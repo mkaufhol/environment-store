@@ -1,9 +1,8 @@
-"""AWS Parameter Store Manager - A Python library to manage AWS Parameter Store."""
+"""Environment store library - Store and manage environment variables persistently."""
 
-from .ssm_parameter_store import ParameterStore
+from environment_store.environment_store_manager import EnvironmentStoreManager
 
 __version__ = "0.1.0"
 
-__all__ = [
-    "ParameterStore",
-]
+
+__all__ = ["EnvironmentStoreManager"]

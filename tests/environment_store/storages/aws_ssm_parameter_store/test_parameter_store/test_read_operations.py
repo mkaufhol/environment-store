@@ -8,7 +8,7 @@ and get_parameters_by_path_as_dict methods.
 
 import pytest
 
-from aws_environment_store_manager.ssm_parameter_store.models import (
+from environment_store.storages.aws_ssm_parameter_store.models import (
     ParameterResponse,
     Parameter,
     ParametersByPathResponse,

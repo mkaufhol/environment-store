@@ -1,5 +1,5 @@
 import pytest
-from aws_environment_store_manager.ssm_parameter_store.validation import (
+from environment_store.storages.aws_ssm_parameter_store.validation import (
     make_string_parameter_store_compatible,
     validate_string,
 )

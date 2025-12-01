@@ -1,5 +1,5 @@
 import pytest
-from aws_environment_store_manager.ssm_parameter_store.decorators import (
+from environment_store.storages.aws_ssm_parameter_store.decorators import (
     clean_and_validate_string,
 )
 
