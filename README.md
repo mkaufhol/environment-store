@@ -1,4 +1,4 @@
-# AWS environment store manager
+# Environment store
 
 ### STATUS: WIP
 

@@ -1,7 +1,7 @@
 [project]
-name = "aws-environment-store-manager"
+name = "environment-store"
 version = "0.1.0"
-description = "Python library to store and manage environment variables on AWS."
+description = "Python library to store and manage environment variables persistently."
 authors = [
     {name = "Maalik Kaufhold",email = "mail@maalikaufhold.de"}
 ]
@@ -29,17 +29,17 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mkaufhol/aws-environment-store-manager"
-Repository = "https://github.com/mkaufhol/aws-environment-store-manager"
-Issues = "https://github.com/mkaufhol/aws-environment-store-manager/issues"
+Homepage = "https://github.com/mkaufhol/environment-store"
+Repository = "https://github.com/mkaufhol/environment-store"
+Issues = "https://github.com/mkaufhol/environment-store/issues"
 
 [tool.poetry]
-packages = [{include = "aws_environment_store_manager", from = "src"}]
+packages = [{include = "environment_store", from = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.14"
-boto3 = "^1.40.57"
-pydantic = "^2.12.3"
+boto3 = "^1.42.0"
+pydantic = "^2.12.5"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.14.1"
