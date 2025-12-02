@@ -89,7 +89,16 @@ manager = EnvironmentStoreManager(adapter=adapter)
 
 # Local file storage
 
-### STATUS: NOT IMPLEMENTED YET
+## JsonFileAdapter
+
+The `JsonFileAdapter` stores the environment variables in a local JSON file. It is useful for testing and development purposes.
+
+```python
+from environment_store import EnvironmentStoreManager, JsonFileAdapter
+
+adapter = JsonFileAdapter("path/to/file.json")
+manager = EnvironmentStoreManager(adapter=adapter)
+```
 
 # Cloud providers
 
@@ -129,6 +138,13 @@ This project is currently in early development and conception phase. Not ready t
 ### Docs WIP
 
 This project uses Poetry for dependency management.
-To install the dependencies, run `poetry install --with dev --with testing --with stubs`.
-To run the tests, run `poetry run pytest`.
+- To install the dependencies, run `poetry install --with dev --with testing --with stubs`.
+- To build the package, run `poetry build`.
+- To run the tests, run `poetry run pytest`.
+
 This project uses pre-commit for code quality checks. To install the pre-commit hooks, run `pre-commit install`.
+
+## Testing the library locally
+
+To test the library locally, you can install the built package with
+`pip install dist/environment_store-0.1.0-py3-none-any.whl` in a different virtual environment.
