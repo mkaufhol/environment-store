@@ -1,4 +1,4 @@
-from .adapter.abstract_adapter import AbstractAdapter
+from .abstract_adapter import AbstractAdapter
 from .decorators import validate_hierarchy
 from .schemas import Variable
 

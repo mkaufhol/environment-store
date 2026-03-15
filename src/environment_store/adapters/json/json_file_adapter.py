@@ -1,8 +1,8 @@
 import json
 import os
 
-from ..schemas import Variable
-from .abstract_adapter import AbstractAdapter
+from environment_store.core.abstract_adapter import AbstractAdapter
+from environment_store.core.schemas import Variable
 
 
 class JsonFileAdapter(AbstractAdapter):

@@ -8,7 +8,7 @@ with various configurations including region settings and clean_string options.
 import pytest
 from moto import mock_aws
 
-from environment_store.storages.aws_ssm_parameter_store.parameter_store import ParameterStore
+from environment_store.adapters.aws.ssm_parameter_store.parameter_store import ParameterStore
 
 
 class TestParameterStoreInitialization:

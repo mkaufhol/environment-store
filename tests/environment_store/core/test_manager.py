@@ -1,7 +1,7 @@
 import pytest
 
-from environment_store.environment_store_manager.manager import EnvironmentStoreManager
-from environment_store.environment_store_manager.schemas import Variable
+from environment_store.core.manager import EnvironmentStoreManager
+from environment_store.core.schemas import Variable
 
 
 class TestEnvironmentStoreManager:

@@ -76,8 +76,8 @@ To initialize the `EnvironmentStoreManager` you need to provide an adapter that 
 The current implemented adapters are listed in the next section.
 
 ```python
-from environment_store.storages.aws_ssm_parameter_store import ParameterStoreAdapter
-from environment_store.environment_store_manager import EnvironmentStoreManager
+from environment_store.adapters.aws.ssm_parameter_store import ParameterStoreAdapter
+from environment_store.core import EnvironmentStoreManager
 
 adapter = ParameterStoreAdapter(region="us-east-1")
 manager = EnvironmentStoreManager(adapter=adapter)

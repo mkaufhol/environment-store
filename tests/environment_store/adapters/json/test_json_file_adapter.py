@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from environment_store.environment_store_manager.adapter.json_file_adapter import (
+from environment_store.adapters.json.json_file_adapter import (
     JsonFileAdapter,
 )
-from environment_store.environment_store_manager.schemas import Variable
+from environment_store.core.schemas import Variable
 
 
 @pytest.fixture
