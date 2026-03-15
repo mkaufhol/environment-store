@@ -157,3 +157,6 @@ cython_debug/
 
 # PyCharm
 .idea/
+
+# Postgres related dev tools
+yoyo-database.ini
