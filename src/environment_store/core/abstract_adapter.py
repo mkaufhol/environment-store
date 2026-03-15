@@ -34,7 +34,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..schemas import Variable
+    from .schemas import Variable
 
 
 class AbstractAdapter(ABC):
