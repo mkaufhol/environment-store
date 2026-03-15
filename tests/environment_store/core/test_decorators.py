@@ -1,6 +1,6 @@
 import pytest
 
-from environment_store.environment_store_manager.decorators import validate_hierarchy
+from environment_store.core import validate_hierarchy
 
 
 class TestValidateHierarchyDecorator:

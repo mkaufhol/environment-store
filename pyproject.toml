@@ -9,7 +9,6 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.12,<3.16"
 dependencies = [
-    "boto3>=1.42.0",
     "pydantic>=2.12.5",
 ]
 keywords = [
@@ -38,22 +37,26 @@ Homepage = "https://github.com/mkaufhol/environment-store"
 Repository = "https://github.com/mkaufhol/environment-store"
 Issues = "https://github.com/mkaufhol/environment-store/issues"
 
+[project.optional-dependencies]
+aws = ["boto3>=1.42.68"]
+#postgres = ["psycopg2-binary"]
+
 [dependency-groups]
 dev = [
-    "ruff>=0.14.1",
+    "ruff>=0.15.6",
     "ty>=0.0.1",
     "pre-commit>=4.3.0",
-    "bandit>=1.8.6",
-    "tox>=4.31.0",
+    "bandit>=1.9.4",
+    "tox>=4.49.1",
     "tox-uv>=1.0.0",
 ]
 stubs = [
-    "boto3-stubs>=1.40.55",
+    "boto3-stubs>=1.42.68",
 ]
 testing = [
-    "pytest>=8.4.2",
-    "moto>=5.1.15",
-    "coverage>=7.11.0",
+    "pytest>=9.0.2",
+    "moto>=5.1.22",
+    "coverage>=7.13.4",
 ]
 
 [tool.uv]

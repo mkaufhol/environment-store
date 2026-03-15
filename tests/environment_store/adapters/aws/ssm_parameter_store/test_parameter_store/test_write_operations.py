@@ -208,7 +208,7 @@ class TestParameterStoreWriteOperations:
 
     def test_create_parameter_with_tags_as_awstag(self, parameter_store):
         """Test that create_parameter successfully stores a parameter with tags as AWSTag objects."""
-        from environment_store.storages.aws_ssm_parameter_store.models import AWSTag
+        from environment_store.adapters.aws.ssm_parameter_store.models import AWSTag
 
         # Arrange: Define parameter details
         parameter_name = "/test/tagged/resource2"
@@ -266,7 +266,7 @@ class TestParameterStoreWriteOperations:
         - Testing exception handling for duplicate parameter creation
         - Verifying that the wrapper properly propagates AWS exceptions
         """
-        from environment_store.storages.aws_ssm_parameter_store.exceptions import (
+        from environment_store.adapters.aws.ssm_parameter_store.exceptions import (
             ParameterAlreadyExists,
         )
 
@@ -316,7 +316,7 @@ class TestParameterStoreWriteOperations:
         - Testing exception handling for updating non-existent parameters
         - Verifying that update_parameter enforces parameter existence
         """
-        from environment_store.storages.aws_ssm_parameter_store.exceptions import (
+        from environment_store.adapters.aws.ssm_parameter_store.exceptions import (
             ParameterNotFoundError,
         )
 
@@ -509,7 +509,7 @@ class TestParameterStoreWriteOperations:
         - Testing exception handling for deleting non-existent parameters
         - Verifying that delete_parameter enforces parameter existence
         """
-        from environment_store.storages.aws_ssm_parameter_store.exceptions import (
+        from environment_store.adapters.aws.ssm_parameter_store.exceptions import (
             ParameterNotFoundError,
         )
 
@@ -563,7 +563,7 @@ class TestParameterStoreWriteOperations:
         - How to verify deletion of multiple parameters
         - Testing the DeleteParametersResponse model
         """
-        from environment_store.storages.aws_ssm_parameter_store.models import (
+        from environment_store.adapters.aws.ssm_parameter_store.models import (
             DeleteParametersResponse,
         )
 
@@ -608,7 +608,7 @@ class TestParameterStoreWriteOperations:
         - How the batch delete handles non-existent parameters
         - How to verify the InvalidParameters list in the response
         """
-        from environment_store.storages.aws_ssm_parameter_store.models import (
+        from environment_store.adapters.aws.ssm_parameter_store.models import (
             DeleteParametersResponse,
         )
 
@@ -643,7 +643,7 @@ class TestParameterStoreWriteOperations:
 
     def test_delete_parameters_with_single_parameter(self, parameter_store):
         """Test that delete_parameters works with a single parameter in the list."""
-        from environment_store.storages.aws_ssm_parameter_store.models import (
+        from environment_store.adapters.aws.ssm_parameter_store.models import (
             DeleteParametersResponse,
         )
 
@@ -674,7 +674,7 @@ class TestParameterStoreWriteOperations:
 
     def test_delete_parameters_with_clean_string_converts_relative_paths(self, parameter_store):
         """Test that delete_parameters with clean_string=True converts relative paths to absolute."""
-        from environment_store.storages.aws_ssm_parameter_store.models import (
+        from environment_store.adapters.aws.ssm_parameter_store.models import (
             DeleteParametersResponse,
         )
 
