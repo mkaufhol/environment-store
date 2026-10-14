@@ -176,3 +176,11 @@ class TestPostgreSQLAdapter:
         with engine.connect() as conn:
             row = conn.execute(text("SELECT var_value, is_secret FROM environment_store")).one()
         assert tuple(row) == ("two", True)
+
+
+def test_migrations_are_applied_by_fixture(engine):
+    from environment_store.adapters.postgresql import apply_migrations, pending_migrations
+
+    url = engine.url.render_as_string(hide_password=False)
+    assert pending_migrations(url) == []
+    assert apply_migrations(url) == []

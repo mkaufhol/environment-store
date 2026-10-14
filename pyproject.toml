@@ -42,13 +42,14 @@ Issues = "https://github.com/mkaufhol/environment-store/issues"
 
 [project.optional-dependencies]
 aws = ["boto3>=1.42.68"]
-postgres = ["psycopg>=3.3.3", "sqlalchemy>=2.0.48"]
+postgres = ["psycopg>=3.3.3", "sqlalchemy>=2.0.48", "yoyo-migrations>=9.0.0"]
 tui = ["textual>=8.2"]
 full = [
     "boto3>=1.42.68",
     "psycopg>=3.3.3",
     "sqlalchemy>=2.0.48",
     "textual>=8.2",
+    "yoyo-migrations>=9.0.0",
 ]
 
 [dependency-groups]

@@ -116,3 +116,34 @@ def test_missing_backend(monkeypatch, capsys):
 def test_parse_dotenv_rejects_garbage():
     with pytest.raises(Exception, match="Invalid dotenv"):
         parse_dotenv("not a pair")
+
+
+def test_migrate_requires_postgres_backend(capsys):
+    assert main(["--backend", "json", "--json-file", "x.json", "migrate"]) == 1
+    assert "only available for the postgres backend" in capsys.readouterr().err
+
+
+def test_migrate_requires_database_url(monkeypatch, capsys):
+    monkeypatch.delenv("ENVIRONMENT_STORE_DATABASE_URL", raising=False)
+    assert main(["--backend", "postgres", "migrate"]) == 1
+    assert "--database-url" in capsys.readouterr().err
+
+
+def test_migrate_applies_and_reports(monkeypatch, capsys):
+    pytest.importorskip("yoyo")
+    calls = []
+    monkeypatch.setattr(
+        "environment_store.adapters.postgresql.apply_migrations",
+        lambda url: calls.append(url) or ["m1", "m2"],
+    )
+    monkeypatch.setattr(
+        "environment_store.adapters.postgresql.pending_migrations", lambda url: ["m3"]
+    )
+    base = ["--backend", "postgres", "--database-url", "postgresql+psycopg://u@h/db"]
+    assert main([*base, "migrate"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "m1\nm2\n"
+    assert calls == ["postgresql+psycopg://u@h/db"]
+    assert main([*base, "migrate", "--status"]) == 0
+    assert capsys.readouterr().out == "m3\n"
+    assert len(calls) == 1
