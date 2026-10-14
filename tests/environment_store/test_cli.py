@@ -280,3 +280,29 @@ def test_transfer_to_aws_parameter_store(two_stores, capsys):
         )
         assert "/app/acme/web/dev/C" in names
         assert len(names) == 4
+
+
+def test_export_prints_resolved_shell_code(store, capsys):
+    store("set", "A", "root")
+    store("set", "B", "it's here", "-o", "acme")
+    store("set", "A", "child", "-o", "acme", "-p", "web")
+    capsys.readouterr()
+    assert store("export", "-o", "acme", "-p", "web") == 0
+    assert capsys.readouterr().out == "export A=child\nexport B='it'\"'\"'s here'\n"
+
+
+def test_export_unset(store, capsys):
+    store("set", "A", "1")
+    store("set", "B", "2", "-o", "acme")
+    capsys.readouterr()
+    assert store("export", "-o", "acme", "--unset") == 0
+    assert capsys.readouterr().out == "unset A\nunset B\n"
+
+
+def test_export_rejects_invalid_shell_names(store, capsys):
+    store("set", "BAD-NAME", "1")
+    capsys.readouterr()
+    assert store("export") == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "BAD-NAME" in captured.err

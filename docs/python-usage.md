@@ -111,6 +111,19 @@ All four accept:
 - `include_parent=True`: set to `False` to get only the level's own variables.
 - `overwrite_parent=True`: set to `False` to keep the **parent's** value when a name exists on both levels.
 
+## Loading into `os.environ`
+
+Like `dotenv.load_dotenv`, `load_into_environ` puts the resolved variables of a level into `os.environ`:
+
+```python
+manager.load_into_environ(
+    organisation="acme", project="webapp", environment="prod", service="api"
+)
+```
+
+Variables that already exist in the environment are kept; pass `override=True` to replace them. It returns the
+variables that were set. `environ=` selects another mapping than `os.environ`.
+
 ## Discovering levels
 
 ```python

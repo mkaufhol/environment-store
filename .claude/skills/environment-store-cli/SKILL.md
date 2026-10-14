@@ -65,7 +65,7 @@ Postgres only: `environment-store migrate --status` lists pending schema migrati
 - **Discover first:** `children` (then `children -o X`, `-o X -p Y`, ...) to learn exact names before reading or writing. Names are case-sensitive.
 - **Effective config for a service:** use `list ... --resolved --format json` at the deepest level rather than querying each level yourself. Plain `list` returns only that one level.
 - **Parse programmatically:** use `--format json` (a `{NAME: value}` object) and `children --format json` (array). Don't scrape table output.
-- **Export into a shell:** `eval "$(environment-store list -o a -p b -e prod --resolved --format export)"` — only when the user wants the variables in the current shell.
+- **Export into a shell:** `eval "$(environment-store export -o a -p b -e prod)"` — only when the user wants the variables in the current shell.
 - **Bulk changes:** one `import` call beats many `set` calls. Run with `--dry-run` first.
 - **Single value in a script:** `VAL=$(environment-store get NAME -o a)`; use `--raw` to drop the trailing newline.
 
