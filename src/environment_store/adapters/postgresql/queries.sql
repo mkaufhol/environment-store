@@ -1,11 +1,11 @@
 -- name: GetEntry :one
 SELECT *
 FROM environment_store
-WHERE organization = $1
-  AND project = $2
-  AND environment = $3
-  AND service = $4
-  AND var = $5
+WHERE organization IS NOT DISTINCT FROM sqlc.narg('organization')
+  AND project IS NOT DISTINCT FROM sqlc.narg('project')
+  AND environment IS NOT DISTINCT FROM sqlc.narg('environment')
+  AND service IS NOT DISTINCT FROM sqlc.narg('service')
+  AND var = sqlc.arg('var')
 LIMIT 1;
 
 -- name: GetAllEntries :many
@@ -36,59 +36,16 @@ ORDER BY organization,
          service,
          var;
 
--- name: GetRootEnvironment :many
+-- name: GetVariables :many
 SELECT var,
        var_value,
        is_secret
 FROM environment_store
-WHERE organization IS NULL
-  AND project IS NULL
-  AND environment IS NULL
-  AND service IS NULL
-ORDER BY var;
-
--- name: GetOrganizationEnvironment :many
-SELECT var,
-       var_value,
-       is_secret
-FROM environment_store
-WHERE organization = $1
-  AND project IS NULL
-  AND environment IS NULL
-  AND service IS NULL
-ORDER BY var;
-
--- name: GetProjectEnvironment :many
-SELECT var,
-       var_value,
-       is_secret
-FROM environment_store
-WHERE organization = $1
-  AND project = $2
-  AND environment IS NULL
-  AND service IS NULL
-ORDER BY var;
-
--- name: GetEnvironmentEnvironment :many
-SELECT var,
-       var_value,
-       is_secret
-FROM environment_store
-WHERE organization = $1
-  AND project = $2
-  AND environment = $3
-  AND service IS NULL
-ORDER BY var;
-
--- name: GetServiceEnvironment :many
-SELECT var,
-       var_value,
-       is_secret
-FROM environment_store
-WHERE organization = $1
-  AND project = $2
-  AND environment = $3
-  AND service = $4
+WHERE organization IS NOT DISTINCT FROM sqlc.narg('organization')
+  AND project IS NOT DISTINCT FROM sqlc.narg('project')
+  AND environment IS NOT DISTINCT FROM sqlc.narg('environment')
+  AND service IS NOT DISTINCT FROM sqlc.narg('service')
+  AND var IS NOT NULL
 ORDER BY var;
 
 -- name: CreateEntry :one
@@ -99,29 +56,75 @@ INSERT INTO environment_store (organization,
                                var,
                                var_value,
                                is_secret)
-VALUES ($1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7)
+VALUES (sqlc.narg('organization'),
+        sqlc.narg('project'),
+        sqlc.narg('environment'),
+        sqlc.narg('service'),
+        sqlc.arg('var'),
+        sqlc.arg('var_value'),
+        sqlc.arg('is_secret'))
 RETURNING *;
 
--- name: UpdateEntry :exec
-UPDATE environment_store
-set var_value = $6,
-    is_secret = $7
-WHERE organization = $1
-  AND project = $2
-  AND environment = $3
-  AND service = $4
-  AND var = $5;
+-- name: UpsertEntry :exec
+INSERT INTO environment_store (organization,
+                               project,
+                               environment,
+                               service,
+                               var,
+                               var_value)
+VALUES (sqlc.narg('organization'),
+        sqlc.narg('project'),
+        sqlc.narg('environment'),
+        sqlc.narg('service'),
+        sqlc.arg('var'),
+        sqlc.arg('var_value'))
+ON CONFLICT (organization, project, environment, service, var)
+    DO UPDATE SET var_value = EXCLUDED.var_value;
 
--- name: DeleteEntry :exec
+-- name: UpdateEntry :execrows
+UPDATE environment_store
+SET var_value = sqlc.arg('var_value')
+WHERE organization IS NOT DISTINCT FROM sqlc.narg('organization')
+  AND project IS NOT DISTINCT FROM sqlc.narg('project')
+  AND environment IS NOT DISTINCT FROM sqlc.narg('environment')
+  AND service IS NOT DISTINCT FROM sqlc.narg('service')
+  AND var = sqlc.arg('var');
+
+-- name: DeleteEntry :execrows
 DELETE
 FROM environment_store
-WHERE organization = $1
-  AND project = $2
-  AND environment = $3
-  AND service = $4;
+WHERE organization IS NOT DISTINCT FROM sqlc.narg('organization')
+  AND project IS NOT DISTINCT FROM sqlc.narg('project')
+  AND environment IS NOT DISTINCT FROM sqlc.narg('environment')
+  AND service IS NOT DISTINCT FROM sqlc.narg('service')
+  AND var = sqlc.arg('var');
+
+-- name: ListOrganizations :many
+SELECT DISTINCT organization
+FROM environment_store
+WHERE organization IS NOT NULL
+ORDER BY organization;
+
+-- name: ListProjects :many
+SELECT DISTINCT project
+FROM environment_store
+WHERE organization = sqlc.arg('organization')
+  AND project IS NOT NULL
+ORDER BY project;
+
+-- name: ListEnvironments :many
+SELECT DISTINCT environment
+FROM environment_store
+WHERE organization = sqlc.arg('organization')
+  AND project = sqlc.arg('project')
+  AND environment IS NOT NULL
+ORDER BY environment;
+
+-- name: ListServices :many
+SELECT DISTINCT service
+FROM environment_store
+WHERE organization = sqlc.arg('organization')
+  AND project = sqlc.arg('project')
+  AND environment = sqlc.arg('environment')
+  AND service IS NOT NULL
+ORDER BY service;
