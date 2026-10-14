@@ -70,10 +70,41 @@ Alternatively you can also use this library without the hierarchical structure:
 
 The core package only depends on `pydantic`. The storage backends bring their own dependencies as extras:
 
+| Extra      | Adds                                                   |
+|------------|--------------------------------------------------------|
+| _(none)_   | core + `JsonFileAdapter`                               |
+| `aws`      | `ParameterStoreAdapter`, `SecretsManagerAdapter` (boto3) |
+| `postgres` | `PostgreSQLAdapter` (psycopg, sqlalchemy)              |
+
+### With uv
+
+Add it to your uv project (this updates `pyproject.toml` and the lockfile):
+
 ```bash
-pip install environment-store            # core + JsonFileAdapter
-pip install "environment-store[aws]"     # + ParameterStoreAdapter, SecretsManagerAdapter (boto3)
-pip install "environment-store[postgres]"  # + PostgreSQLAdapter (psycopg, sqlalchemy)
+uv add environment-store                 # core + JsonFileAdapter
+uv add "environment-store[aws]"          # + AWS adapters
+uv add "environment-store[postgres]"     # + PostgreSQL adapter
+uv add "environment-store[aws,postgres]" # multiple extras
+```
+
+If the package is not published to an index you can use, install it straight from the repository:
+
+```bash
+uv add "environment-store[aws] @ git+https://github.com/mkaufhol/environment-store"
+```
+
+Pin a branch, tag or commit by appending `@<ref>` to the URL, e.g. `...environment-store@v0.1.0`.
+
+Without a uv project (e.g. for a quick script or an existing virtual environment), use the pip interface:
+
+```bash
+uv pip install "environment-store[aws]"
+```
+
+### With pip
+
+```bash
+pip install "environment-store[aws]"
 ```
 
 ## EnvironmentStoreManager usage
