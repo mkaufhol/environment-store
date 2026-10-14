@@ -1,4 +1,8 @@
-# Environment store
+<p align="center">
+  <img src="docs/assets/environment-store-logo.svg" alt="Environment store logo" width="200">
+</p>
+
+<h1 align="center">Environment store</h1>
 
 Store and manage environment variables persistently, in a hierarchy, on different backends: a local file,
 PostgreSQL, AWS Parameter Store or AWS Secrets Manager. Use it from **Python**, the **command line** or an
