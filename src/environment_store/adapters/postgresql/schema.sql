@@ -35,7 +35,7 @@ ALTER SEQUENCE public.environment_store_id_seq OWNED BY public.environment_store
 ALTER TABLE ONLY public.environment_store ALTER COLUMN id SET DEFAULT nextval('public.environment_store_id_seq'::regclass);
 
 ALTER TABLE ONLY public.environment_store
-    ADD CONSTRAINT environment_store_organization_project_environment_service__key UNIQUE (organization, project, environment, service, var);
+    ADD CONSTRAINT environment_store_organization_project_environment_service__key UNIQUE NULLS NOT DISTINCT (organization, project, environment, service, var);
 
 ALTER TABLE ONLY public.environment_store
     ADD CONSTRAINT environment_store_pkey PRIMARY KEY (id);

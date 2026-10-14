@@ -58,6 +58,8 @@ testing = [
     "pytest>=9.0.2",
     "moto>=5.1.22",
     "coverage>=7.13.4",
+    "sqlalchemy>=2.0.48",
+    "psycopg[binary]>=3.3.3",
 ]
 
 [tool.uv]
