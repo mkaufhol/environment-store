@@ -299,3 +299,9 @@ class TestJsonFileAdapter:
         assert adapter.get_projects("acme") == ["webapp"]
         assert adapter.get_environments("acme", "webapp") == ["dev"]
         assert adapter.get_services("acme", "webapp", "dev") == ["api"]
+
+
+def test_adapter_is_importable_from_the_package():
+    from environment_store.adapters.json import JsonFileAdapter as Exported
+
+    assert Exported is JsonFileAdapter

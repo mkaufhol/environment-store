@@ -1,0 +1,243 @@
+# Development
+
+How to work on environment-store itself.
+
+- [Setup](#setup)
+- [Project layout](#project-layout)
+- [Architecture: one shared layer](#architecture-one-shared-layer)
+- [Everyday commands](#everyday-commands)
+- [Tests](#tests)
+- [Adding a feature](#adding-a-feature)
+- [Adding a storage adapter](#adding-a-storage-adapter)
+- [Database migrations](#database-migrations)
+- [Running the CLI or TUI from a clone](#running-the-cli-or-tui-from-a-clone)
+- [Docs and the agent skill](#docs-and-the-agent-skill)
+
+## Setup
+
+The project uses [uv](https://docs.astral.sh/uv/) and needs Python 3.12 or newer.
+
+```bash
+git clone https://github.com/mkaufhol/environment-store
+cd environment-store
+uv sync                 # installs the dev, testing and stubs groups
+pre-commit install      # run the quality checks on every commit
+```
+
+The dependency groups in `pyproject.toml`:
+
+| Group | Contents |
+|---|---|
+| `dev` | ruff, ty, pre-commit, bandit, tox, yoyo-migrations |
+| `testing` | pytest, moto, coverage, sqlalchemy, psycopg, textual |
+| `stubs` | boto3-stubs |
+
+The optional extras for users (`aws`, `postgres`, `tui`, `full`) are described in
+[Installation](installation.md). Keep the `full` extra equal to the union of the others.
+
+## Project layout
+
+```
+src/environment_store/
+├── core/                      # the shared layer, no I/O of its own
+│   ├── manager.py             # EnvironmentStoreManager: the public API
+│   ├── hierarchy.py           # level names, path <-> kwargs helpers
+│   ├── abstract_adapter.py    # contract every backend implements
+│   ├── schemas.py             # Variable, TransferResult, ...
+│   ├── decorators.py          # validate_hierarchy
+│   └── exceptions.py
+├── adapters/
+│   ├── json/                  # JsonFileAdapter
+│   ├── postgresql/            # PostgreSQLAdapter, migrations, sqlc-generated queries
+│   └── aws/
+│       ├── ssm_parameter_store/
+│       └── secrets_manager/
+├── cli.py                     # environment-store command
+└── tui/                       # Textual app
+tests/                         # mirrors src/
+docs/                          # this documentation
+.claude/skills/environment-store-cli/SKILL.md   # skill for LLM agents using the CLI
+```
+
+## Architecture: one shared layer
+
+The CLI, the TUI and any future frontend (an API, a web app) are **thin presentation layers** over
+`EnvironmentStoreManager`:
+
+```
+ CLI (cli.py)     TUI (tui/)     future API / web app
+        \             |             /
+         \            |            /
+          EnvironmentStoreManager  (core/manager.py + core/hierarchy.py)
+                      |
+               AbstractAdapter
+        /        |         |          \
+   JSON file  PostgreSQL  SSM   Secrets Manager
+```
+
+**All logic lives in the core layer.** That includes hierarchy rules, listing child levels (`get_child_levels`),
+merging parent variables (`get_resolved_variables`), walking and copying stores (`iter_levels`, `import_from`),
+and counting and deleting levels (`count_level`, `delete_level`), including the safety rule that deleting a level
+requires its exact name as `confirm`.
+
+A frontend should only:
+
+1. parse its input (arguments, keys, HTTP requests),
+2. call the manager,
+3. render the result or the error.
+
+If you catch yourself writing a loop over levels, a merge, or a validation rule in `cli.py` or `tui/app.py`, it
+belongs in the manager so every frontend gets it and there is nothing to keep in sync.
+
+Keep the CLI and TUI feature-equivalent. For example `x` in the TUI is `delete-level` in the CLI, and `n` is `set`
+on a new path. Bulk administration commands (`import`, `transfer`, `migrate`) are CLI-only.
+
+## Everyday commands
+
+```bash
+uv run pytest                  # tests
+uv run ruff check              # lint
+uv run ruff format             # format
+uv run ty check                # type check
+uv run bandit -c pyproject.toml -r src   # security lint (also runs in pre-commit)
+uv build                       # build sdist and wheel into dist/
+```
+
+Pre-commit runs: YAML check, end-of-file fixer, trailing whitespace, `ruff check`, `ruff format`, `uv-lock`, `ty` and
+`bandit`. A commit is rejected if one fails; fix the issue (some hooks fix files for you), `git add` again and commit.
+
+`ruff` and `ty` skip the sqlc-generated files `adapters/postgresql/queries.py` and `models.py`.
+
+`tox` runs the suite on all supported Python versions (`uv run tox`); missing interpreters are skipped.
+
+## Tests
+
+```bash
+uv run pytest                                   # everything
+uv run pytest tests/environment_store/core      # one area
+uv run pytest -k delete_level                   # by name
+```
+
+- `tests/` mirrors `src/`. The AWS adapters are tested against [moto](https://docs.getmoto.org/), so no AWS account
+  is needed.
+- The TUI is tested headlessly with Textual's `run_test()` pilot (`tests/environment_store/test_tui.py`).
+- The CLI is tested by calling `main([...])` with a temporary JSON file (`tests/environment_store/test_cli.py`).
+
+### PostgreSQL tests
+
+They are skipped unless `ENVIRONMENT_STORE_TEST_POSTGRES_URL` points to a **throwaway database**. The tests apply
+the migrations and **truncate the `environment_store` table between tests**, so never point it at real data:
+
+```bash
+createdb env_store_test
+export ENVIRONMENT_STORE_TEST_POSTGRES_URL=postgresql+psycopg://postgres:password@localhost:5432/env_store_test
+uv run pytest tests/environment_store/adapters/postgresql
+```
+
+## Adding a feature
+
+1. **Core first.** Add the method to `EnvironmentStoreManager` (use `@validate_hierarchy` for methods that take
+   hierarchy arguments, and call them with keywords, because the decorator only sees keyword arguments). Reuse
+   helpers from `core/hierarchy.py`. Add unit tests in `tests/environment_store/core/`.
+2. **CLI.** Add `cmd_<name>` and its sub-parser in `cli.py`. Reuse `_hierarchy_parser()` for `-o/-p/-e/-s` and
+   `_hierarchy(args)` to forward them. Print data to stdout, messages to stderr, and return one of the documented
+   exit codes. Add tests that call `main([...])`.
+3. **TUI.** Add a binding and action in `tui/app.py` that calls the same manager method. Add a pilot test.
+4. **Docs.** Update [cli.md](cli.md), [tui.md](tui.md) and [python-usage.md](python-usage.md), and the agent skill
+   (see below).
+5. Run `uv run pytest`, `uv run ruff check`, `uv run ty check`.
+
+## Adding a storage adapter
+
+1. Create `adapters/<name>/` with a class that subclasses `AbstractAdapter` and implements its ten abstract methods
+   (`set_variable`, `set_variables`, `get_variable`, `get_variables`, `delete_variable`, `delete_variables`,
+   `get_organisations`, `get_projects`, `get_environments`, `get_services`). Read the docstrings in
+   [`abstract_adapter.py`](../src/environment_store/core/abstract_adapter.py).
+2. Respect the hierarchy rules, and make a level disappear once its last variable is deleted (so the manager's
+   `delete_level` and the TUI stay correct).
+3. If it needs third-party packages, add an optional extra in `pyproject.toml` **and** add it to `full`. Import the
+   package lazily so the core installs without it.
+4. Export the adapter in the package's `__init__.py`.
+5. Register it in the CLI: add it to `BACKENDS`, `build_manager` and `_backend_identity` in `cli.py`, and add its
+   options to `_add_backend_options` (this also provides the `--dest-*` options for `transfer`).
+6. Tests: mirror the existing adapter tests; use a fake or in-memory service if possible.
+7. Document it in [backends.md](backends.md), [installation.md](installation.md) and [cli.md](cli.md).
+
+## Database migrations
+
+The PostgreSQL schema is managed with [yoyo](https://ollycope.com/software/yoyo/latest/). Migrations live in
+`src/environment_store/adapters/postgresql/migrations/` and ship inside the package, so users apply them with
+`environment-store migrate`.
+
+Create a new migration (SQL format, with a rollback file):
+
+```bash
+cd src/environment_store/adapters/postgresql
+uv run yoyo new --sql -m "describe the change" migrations
+```
+
+Edit the generated `<id>.sql` and `<id>.rollback.sql` files. Never edit a migration that has been released; add a new
+one instead.
+
+Apply migrations with the yoyo CLI while developing: copy `yoyo-database-example.ini` to `yoyo-database.ini`
+(git-ignored), put your database URL in it and run
+
+```bash
+src/environment_store/adapters/postgresql/scripts/init_database.sh
+```
+
+### Regenerating the typed queries
+
+`queries.py` and `models.py` are generated by [sqlc](https://sqlc.dev/) from `queries.sql` and the live schema. After
+changing a migration or `queries.sql`:
+
+```bash
+# needs sqlc and pg_dump on PATH, and yoyo-database.ini pointing to a migrated database
+src/environment_store/adapters/postgresql/scripts/generate_sqlc.sh
+```
+
+This dumps the schema to `schema.sql` and runs `sqlc generate`. Commit the regenerated files. Never edit
+`queries.py` or `models.py` by hand.
+
+## Running the CLI or TUI from a clone
+
+Inside the clone, `uv run` uses the project environment:
+
+```bash
+uv run environment-store --backend json --json-file ./store.json list
+uv run environment-store --backend json --json-file ./store.json tui
+```
+
+From anywhere else, `uvx` can run the clone without installing it. Add `--refresh` if uv reuses a cached build and you
+want your latest local changes:
+
+```bash
+uvx --from "environment-store[full] @ path/to/repo" environment-store \
+  --backend json --json-file ./store.json list -o acme
+
+uvx --from "environment-store[full] @ path/to/repo" environment-store \
+  --backend json --json-file ./store.json tui
+```
+
+Use `[aws]`, `[postgres]` or `[tui]` instead of `[full]` to install only what you need.
+
+To test the built package in a separate virtual environment:
+
+```bash
+uv build
+uv pip install "dist/environment_store-0.1.0-py3-none-any.whl[full]"
+```
+
+To use the clone from another project while you edit it:
+
+```bash
+uv add --editable "environment-store[full] @ path/to/repo"
+```
+
+## Docs and the agent skill
+
+- The documentation lives in `docs/`; the [README](../README.md) only summarises it and links here. When behaviour
+  changes, update the relevant guide in the same commit, and keep command examples runnable.
+- [`.claude/skills/environment-store-cli/SKILL.md`](../.claude/skills/environment-store-cli/SKILL.md) teaches LLM
+  agents to use the CLI efficiently and safely. Update it whenever a CLI command, option, exit code or safety rule
+  changes. It deliberately tells agents not to use the interactive `tui`.
