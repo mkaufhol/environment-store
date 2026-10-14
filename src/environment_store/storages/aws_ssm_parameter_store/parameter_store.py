@@ -4,7 +4,7 @@ This module provides a wrapper around the boto3 ssm client to make interactions 
 
 from __future__ import annotations
 
-from typing import Optional, Literal
+from typing import Literal
 
 import boto3
 
@@ -12,9 +12,9 @@ from .decorators import clean_and_validate_string
 from .exceptions import ParameterAlreadyExists, ParameterNotFoundError
 from .models import (
     AWSTag,
+    DeleteParametersResponse,
     ParameterResponse,
     ParametersByPathResponse,
-    DeleteParametersResponse,
 )
 
 
@@ -115,9 +115,9 @@ class ParameterStore:
         value: str,
         parameter_type: Literal["String", "StringList", "SecureString"] = "String",
         tier: Literal["Standard", "Advanced"] = "Standard",
-        description: Optional[str] = None,
-        encryption_key_id: Optional[str] = None,
-        tags: Optional[list[AWSTag | dict[str, str]]] = None,
+        description: str | None = None,
+        encryption_key_id: str | None = None,
+        tags: list[AWSTag | dict[str, str]] | None = None,
     ) -> dict[str, str]:
         """
         Wrapper around the boto3 ssm put_parameter function.
@@ -145,10 +145,10 @@ class ParameterStore:
             request_params["Description"] = description
         if tags:
             # Validate tag input
-            tags = [
+            validated_tags = [
                 AWSTag.model_validate(tag) if isinstance(tag, dict) else tag for tag in tags
             ]
-            request_params["Tags"] = [tag.model_dump() for tag in tags]
+            request_params["Tags"] = [tag.model_dump() for tag in validated_tags]
         if encryption_key_id:
             request_params["KeyId"] = encryption_key_id
 
@@ -166,9 +166,9 @@ class ParameterStore:
         value: str,
         parameter_type: Literal["String", "StringList", "SecureString"] = "String",
         tier: Literal["Standard", "Advanced"] = "Standard",
-        description: Optional[str] = None,
-        encryption_key_id: Optional[str] = None,
-        tags: Optional[list[AWSTag | dict[str, str]]] = None,
+        description: str | None = None,
+        encryption_key_id: str | None = None,
+        tags: list[AWSTag | dict[str, str]] | None = None,
     ) -> dict[str, str]:
         """
         Create a parameter store entry in AWS. This method ensures that the parameter does not already exist.
@@ -200,9 +200,9 @@ class ParameterStore:
         value: str,
         parameter_type: Literal["String", "StringList", "SecureString"] = "String",
         tier: Literal["Standard", "Advanced"] = "Standard",
-        description: Optional[str] = None,
-        encryption_key_id: Optional[str] = None,
-        tags: Optional[list[AWSTag | dict[str, str]]] = None,
+        description: str | None = None,
+        encryption_key_id: str | None = None,
+        tags: list[AWSTag | dict[str, str]] | None = None,
     ) -> dict[str, str]:
         """
         Update a parameter store entry in AWS. If the parameter does not exist, it will be created.
@@ -234,9 +234,9 @@ class ParameterStore:
         value: str,
         parameter_type: Literal["String", "StringList", "SecureString"] = "String",
         tier: Literal["Standard", "Advanced"] = "Standard",
-        description: Optional[str] = None,
-        encryption_key_id: Optional[str] = None,
-        tags: Optional[list[AWSTag | dict[str, str]]] = None,
+        description: str | None = None,
+        encryption_key_id: str | None = None,
+        tags: list[AWSTag | dict[str, str]] | None = None,
     ) -> dict[str, str]:
         """
         Update a parameter store entry in AWS only if it exists.

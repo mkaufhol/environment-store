@@ -1,4 +1,5 @@
 import pytest
+
 from environment_store.environment_store_manager.manager import EnvironmentStoreManager
 from environment_store.environment_store_manager.schemas import Variable
 
@@ -8,7 +9,7 @@ class TestEnvironmentStoreManager:
 
     def test_initialization(self):
         """Test that EnvironmentStoreManager initializes."""
-        manager = EnvironmentStoreManager(adapter=None)
+        manager = EnvironmentStoreManager(adapter=None)  # ty: ignore[invalid-argument-type]
         assert isinstance(manager, EnvironmentStoreManager)
 
     def test_overwrite_hierarchy_variables_with_no_duplicates(self):
@@ -83,11 +84,11 @@ class TestEnvironmentStoreManager:
     def test_overwrite_hierarchy_variables_with_none_variables(self):
         """Test that overwrite_hierarchy_variables raises ValueError with None variables."""
         with pytest.raises(ValueError) as exc_info:
-            EnvironmentStoreManager.overwrite_hierarchy_variables(None, None)  # noqa
+            EnvironmentStoreManager.overwrite_hierarchy_variables(None, None)  # ty: ignore[invalid-argument-type]
         assert "variables must be a list" in str(exc_info.value)
 
     def test_overwrite_hierarchy_variables_with_none_overwrite_variables(self):
         """Test that overwrite_hierarchy_variables raises ValueError with None overwrite_variables."""
         with pytest.raises(ValueError) as exc_info:
-            EnvironmentStoreManager.overwrite_hierarchy_variables([], None)  # noqa
+            EnvironmentStoreManager.overwrite_hierarchy_variables([], None)  # ty: ignore[invalid-argument-type]
         assert "overwrite_variables must be a list" in str(exc_info.value)

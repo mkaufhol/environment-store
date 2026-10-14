@@ -147,7 +147,6 @@ class AbstractAdapter(ABC):
             - Should handle concurrent writes gracefully (last-write-wins is acceptable).
             - May need to create intermediate hierarchy levels if they don't exist.
         """
-        pass
 
     @abstractmethod
     def set_variables(
@@ -242,7 +241,6 @@ class AbstractAdapter(ABC):
               in your concrete implementation.
             - An empty variables list should be handled gracefully (no-op).
         """
-        pass
 
     @abstractmethod
     def get_variable(
@@ -304,7 +302,6 @@ class AbstractAdapter(ABC):
             - Should only search the exact level specified, not parent levels.
             - The manager handles inheritance/override logic using get_variables().
         """
-        pass
 
     @abstractmethod
     def get_variables(
@@ -367,7 +364,6 @@ class AbstractAdapter(ABC):
             - Should not include variables from child levels (e.g., service variables
               when querying at environment level).
         """
-        pass
 
     @abstractmethod
     def delete_variable(
@@ -429,7 +425,6 @@ class AbstractAdapter(ABC):
             - Should only delete from the exact level specified.
             - Should not affect variables with the same name at other hierarchy levels.
         """
-        pass
 
     @abstractmethod
     def delete_variables(
@@ -516,7 +511,6 @@ class AbstractAdapter(ABC):
             - For backends that support batch operations, this should be more
               efficient than calling delete_variable() multiple times.
         """
-        pass
 
     @abstractmethod
     def get_organisations(self) -> list[str]:
@@ -559,7 +553,6 @@ class AbstractAdapter(ABC):
             - Empty organisations (no variables and no children) may or may not
               be included depending on the backend's capabilities.
         """
-        pass
 
     @abstractmethod
     def get_projects(self, organisation: str) -> list[str]:
@@ -610,7 +603,6 @@ class AbstractAdapter(ABC):
             - Should include projects that have no direct variables but have
               child environments/services with variables.
         """
-        pass
 
     @abstractmethod
     def get_environments(self, organisation: str, project: str) -> list[str]:
@@ -667,7 +659,6 @@ class AbstractAdapter(ABC):
             - Should include environments that have no direct variables but have
               child services with variables.
         """
-        pass
 
     @abstractmethod
     def get_services(self, organisation: str, project: str, environment: str) -> list[str]:
@@ -727,7 +718,6 @@ class AbstractAdapter(ABC):
             - Services are the leaf level of the hierarchy - they cannot have
               child entities, only variables.
         """
-        pass
 
     # Optional methods that concrete implementations may override
 

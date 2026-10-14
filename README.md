@@ -137,10 +137,12 @@ This project is currently in early development and conception phase. Not ready t
 
 ### Docs WIP
 
-This project uses Poetry for dependency management.
-- To install the dependencies, run `poetry install --with dev --with testing --with stubs`.
-- To build the package, run `poetry build`.
-- To run the tests, run `poetry run pytest`.
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
+- To install the dependencies, run `uv sync` (installs the dev, testing and stubs groups).
+- To build the package, run `uv build`.
+- To run the tests, run `uv run pytest`.
+- To lint and format, run `uv run ruff check` and `uv run ruff format`.
+- To type check, run `uv run ty check`.
 
 This project uses pre-commit for code quality checks. To install the pre-commit hooks, run `pre-commit install`.
 

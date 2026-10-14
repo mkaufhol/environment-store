@@ -8,6 +8,10 @@ authors = [
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
+dependencies = [
+    "boto3>=1.42.0",
+    "pydantic>=2.12.5",
+]
 keywords = [
     "aws",
     "environment",
@@ -33,33 +37,30 @@ Homepage = "https://github.com/mkaufhol/environment-store"
 Repository = "https://github.com/mkaufhol/environment-store"
 Issues = "https://github.com/mkaufhol/environment-store/issues"
 
-[tool.poetry]
-packages = [{include = "environment_store", from = "src"}]
+[dependency-groups]
+dev = [
+    "ruff>=0.14.1",
+    "ty>=0.0.1",
+    "pre-commit>=4.3.0",
+    "bandit>=1.8.6",
+    "tox>=4.31.0",
+    "tox-uv>=1.0.0",
+]
+stubs = [
+    "boto3-stubs>=1.40.55",
+]
+testing = [
+    "pytest>=8.4.2",
+    "moto>=5.1.15",
+    "coverage>=7.11.0",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.14"
-boto3 = "^1.42.0"
-pydantic = "^2.12.5"
-
-[tool.poetry.group.dev.dependencies]
-ruff = "^0.14.1"
-pre-commit = "^4.3.0"
-bandit = "^1.8.6"
-tox = "^4.31.0"
-
-
-[tool.poetry.group.stubs.dependencies]
-boto3-stubs = "^1.40.55"
-
-
-[tool.poetry.group.testing.dependencies]
-pytest = "^8.4.2"
-moto = "^5.1.15"
-coverage = "^7.11.0"
+[tool.uv]
+default-groups = ["dev", "testing", "stubs"]
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
 
 [tool.ruff]
 line-length = 96
@@ -75,3 +76,6 @@ line-ending = "auto"
 [tool.bandit]
 exclude_dirs = ["tests"]
 skips = ["B101"]
+
+[tool.ty.environment]
+python-version = "3.10"

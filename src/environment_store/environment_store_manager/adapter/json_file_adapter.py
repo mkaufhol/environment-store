@@ -1,8 +1,8 @@
 import json
 import os
 
-from .abstract_adapter import AbstractAdapter
 from ..schemas import Variable
+from .abstract_adapter import AbstractAdapter
 
 
 class JsonFileAdapter(AbstractAdapter):
