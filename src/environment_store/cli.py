@@ -18,63 +18,80 @@ FORMATS = ("dotenv", "export", "json", "table")
 
 EXIT_ERROR = 1
 EXIT_USAGE = 2
+EXIT_CONFLICT = 3
 
 
 class CliError(Exception):
     """An expected, user-facing error. Reported on stderr without a traceback."""
 
 
-def build_manager(args: argparse.Namespace) -> EnvironmentStoreManager:
-    """Create a manager for the backend selected via options or environment variables."""
-    backend = args.backend
+def build_manager(args: argparse.Namespace, prefix: str = "") -> EnvironmentStoreManager:
+    """
+    Create a manager for the backend selected via options or environment variables.
+
+    ``prefix`` selects the option set: ``""`` for the main store, ``"dest_"`` for the destination
+    of ``transfer``.
+    """
+    flag = "--dest-" if prefix else "--"
+    env = "ENVIRONMENT_STORE_DEST_" if prefix else "ENVIRONMENT_STORE_"
+    backend = getattr(args, f"{prefix}backend")
     if backend is None:
         raise CliError(
-            f"No backend selected. Use --backend ({', '.join(BACKENDS)}) "
-            "or set ENVIRONMENT_STORE_BACKEND."
+            f"No {'destination ' if prefix else ''}backend selected. Use {flag}backend "
+            f"({', '.join(BACKENDS)}) or set {env}BACKEND."
         )
+
+    json_file = getattr(args, f"{prefix}json_file")
+    database_url = getattr(args, f"{prefix}database_url")
+    store_prefix = getattr(args, f"{prefix}prefix")
 
     if backend == "json":
         from environment_store.adapters.json.json_file_adapter import JsonFileAdapter
 
-        if not args.json_file:
-            raise CliError("The json backend needs --json-file or ENVIRONMENT_STORE_JSON_FILE.")
-        return EnvironmentStoreManager(adapter=JsonFileAdapter(args.json_file))
+        if not json_file:
+            raise CliError(f"The json backend needs {flag}json-file or {env}JSON_FILE.")
+        return EnvironmentStoreManager(adapter=JsonFileAdapter(json_file))
 
     if backend == "postgres":
         from environment_store.adapters.postgresql import PostgreSQLAdapter
 
-        if not args.database_url:
+        if not database_url:
             raise CliError(
-                "The postgres backend needs --database-url or ENVIRONMENT_STORE_DATABASE_URL."
+                f"The postgres backend needs {flag}database-url or {env}DATABASE_URL."
             )
-        return EnvironmentStoreManager(adapter=PostgreSQLAdapter(args.database_url))
+        return EnvironmentStoreManager(adapter=PostgreSQLAdapter(database_url))
+
+    region = getattr(args, f"{prefix}region")
+    if not region:
+        raise CliError(f"The {backend} backend needs {flag}region, {env}REGION or AWS_REGION.")
 
     if backend == "ssm":
         from environment_store.adapters.aws.ssm_parameter_store import ParameterStoreAdapter
 
         return EnvironmentStoreManager(
             adapter=ParameterStoreAdapter(
-                region=_require_region(args),
-                prefix=args.prefix or "",
-                parameter_type=args.parameter_type,
+                region=region,
+                prefix=store_prefix or "",
+                parameter_type=getattr(args, f"{prefix}parameter_type"),
             )
         )
 
     from environment_store.adapters.aws.secrets_manager import SecretsManagerAdapter
 
     return EnvironmentStoreManager(
-        adapter=SecretsManagerAdapter(
-            region=_require_region(args), prefix=args.prefix or "environment-store"
-        )
+        adapter=SecretsManagerAdapter(region=region, prefix=store_prefix or "environment-store")
     )
 
 
-def _require_region(args: argparse.Namespace) -> str:
-    if not args.region:
-        raise CliError(
-            f"The {args.backend} backend needs --region, ENVIRONMENT_STORE_REGION or AWS_REGION."
-        )
-    return args.region
+def _backend_identity(args: argparse.Namespace, prefix: str = "") -> tuple[str | None, ...]:
+    """What makes two backend selections point at the same store."""
+    backend = getattr(args, f"{prefix}backend")
+    if backend == "json":
+        json_file = getattr(args, f"{prefix}json_file")
+        return (backend, os.path.abspath(json_file) if json_file else None)
+    if backend == "postgres":
+        return (backend, getattr(args, f"{prefix}database_url"))
+    return (backend, getattr(args, f"{prefix}region"), getattr(args, f"{prefix}prefix"))
 
 
 def _env(name: str) -> str | None:
@@ -295,6 +312,39 @@ def cmd_delete_level(manager: EnvironmentStoreManager, args: argparse.Namespace)
     return 0
 
 
+def cmd_transfer(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
+    if _backend_identity(args) == _backend_identity(args, "dest_"):
+        raise CliError("Source and destination are the same store.")
+    destination = build_manager(args, "dest_")
+    result = destination.import_from(
+        manager, **_hierarchy(args), overwrite=args.overwrite, dry_run=args.dry_run
+    )
+    if args.format == "json":
+        _out(result.model_dump_json(indent=2))
+    else:
+        for conflict in result.conflicts:
+            where = describe(tuple(conflict.path))
+            print(
+                f"conflict: {conflict.name} at {where} differs in the destination",
+                file=sys.stderr,
+            )
+    verb = "Would transfer" if args.dry_run else "Transferred"
+    scope = _describe(args) if any(_hierarchy(args).values()) else "the whole store"
+    print(
+        f"{verb} {scope} from {args.backend} to {args.dest_backend}: {result.levels} level(s), "
+        f"{result.created} created, {result.updated} updated, {result.unchanged} unchanged, "
+        f"{result.skipped} skipped",
+        file=sys.stderr,
+    )
+    if result.skipped:
+        print(
+            "Skipped variables already exist with a different value; use --overwrite to replace them.",
+            file=sys.stderr,
+        )
+        return EXIT_CONFLICT
+    return 0
+
+
 def cmd_migrate(args: argparse.Namespace) -> int:
     if args.backend != "postgres":
         raise CliError(
@@ -349,45 +399,62 @@ def _hierarchy_parser() -> argparse.ArgumentParser:
     return parent
 
 
+def _add_backend_options(group: argparse._ArgumentGroup, dest: bool) -> None:
+    """Add the backend options. With ``dest`` they select the destination of ``transfer``."""
+    flag, key, env, name = (
+        ("--dest-", "dest_", "DEST_", "destination ") if dest else ("--", "", "", "")
+    )
+    var = f"ENVIRONMENT_STORE_{env}"
+    group.add_argument(
+        f"{flag}backend",
+        dest=f"{key}backend",
+        choices=BACKENDS,
+        default=_env(f"{env}BACKEND"),
+        help=f"{name}storage backend ({var}BACKEND)",
+    )
+    group.add_argument(
+        f"{flag}json-file",
+        dest=f"{key}json_file",
+        default=_env(f"{env}JSON_FILE"),
+        help=f"json backend: file path ({var}JSON_FILE)",
+    )
+    group.add_argument(
+        f"{flag}database-url",
+        dest=f"{key}database_url",
+        default=_env(f"{env}DATABASE_URL"),
+        help=f"postgres backend: SQLAlchemy URL ({var}DATABASE_URL)",
+    )
+    group.add_argument(
+        f"{flag}region",
+        dest=f"{key}region",
+        default=_env(f"{env}REGION") or os.environ.get("AWS_REGION"),
+        help=f"ssm/secretsmanager: AWS region ({var}REGION, AWS_REGION)",
+    )
+    group.add_argument(
+        f"{flag}prefix",
+        dest=f"{key}prefix",
+        default=_env(f"{env}PREFIX"),
+        help=f"ssm/secretsmanager: name prefix ({var}PREFIX)",
+    )
+    group.add_argument(
+        f"{flag}parameter-type",
+        dest=f"{key}parameter_type",
+        choices=("String", "SecureString"),
+        default=_env(f"{env}PARAMETER_TYPE") or "SecureString",
+        help=f"ssm: parameter type ({var}PARAMETER_TYPE, default SecureString)",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="environment-store",
         description="Manage hierarchical environment variables in a persistent store.",
     )
-    backend = parser.add_argument_group(
-        "backend", "Each option can also be set via the ENVIRONMENT_STORE_* variable shown."
-    )
-    backend.add_argument(
-        "--backend",
-        choices=BACKENDS,
-        default=_env("BACKEND"),
-        help="storage backend (ENVIRONMENT_STORE_BACKEND)",
-    )
-    backend.add_argument(
-        "--json-file",
-        default=_env("JSON_FILE"),
-        help="json backend: file path (ENVIRONMENT_STORE_JSON_FILE)",
-    )
-    backend.add_argument(
-        "--database-url",
-        default=_env("DATABASE_URL"),
-        help="postgres backend: SQLAlchemy URL (ENVIRONMENT_STORE_DATABASE_URL)",
-    )
-    backend.add_argument(
-        "--region",
-        default=_env("REGION") or os.environ.get("AWS_REGION"),
-        help="ssm/secretsmanager: AWS region (ENVIRONMENT_STORE_REGION, AWS_REGION)",
-    )
-    backend.add_argument(
-        "--prefix",
-        default=_env("PREFIX"),
-        help="ssm/secretsmanager: name prefix (ENVIRONMENT_STORE_PREFIX)",
-    )
-    backend.add_argument(
-        "--parameter-type",
-        choices=("String", "SecureString"),
-        default=_env("PARAMETER_TYPE") or "SecureString",
-        help="ssm: parameter type (ENVIRONMENT_STORE_PARAMETER_TYPE, default SecureString)",
+    _add_backend_options(
+        parser.add_argument_group(
+            "backend", "Each option can also be set via the ENVIRONMENT_STORE_* variable shown."
+        ),
+        dest=False,
     )
 
     hierarchy = _hierarchy_parser()
@@ -451,6 +518,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--format", choices=("lines", "json"), default="lines")
     p.set_defaults(func=cmd_children)
+
+    p = sub.add_parser(
+        "transfer",
+        parents=[hierarchy],
+        help="copy variables from this store (the main backend options) to another backend",
+        description=(
+            "Copy the variables of the main store (--backend ...) into the destination store "
+            "(--dest-backend ...), keeping the hierarchy. Use -o/-p/-e/-s to copy only a subtree. "
+            "Existing variables with a different value are skipped unless --overwrite is given. "
+            "The source is never modified. Exit code 3 means some variables were skipped."
+        ),
+    )
+    _add_backend_options(p.add_argument_group("destination backend"), dest=True)
+    p.add_argument(
+        "--overwrite", action="store_true", help="replace differing destination values"
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="report what would happen, write nothing"
+    )
+    p.add_argument("--format", choices=("text", "json"), default="text")
+    p.set_defaults(func=cmd_transfer)
 
     p = sub.add_parser("migrate", help="apply the database migrations (postgres backend only)")
     p.add_argument(

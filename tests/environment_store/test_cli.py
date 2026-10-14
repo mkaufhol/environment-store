@@ -189,3 +189,94 @@ def test_delete_level_refuses_root_and_skipped_levels(store, capsys):
     assert "root level" in capsys.readouterr().err
     assert store("delete-level", "-p", "web", "--confirm", "web") == 2
     assert "requires organisation" in capsys.readouterr().err
+
+
+@pytest.fixture
+def two_stores(tmp_path):
+    source, dest = str(tmp_path / "source.json"), str(tmp_path / "dest.json")
+
+    def run(*args: str, source_args=("--backend", "json", "--json-file")) -> int:
+        return main([*source_args, source, *args])
+
+    def dest_run(*args: str) -> int:
+        return main(["--backend", "json", "--json-file", dest, *args])
+
+    return run, dest_run, source, dest
+
+
+def _transfer(run, dest, *args):
+    return run("transfer", "--dest-backend", "json", "--dest-json-file", dest, *args)
+
+
+def test_transfer_copies_store(two_stores, capsys):
+    run, dest_run, _, dest = two_stores
+    _seed(run)
+    capsys.readouterr()
+    assert _transfer(run, dest) == 0
+    assert "4 created" in capsys.readouterr().err
+    dest_run("list", "-o", "acme", "-p", "web", "-e", "dev", "--resolved", "--format", "json")
+    assert json.loads(capsys.readouterr().out) == {"ROOT": "r", "A": "1", "B": "2", "C": "3"}
+    run("children")  # source unchanged
+    assert capsys.readouterr().out == "acme\n"
+
+
+def test_transfer_dry_run_subtree_and_json(two_stores, capsys):
+    run, dest_run, _, dest = two_stores
+    _seed(run)
+    capsys.readouterr()
+    assert _transfer(run, dest, "-o", "acme", "-p", "web", "--dry-run", "--format", "json") == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["created"] == 2
+    assert "Would transfer" in captured.err
+    dest_run("children")
+    assert capsys.readouterr().out == ""
+
+
+def test_transfer_conflicts_exit_3_until_overwrite(two_stores, capsys):
+    run, dest_run, _, dest = two_stores
+    _seed(run)
+    dest_run("set", "A", "different", "-o", "acme")
+    capsys.readouterr()
+    assert _transfer(run, dest) == 3
+    err = capsys.readouterr().err
+    assert "conflict: A at acme" in err and "--overwrite" in err
+    dest_run("get", "A", "-o", "acme")
+    assert capsys.readouterr().out == "different\n"
+    assert _transfer(run, dest, "--overwrite") == 0
+    dest_run("get", "A", "-o", "acme")
+    assert capsys.readouterr().out == "1\n"
+
+
+def test_transfer_rejects_same_store_and_missing_destination(two_stores, capsys, monkeypatch):
+    run, _, source, _ = two_stores
+    monkeypatch.delenv("ENVIRONMENT_STORE_DEST_BACKEND", raising=False)
+    assert run("transfer", "--dest-backend", "json", "--dest-json-file", source) == 1
+    assert "same store" in capsys.readouterr().err
+    assert run("transfer") == 1
+    assert "--dest-backend" in capsys.readouterr().err
+
+
+def test_transfer_to_aws_parameter_store(two_stores, capsys):
+    boto3 = pytest.importorskip("boto3")
+    moto = pytest.importorskip("moto")
+    run, _, _, _ = two_stores
+    _seed(run)
+    capsys.readouterr()
+    with moto.mock_aws():
+        code = run(
+            "transfer",
+            "--dest-backend",
+            "ssm",
+            "--dest-region",
+            "eu-central-1",
+            "--dest-prefix",
+            "app",
+        )
+        assert code == 0
+        ssm = boto3.client("ssm", region_name="eu-central-1")
+        names = sorted(
+            p["Name"]
+            for p in ssm.get_parameters_by_path(Path="/", Recursive=True)["Parameters"]
+        )
+        assert "/app/acme/web/dev/C" in names
+        assert len(names) == 4

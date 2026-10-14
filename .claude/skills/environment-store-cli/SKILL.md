@@ -51,6 +51,7 @@ environment-store import .env -o acme -p web -e dev           # .env or flat JSO
 environment-store import vars.json ... --dry-run              # preview, writes nothing
 environment-store delete-level -o acme -p web --dry-run      # preview: sub-levels and variables affected
 environment-store delete-level -o acme -p web --confirm web  # delete the level and EVERYTHING below it
+environment-store transfer --dest-backend postgres --dest-database-url URL --dry-run   # copy store -> other backend
 environment-store children                                    # list organisations
 environment-store children -o acme [-p web [-e dev]]          # projects / environments / services
 ```
@@ -84,13 +85,25 @@ deepest level given (agents run without a terminal, so there is no prompt). Alwa
 user the numbers and get an explicit yes before passing `--confirm`. Never fill `--confirm` from the user's
 general request such as "clean up".
 
-## 6. Output & errors
+## 6. Transferring between backends
+
+`transfer` copies the store selected by the main options (`--backend ...`) into the destination given with
+`--dest-backend`, `--dest-json-file`, `--dest-database-url`, `--dest-region`, `--dest-prefix`
+(or `ENVIRONMENT_STORE_DEST_*`). Add `-o/-p/-e/-s` to copy only a subtree. The source is never changed.
+
+- Always run `--dry-run` first and report the counts to the user.
+- Existing destination variables with a different value are skipped (listed on stderr, exit code `3`).
+  Only pass `--overwrite` after the user has seen the conflicts and agreed.
+- For a postgres destination run `environment-store --backend postgres --database-url URL migrate` first.
+- Use `--format json` to read the result programmatically (`created`, `updated`, `unchanged`, `skipped`, `conflicts`).
+
+## 7. Output & errors
 
 - Data goes to stdout; status messages (`Set ...`, `Deleted ...`) and errors go to stderr as `error: ...`.
-- Exit codes: `0` ok, `1` runtime/backend error or variable not found, `2` invalid hierarchy/arguments.
+- Exit codes: `0` ok, `1` runtime/backend error or variable not found, `2` invalid hierarchy/arguments, `3` `transfer` skipped conflicting variables.
 - Common fixes: "No backend selected" → set `--backend`/env; "requires organisation" → add the missing parent flag; "missing dependency" → install the extra (`environment-store[aws]` or `[postgres]`).
 - Backend naming limits: AWS backends allow only `a-zA-Z0-9_.-` in names and prefix.
 
-## 7. Don't use `tui`
+## 8. Don't use `tui`
 
 `environment-store tui` opens an interactive full-screen UI for humans. Agents must not run it; use the commands above.

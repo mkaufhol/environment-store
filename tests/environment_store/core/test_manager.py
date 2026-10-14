@@ -170,3 +170,69 @@ class TestDeleteLevel:
         assert [v.name for v in manager.get_resolved_variables()] == ["ROOT"]
         with pytest.raises(ValueError, match="requires organisation"):
             manager.get_resolved_variables(project="web")
+
+
+class TestImportFrom:
+    @pytest.fixture
+    def stores(self, tmp_path):
+        from environment_store.adapters.json.json_file_adapter import JsonFileAdapter
+
+        source = EnvironmentStoreManager(JsonFileAdapter(str(tmp_path / "source.json")))
+        destination = EnvironmentStoreManager(JsonFileAdapter(str(tmp_path / "dest.json")))
+        source.set_variable("ROOT", "r")
+        source.set_variable("A", "1", organisation="acme")
+        source.set_variable("B", "2", organisation="acme", project="web")
+        source.set_variable("C", "3", organisation="acme", project="web", environment="dev")
+        source.set_variable("E", "5", organisation="other")
+        return source, destination
+
+    def test_iter_levels_walks_parents_first_and_skips_empty_levels(self, stores):
+        source, _ = stores
+        assert [path for path, _ in source.iter_levels()] == [
+            (),
+            ("acme",),
+            ("acme", "web"),
+            ("acme", "web", "dev"),
+            ("other",),
+        ]
+        assert [path for path, _ in source.iter_levels(organisation="acme", project="web")] == [
+            ("acme", "web"),
+            ("acme", "web", "dev"),
+        ]
+
+    def test_copies_everything_and_leaves_source_untouched(self, stores):
+        source, destination = stores
+        result = destination.import_from(source)
+        assert (result.levels, result.created, result.skipped) == (5, 5, 0)
+        assert (
+            destination.get_variable("C", organisation="acme", project="web", environment="dev")
+            == "3"
+        )
+        assert destination.get_variable("ROOT") == "r"
+        assert source.count_level(organisation="acme") == (3, 2)
+
+    def test_copies_only_a_subtree(self, stores):
+        source, destination = stores
+        result = destination.import_from(source, organisation="acme", project="web")
+        assert result.created == 2
+        assert destination.get_organisations() == ["acme"]
+        assert destination.get_variables(organisation="acme") == []
+
+    def test_existing_values_conflict_unless_overwrite(self, stores):
+        source, destination = stores
+        destination.set_variable("A", "other value", organisation="acme")
+        destination.set_variable("ROOT", "r")
+        result = destination.import_from(source)
+        assert (result.created, result.unchanged, result.skipped) == (3, 1, 1)
+        assert [(c.path, c.name) for c in result.conflicts] == [(["acme"], "A")]
+        assert destination.get_variable("A", organisation="acme") == "other value"
+        result = destination.import_from(source, overwrite=True)
+        assert (result.updated, result.unchanged, result.skipped) == (1, 4, 0)
+        assert destination.get_variable("A", organisation="acme") == "1"
+
+    def test_dry_run_writes_nothing(self, stores):
+        source, destination = stores
+        result = destination.import_from(source, dry_run=True)
+        assert result.created == 5
+        assert destination.get_organisations() == []
+        assert destination.get_variables() == []

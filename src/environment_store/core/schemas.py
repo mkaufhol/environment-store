@@ -27,3 +27,21 @@ class Organization(BaseModel):
     name: str
     variables: list[Variable]
     projects: list[Project]
+
+
+class TransferConflict(BaseModel):
+    """A variable that exists in the destination with a different value."""
+
+    path: list[str]
+    name: str
+
+
+class TransferResult(BaseModel):
+    """What ``EnvironmentStoreManager.import_from`` did (or would do when run as a dry run)."""
+
+    levels: int = 0
+    created: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    skipped: int = 0
+    conflicts: list[TransferConflict] = []

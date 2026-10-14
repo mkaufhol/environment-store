@@ -1,8 +1,10 @@
+from collections.abc import Iterator
+
 from .abstract_adapter import AbstractAdapter
 from .decorators import validate_hierarchy
 from .exceptions import ConfirmationMismatchError
 from .hierarchy import Path, level_kind, to_kwargs, to_path
-from .schemas import Variable
+from .schemas import TransferConflict, TransferResult, Variable
 
 
 class EnvironmentStoreManager:
@@ -339,6 +341,77 @@ class EnvironmentStoreManager:
         if len(path) == 3:
             return self.get_environment_variables(path[0], path[1], path[2])
         return self.get_service_variables(path[0], path[1], path[2], path[3])
+
+    @validate_hierarchy
+    def iter_levels(
+        self,
+        organisation: str | None = None,
+        project: str | None = None,
+        environment: str | None = None,
+        service: str | None = None,
+    ) -> Iterator[tuple[Path, list[Variable]]]:
+        """
+        Walk a level and everything below it (the whole store without arguments).
+
+        Yields ``(path, variables)`` for every level that holds variables, parents before children.
+        """
+        start = to_path(organisation, project, environment, service)
+        for path in sorted(self._level_paths(start)):
+            variables = self.get_variables(**to_kwargs(path))
+            if variables:
+                yield path, variables
+
+    @validate_hierarchy
+    def import_from(
+        self,
+        source: "EnvironmentStoreManager",
+        organisation: str | None = None,
+        project: str | None = None,
+        environment: str | None = None,
+        service: str | None = None,
+        *,
+        overwrite: bool = False,
+        dry_run: bool = False,
+    ) -> TransferResult:
+        """
+        Copy the variables of another store into this one, keeping the hierarchy.
+
+        Transfers the given level and everything below it (the whole store without arguments).
+        Variables that do not exist here are created. Variables that exist with the same value are
+        left alone. Variables that exist with a different value are only replaced when
+        ``overwrite`` is set, otherwise they are reported as conflicts and skipped. The source is
+        never modified.
+
+        :param source: The manager to read from
+        :param overwrite: Replace existing variables that have a different value
+        :param dry_run: Compute the result without writing anything
+        """
+        result = TransferResult()
+        for path, variables in source.iter_levels(
+            organisation=organisation, project=project, environment=environment, service=service
+        ):
+            kwargs = to_kwargs(path)
+            existing = {v.name: v.value for v in self.get_variables(**kwargs)}
+            to_write: list[Variable] = []
+            for variable in variables:
+                if variable.name not in existing:
+                    result.created += 1
+                elif existing[variable.name] == variable.value:
+                    result.unchanged += 1
+                    continue
+                elif overwrite:
+                    result.updated += 1
+                else:
+                    result.skipped += 1
+                    result.conflicts.append(
+                        TransferConflict(path=list(path), name=variable.name)
+                    )
+                    continue
+                to_write.append(variable)
+            result.levels += 1
+            if to_write and not dry_run:
+                self.set_variables(to_write, **kwargs)
+        return result
 
     @validate_hierarchy
     def count_level(
