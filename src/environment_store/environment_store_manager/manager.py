@@ -1,6 +1,6 @@
-from .schemas import Variable
-from .decorators import validate_hierarchy
 from .adapter.abstract_adapter import AbstractAdapter
+from .decorators import validate_hierarchy
+from .schemas import Variable
 
 
 class EnvironmentStoreManager:
@@ -137,7 +137,7 @@ class EnvironmentStoreManager:
         """
         variables = []
         if include_parent:
-            variables.append(self.get_variables())
+            variables.extend(self.get_variables())
         return self.overwrite_hierarchy_variables(
             variables,
             self.get_variables(organisation=organisation),
@@ -162,7 +162,7 @@ class EnvironmentStoreManager:
         """
         variables = []
         if include_parent:
-            variables.append(
+            variables.extend(
                 self.get_organisation_variables(organisation, include_parent=include_parent)
             )
         return self.overwrite_hierarchy_variables(
@@ -191,7 +191,7 @@ class EnvironmentStoreManager:
         """
         variables = []
         if include_parent:
-            variables.append(
+            variables.extend(
                 self.get_project_variables(organisation, project, include_parent=include_parent)
             )
         return self.overwrite_hierarchy_variables(
@@ -224,7 +224,7 @@ class EnvironmentStoreManager:
         """
         variables = []
         if include_parent:
-            variables.append(
+            variables.extend(
                 self.get_environment_variables(
                     organisation, project, environment, include_parent=include_parent
                 )
@@ -301,4 +301,4 @@ class EnvironmentStoreManager:
             variables_dict.update(overwrite_dict)
             return list(variables_dict.values())
         overwrite_dict.update(variables_dict)
-        return sorted(list(overwrite_dict.values()), key=lambda x: x.name)
+        return sorted(overwrite_dict.values(), key=lambda x: x.name)

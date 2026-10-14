@@ -22,16 +22,14 @@ class TestParameterStoreInitialization:
 
     def test_initialization_with_empty_region(self, aws_credentials):
         """Test that ParameterStore raises ValueError with an invalid region."""
-        with pytest.raises(ValueError):
-            with mock_aws():
-                ParameterStore(region="")
+        with pytest.raises(ValueError), mock_aws():
+            ParameterStore(region="")
 
     def test_initialization_with_invalid_region(self, aws_credentials):
         """Test that ParameterStore raises ValueError with an invalid region."""
-        with pytest.raises(KeyError):
-            with mock_aws():
-                store = ParameterStore(region="invalid-region")
-                store.client.describe_parameters()
+        with pytest.raises(KeyError), mock_aws():
+            store = ParameterStore(region="invalid-region")
+            store.client.describe_parameters()
 
     def test_initialization_with_clean_string_false(self, aws_credentials):
         """Test that ParameterStore initializes with clean_string=False."""

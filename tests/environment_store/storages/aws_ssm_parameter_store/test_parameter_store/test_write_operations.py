@@ -6,6 +6,7 @@ write operations including create_parameter, update_parameter, and update_or_cre
 """
 
 import pytest
+from botocore.exceptions import ParamValidationError
 
 
 class TestParameterStoreWriteOperations:
@@ -637,7 +638,7 @@ class TestParameterStoreWriteOperations:
         """Test that delete_parameters raises error with empty list (AWS API requirement)."""
         # AWS API requires at least one parameter name
         # Act & Assert: Try to delete with empty list
-        with pytest.raises(Exception):  # AWS will raise ParamValidationError
+        with pytest.raises(ParamValidationError):
             parameter_store.delete_parameters([])
 
     def test_delete_parameters_with_single_parameter(self, parameter_store):

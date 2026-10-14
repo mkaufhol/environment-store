@@ -1,4 +1,5 @@
 import pytest
+
 from environment_store.storages.aws_ssm_parameter_store.validation import (
     make_string_parameter_store_compatible,
     validate_string,
@@ -477,12 +478,12 @@ class TestValidateString:
         """Test None string raises ValueError when raises=True."""
         # None is treated as falsy and not allowed
         with pytest.raises(ValueError) as exc_info:
-            validate_string(None)
+            validate_string(None)  # ty: ignore[invalid-argument-type]
         assert "String cannot be empty" in str(exc_info.value)
 
     def test_none_string_returns_false_no_raise(self):
         """Test None string returns False when raises=False."""
-        assert validate_string(None, raises=False) is False
+        assert validate_string(None, raises=False) is False  # ty: ignore[invalid-argument-type]
 
     def test_whitespace_only_string_raises_error(self):
         """Test string with only whitespace raises error."""
