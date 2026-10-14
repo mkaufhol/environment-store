@@ -32,6 +32,9 @@ classifiers = [
     "Programming Language :: Python :: 3.15",
 ]
 
+[project.scripts]
+environment-store = "environment_store.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/mkaufhol/environment-store"
 Repository = "https://github.com/mkaufhol/environment-store"

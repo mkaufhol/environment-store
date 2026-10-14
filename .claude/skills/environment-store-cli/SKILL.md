@@ -1,0 +1,78 @@
+---
+name: environment-store-cli
+description: Read and manage hierarchical environment variables (organisation > project > environment > service) with the `environment-store` CLI. Use when asked to get, set, list, delete, import or export environment variables/secrets, to load an environment's config for a service, or to inspect which orgs/projects/environments/services exist in the store.
+---
+
+# environment-store CLI
+
+Manages variables in a hierarchy: **organisation > project > environment > service > variable**.
+Names are unique per level, not across levels. Levels cannot be skipped
+(`-p` needs `-o`, `-e` needs `-p`, `-s` needs `-e`). No hierarchy flags = root level.
+
+Run it as `environment-store ...` (or `uv run environment-store ...` / `python -m environment_store ...`).
+
+## 1. Backend (check this first)
+
+A backend must be selected, via flags or env vars. Check the environment before asking the user:
+
+```bash
+env | grep '^ENVIRONMENT_STORE_'
+```
+
+| Backend | Selected with | Needs |
+|---|---|---|
+| `json` | `--backend json` | `--json-file PATH` / `ENVIRONMENT_STORE_JSON_FILE` |
+| `postgres` | `--backend postgres` | `--database-url URL` / `ENVIRONMENT_STORE_DATABASE_URL` |
+| `ssm` | `--backend ssm` | `--region` / `ENVIRONMENT_STORE_REGION` / `AWS_REGION`; optional `--prefix`, `--parameter-type` |
+| `secretsmanager` | `--backend secretsmanager` | region as above; optional `--prefix` |
+
+`ENVIRONMENT_STORE_BACKEND` sets the backend. Backend flags go **before** the subcommand:
+`environment-store --backend json --json-file s.json list -o acme`.
+AWS credentials come from the normal boto3 chain. If the user has not told you which backend/store
+to use and none is configured, ask — never guess a production store. Prefer a throwaway `json` file for experiments.
+
+## 2. Commands
+
+Hierarchy flags (all commands except where noted): `-o ORG -p PROJECT -e ENV -s SERVICE`.
+
+```bash
+environment-store get NAME -o acme -p web -e prod            # prints raw value; exit 1 if missing
+environment-store get NAME --format json                      # {"name":..,"value":..}
+environment-store set NAME VALUE -o acme -p web               # create or update
+printf %s "$SECRET" | environment-store set NAME --stdin      # keep secrets out of argv/history
+environment-store set NAME --from-file ./cert.pem
+environment-store list -o acme -p web -e prod                 # only that level, NAME=value lines
+environment-store list ... --resolved                         # merged with parent levels, deeper wins
+environment-store list ... --format json|dotenv|export|table
+environment-store list ... --names-only                       # no values
+environment-store list ... --mask                             # values shown as ***
+environment-store delete NAME [NAME...] -o acme --yes
+environment-store import .env -o acme -p web -e dev           # .env or flat JSON, `-` = stdin
+environment-store import vars.json ... --dry-run              # preview, writes nothing
+environment-store children                                    # list organisations
+environment-store children -o acme [-p web [-e dev]]          # projects / environments / services
+```
+
+## 3. Efficient workflows
+
+- **Discover first:** `children` (then `children -o X`, `-o X -p Y`, ...) to learn exact names before reading or writing. Names are case-sensitive.
+- **Effective config for a service:** use `list ... --resolved --format json` at the deepest level rather than querying each level yourself. Plain `list` returns only that one level.
+- **Parse programmatically:** use `--format json` (a `{NAME: value}` object) and `children --format json` (array). Don't scrape table output.
+- **Export into a shell:** `eval "$(environment-store list -o a -p b -e prod --resolved --format export)"` — only when the user wants the variables in the current shell.
+- **Bulk changes:** one `import` call beats many `set` calls. Run with `--dry-run` first.
+- **Single value in a script:** `VAL=$(environment-store get NAME -o a)`; use `--raw` to drop the trailing newline.
+
+## 4. Safety rules
+
+- Values are often secrets. Use `--names-only` or `--mask` when you only need to know *what exists*; don't print or paste values into chat, commits or logs unless the user asks.
+- Pass secret values via `--stdin` / `--from-file`, not as command-line arguments.
+- `set` silently overwrites an existing value, and `delete` is permanent (SecretsManager deletes without a recovery window). Before modifying prod-like levels, `get` the current value and confirm intent with the user.
+- `delete` prompts only on an interactive TTY; agents must pass `--yes`, so confirm with the user first.
+- Setting at a higher level (root/org) changes the resolved result for everything below it unless overridden.
+
+## 5. Output & errors
+
+- Data goes to stdout; status messages (`Set ...`, `Deleted ...`) and errors go to stderr as `error: ...`.
+- Exit codes: `0` ok, `1` runtime/backend error or variable not found, `2` invalid hierarchy/arguments.
+- Common fixes: "No backend selected" → set `--backend`/env; "requires organisation" → add the missing parent flag; "missing dependency" → install the extra (`environment-store[aws]` or `[postgres]`).
+- Backend naming limits: AWS backends allow only `a-zA-Z0-9_.-` in names and prefix.
