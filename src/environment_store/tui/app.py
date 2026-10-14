@@ -95,6 +95,52 @@ class NewLevelForm(ModalScreen[tuple[str, str, str] | None]):
         self.dismiss(None)
 
 
+class ConfirmDeleteLevel(ModalScreen[bool]):
+    """Warn about deleting a level and require typing its name to confirm."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(
+        self, kind: str, name: str, where: str, variables: int, sub_levels: int
+    ) -> None:
+        super().__init__()
+        self._kind, self._level_name, self._where = kind, name, where
+        self._variables, self._sub_levels = variables, sub_levels
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label(f"Delete {self._kind} '{self._level_name}'?", id="warning-title")
+            yield Label(
+                f"This permanently deletes {self._where}, {self._sub_levels} level(s) below it "
+                f"and {self._variables} variable(s). This cannot be undone."
+            )
+            yield Label(f"Type '{self._level_name}' to confirm:")
+            yield Input(placeholder=self._level_name, id="confirm")
+            with Horizontal(id="buttons"):
+                yield Button("Delete", variant="error", id="yes", disabled=True)
+                yield Button("Cancel", id="no")
+
+    def on_mount(self) -> None:
+        self.query_one("#confirm", Input).focus()
+
+    @on(Input.Changed, "#confirm")
+    def confirm_changed(self, event: Input.Changed) -> None:
+        self.query_one("#yes", Button).disabled = event.value != self._level_name
+
+    @on(Input.Submitted, "#confirm")
+    def confirm_submitted(self, event: Input.Submitted) -> None:
+        if event.value == self._level_name:
+            self.dismiss(True)
+
+    @on(Button.Pressed, "#yes")
+    def yes(self) -> None:
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#no")
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class ConfirmDelete(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
 
@@ -124,14 +170,16 @@ class EnvironmentStoreApp(App[None]):
     #tree { width: 36; border: round $primary; }
     #main { border: round $primary; }
     #path { padding: 0 1; text-style: bold; }
-    VariableForm, NewLevelForm, ConfirmDelete { align: center middle; }
+    VariableForm, NewLevelForm, ConfirmDelete, ConfirmDeleteLevel { align: center middle; }
     #dialog { width: 60; height: auto; padding: 1 2; border: thick $primary; background: $surface; }
+    #warning-title { text-style: bold; color: $error; }
     #buttons { height: auto; margin-top: 1; }
     #buttons Button { margin-right: 2; }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("a", "add", "Add"),
         Binding("n", "new_level", "New level"),
+        Binding("x", "delete_level", "Delete level"),
         Binding("e", "edit", "Edit"),
         Binding("d", "delete", "Delete"),
         Binding("r", "toggle_resolved", "Resolved"),
@@ -289,6 +337,33 @@ class EnvironmentStoreApp(App[None]):
 
         self.push_screen(NewLevelForm(kind, parent), done)
 
+    def action_delete_level(self) -> None:
+        path = self.path
+        if not path:
+            self.notify("The root level cannot be deleted", severity="warning")
+            return
+        kind, name = LEVELS[len(path) - 1], path[-1]
+        try:
+            variables, sub_levels = self.manager.count_level(**path_kwargs(path))
+        except Exception as exc:  # noqa: BLE001
+            self.notify(f"{type(exc).__name__}: {exc}", severity="error")
+            return
+
+        def done(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+            try:
+                deleted = self.manager.delete_level(**path_kwargs(path))
+            except Exception as exc:  # noqa: BLE001
+                self.notify(f"{type(exc).__name__}: {exc}", severity="error")
+                return
+            self.notify(f"Deleted {kind} {name} ({deleted} variable(s))")
+            self._reveal(path[:-1])
+
+        self.push_screen(
+            ConfirmDeleteLevel(kind, name, describe(path), variables, sub_levels), done
+        )
+
     def _reveal(self, path: Path) -> None:
         """Reload the tree along ``path`` and move the cursor to its last node."""
         tree = self.query_one("#tree", Tree)
@@ -300,6 +375,9 @@ class EnvironmentStoreApp(App[None]):
             if match is None:
                 return
             node = match
+        if node.allow_expand:
+            self._load_children(node)
+            node.expand()
         # The tree rebuilds its lines lazily, so move the cursor once it has refreshed.
         self.call_after_refresh(tree.move_cursor, node)
         tree.focus()

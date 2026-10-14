@@ -154,6 +154,7 @@ until you press `v`.
 | `d`      | delete the highlighted variable (asks for confirmation)             |
 | `n`      | new child level (organisation at root, then project, environment, service); asks for a name and a first variable, since a level exists once it holds a variable |
 | `r`      | toggle the resolved view (merged with parent levels, deeper wins)   |
+| `x`      | delete the selected level with everything below it; you must type its name to confirm |
 | `v`      | show / hide values                                                  |
 | `F5`     | reload the tree and the table                                       |
 | `q`      | quit                                                                |
