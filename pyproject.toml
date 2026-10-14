@@ -43,6 +43,13 @@ Issues = "https://github.com/mkaufhol/environment-store/issues"
 [project.optional-dependencies]
 aws = ["boto3>=1.42.68"]
 postgres = ["psycopg>=3.3.3", "sqlalchemy>=2.0.48"]
+tui = ["textual>=8.2"]
+full = [
+    "boto3>=1.42.68",
+    "psycopg>=3.3.3",
+    "sqlalchemy>=2.0.48",
+    "textual>=8.2",
+]
 
 [dependency-groups]
 dev = [
@@ -63,6 +70,7 @@ testing = [
     "coverage>=7.13.4",
     "sqlalchemy>=2.0.48",
     "psycopg[binary]>=3.3.3",
+    "textual>=8.2",
 ]
 
 [tool.uv]

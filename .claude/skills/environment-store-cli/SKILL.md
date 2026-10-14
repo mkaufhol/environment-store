@@ -76,3 +76,7 @@ environment-store children -o acme [-p web [-e dev]]          # projects / envir
 - Exit codes: `0` ok, `1` runtime/backend error or variable not found, `2` invalid hierarchy/arguments.
 - Common fixes: "No backend selected" → set `--backend`/env; "requires organisation" → add the missing parent flag; "missing dependency" → install the extra (`environment-store[aws]` or `[postgres]`).
 - Backend naming limits: AWS backends allow only `a-zA-Z0-9_.-` in names and prefix.
+
+## 6. Don't use `tui`
+
+`environment-store tui` opens an interactive full-screen UI for humans. Agents must not run it; use the commands above.

@@ -75,6 +75,8 @@ The core package only depends on `pydantic`. The storage backends bring their ow
 | _(none)_   | core + `JsonFileAdapter`                               |
 | `aws`      | `ParameterStoreAdapter`, `SecretsManagerAdapter` (boto3) |
 | `postgres` | `PostgreSQLAdapter` (psycopg, sqlalchemy)              |
+| `tui`      | terminal UI, `environment-store tui` ([Textual](https://textual.textualize.io/)) |
+| `full`     | everything above: `aws` + `postgres` + `tui`           |
 
 ### With uv
 
@@ -85,6 +87,7 @@ uv add environment-store                 # core + JsonFileAdapter
 uv add "environment-store[aws]"          # + AWS adapters
 uv add "environment-store[postgres]"     # + PostgreSQL adapter
 uv add "environment-store[aws,postgres]" # multiple extras
+uv add "environment-store[full]"         # all extras
 ```
 
 If the package is not published to an index you can use, install it straight from the repository:
@@ -106,6 +109,55 @@ uv pip install "environment-store[aws]"
 ```bash
 pip install "environment-store[aws]"
 ```
+
+## Terminal UI
+
+An interactive terminal UI built with [Textual](https://textual.textualize.io/). It needs the `tui` extra
+(or `full`):
+
+```bash
+uv add "environment-store[tui]"
+```
+
+### Starting it
+
+It takes the same backend options as the CLI (`--backend`, `--json-file`, `--database-url`, `--region`,
+`--prefix`, or the matching `ENVIRONMENT_STORE_*` variables). Backend options go before `tui`:
+
+```bash
+environment-store --backend json --json-file ./store.json tui
+
+# or with environment variables
+export ENVIRONMENT_STORE_BACKEND=postgres
+export ENVIRONMENT_STORE_DATABASE_URL=postgresql+psycopg://user:pass@localhost/envstore
+environment-store tui
+```
+
+Without installing it into a project, you can also run it once with `uvx`:
+
+```bash
+uvx --from "environment-store[tui]" environment-store --backend json --json-file ./store.json tui
+```
+
+### Usage
+
+The left pane is the hierarchy tree (organisation > project > environment > service); nodes load their
+children when expanded. The right pane lists the variables of the selected level. Values are hidden (`***`)
+until you press `v`.
+
+| Key      | Action                                                              |
+|----------|---------------------------------------------------------------------|
+| `↑` `↓`  | move; selecting a tree node shows that level's variables            |
+| `→` `←`  | expand / collapse a tree node                                       |
+| `a`      | add a variable at the selected level                                |
+| `e`      | edit the highlighted variable                                       |
+| `d`      | delete the highlighted variable (asks for confirmation)             |
+| `r`      | toggle the resolved view (merged with parent levels, deeper wins)   |
+| `v`      | show / hide values                                                  |
+| `F5`     | reload the tree and the table                                       |
+| `q`      | quit                                                                |
+
+In the resolved view the table is read-only; switch it off with `r` to edit or delete.
 
 ## EnvironmentStoreManager usage
 

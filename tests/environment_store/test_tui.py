@@ -1,0 +1,63 @@
+import asyncio
+
+import pytest
+
+pytest.importorskip("textual")
+
+from textual.widgets import DataTable, Input, Tree
+
+from environment_store.adapters.json.json_file_adapter import JsonFileAdapter
+from environment_store.core import EnvironmentStoreManager
+from environment_store.tui.app import EnvironmentStoreApp
+
+
+@pytest.fixture
+def manager(tmp_path):
+    m = EnvironmentStoreManager(JsonFileAdapter(str(tmp_path / "s.json")))
+    m.set_variable("ROOT", "r")
+    m.set_variable("A", "org", organisation="acme")
+    m.set_variable("B", "proj", organisation="acme", project="web")
+    return m
+
+
+def test_tree_lists_hierarchy_and_table_follows_selection(manager):
+    async def scenario():
+        app = EnvironmentStoreApp(manager)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            tree = app.query_one(Tree)
+            assert [str(n.label) for n in tree.root.children] == ["acme"]
+            table = app.query_one(DataTable)
+            assert table.row_count == 1  # root variable
+            await pilot.press("down")
+            await pilot.pause()
+            assert app.path == ("acme",)
+            assert table.get_row("A") == ["A", "***"]
+            await pilot.press("v")
+            assert table.get_row("A") == ["A", "org"]
+            await pilot.press("r")
+            assert table.row_count == 2  # org + root
+
+    asyncio.run(scenario())
+
+
+def test_add_and_delete_variable(manager):
+    async def scenario():
+        app = EnvironmentStoreApp(manager)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            app.screen.query_one("#name", Input).value = "NEW"
+            app.screen.query_one("#value", Input).value = "val"
+            await pilot.click("#save")
+            await pilot.pause()
+            assert manager.get_variable("NEW") == "val"
+            app.query_one(DataTable).move_cursor(row=0)
+            await pilot.press("d")
+            await pilot.pause()
+            await pilot.click("#yes")
+            await pilot.pause()
+            assert len(manager.get_variables()) == 1
+
+    asyncio.run(scenario())
