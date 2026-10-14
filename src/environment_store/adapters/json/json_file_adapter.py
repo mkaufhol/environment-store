@@ -124,6 +124,7 @@ class JsonFileAdapter(AbstractAdapter):
                 .get(environment, {})
                 .get(service, {})
                 .items()
+                if isinstance(value, str)
             ]
         elif environment is not None and project is not None and organisation is not None:
             return [
@@ -132,19 +133,26 @@ class JsonFileAdapter(AbstractAdapter):
                 .get(project, {})
                 .get(environment, {})
                 .items()
+                if isinstance(value, str)
             ]
         elif project is not None and organisation is not None:
             return [
                 Variable(name=name, value=value)
                 for name, value in data.get(organisation, {}).get(project, {}).items()
+                if isinstance(value, str)
             ]
         elif organisation is not None:
             return [
                 Variable(name=name, value=value)
                 for name, value in data.get(organisation, {}).items()
+                if isinstance(value, str)
             ]
         else:
-            return [Variable(name=name, value=value) for name, value in data.items()]
+            return [
+                Variable(name=name, value=value)
+                for name, value in data.items()
+                if isinstance(value, str)
+            ]
 
     def delete_variable(
         self,

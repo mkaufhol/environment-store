@@ -145,6 +145,26 @@ manager.delete_variable("DB_HOST", organisation="acme", project="webapp")
 A level can only be addressed if all of its parents are given (a `service` needs an `environment`, a `project`
 needs an `organisation`, ...), otherwise a `ValueError` is raised.
 
+## Command line interface
+
+The package installs an `environment-store` command (also `python -m environment_store`).
+Select a backend with `--backend json|postgres|ssm|secretsmanager` (or `ENVIRONMENT_STORE_BACKEND`);
+see `environment-store --help` for the backend options and their `ENVIRONMENT_STORE_*` variables.
+
+```bash
+export ENVIRONMENT_STORE_BACKEND=json ENVIRONMENT_STORE_JSON_FILE=./store.json
+
+environment-store set DB_HOST localhost -o acme -p web -e dev
+environment-store get DB_HOST -o acme -p web -e dev
+environment-store list -o acme -p web -e dev --resolved --format json
+environment-store import .env -o acme -p web -e dev
+environment-store children -o acme
+environment-store delete DB_HOST -o acme -p web -e dev --yes
+```
+
+An agent skill describing efficient CLI usage lives in
+[.claude/skills/environment-store-cli/SKILL.md](.claude/skills/environment-store-cli/SKILL.md).
+
 ---
 
 # Local file storage
