@@ -76,6 +76,12 @@ testing = [
 
 [tool.uv]
 default-groups = ["dev", "testing", "stubs"]
+# Rebuild path installs (uvx --from <path>, uv add <path>) when sources change, not only pyproject.toml
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "src/**/*.py" },
+    { file = "src/**/*.sql" },
+]
 
 [build-system]
 requires = ["uv_build>=0.11.0,<0.12.0"]
