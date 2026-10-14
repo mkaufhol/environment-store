@@ -255,3 +255,23 @@ uv add --editable "environment-store[full] @ path/to/repo"
 - [`.claude/skills/environment-store-cli/SKILL.md`](../.claude/skills/environment-store-cli/SKILL.md) teaches LLM
   agents to use the CLI efficiently and safely. Update it whenever a CLI command, option, exit code or safety rule
   changes. It deliberately tells agents not to use the interactive `tui`.
+
+## Releasing
+
+Releases are published from GitHub Actions with PyPI trusted publishing, so no API token is stored.
+
+One-time setup:
+
+1. On [PyPI](https://pypi.org/manage/account/publishing/) and [TestPyPI](https://test.pypi.org/manage/account/publishing/)
+   add a pending trusted publisher: owner `mkaufhol`, repository `environment-store`,
+   workflow `release.yml`, environment `pypi` (PyPI) or `testpypi` (TestPyPI).
+2. In the GitHub repository settings create the matching `pypi` and `testpypi` environments.
+   Optionally require a reviewer on `pypi`.
+
+Per release:
+
+1. Bump `version` in `pyproject.toml`, add a section to `CHANGELOG.md`, run `uv lock` and merge to `main`.
+2. Optional dry run: run the **Release** workflow manually with target `testpypi`.
+3. Tag and push: `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`.
+   The workflow checks that the tag matches the package version, builds, publishes to PyPI
+   and creates a GitHub release (marked as pre-release for `rc`, `a`, `b` and `dev` versions).
