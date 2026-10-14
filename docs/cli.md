@@ -35,7 +35,7 @@ environment-store list
 ```
 
 AWS credentials come from the usual boto3 chain (environment variables, shared credentials file, instance roles).
-Details per backend: [Storage backends](backends.md).
+Details per backend: [Storage backends](backends/README.md).
 
 ## Addressing a level
 
@@ -141,7 +141,7 @@ environment-store --backend postgres --database-url "$URL" migrate            # 
 ```
 
 Needs the `postgres` extra and an existing, empty or migrated database. See
-[PostgreSQL](backends.md#postgresql).
+[PostgreSQL](backends/postgresql.md).
 
 ### `tui`: open the terminal UI
 

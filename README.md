@@ -57,7 +57,7 @@ The full walkthrough is in the **[Quickstart](docs/quickstart.md)**.
 | [Python usage](docs/python-usage.md) | the `EnvironmentStoreManager` API |
 | [Command line interface](docs/cli.md) | all commands, `transfer`, exit codes, recipes |
 | [Terminal UI](docs/tui.md) | layout and key bindings |
-| [Storage backends](docs/backends.md) | JSON, PostgreSQL, Parameter Store, Secrets Manager |
+| [Storage backends](docs/backends/README.md) | JSON, PostgreSQL, Parameter Store, Secrets Manager |
 | [Development](docs/development.md) | setup, architecture, tests, contributing |
 | [Adding a storage adapter](docs/adding-an-adapter.md) | developer guide for new backends |
 
@@ -129,7 +129,7 @@ A tree of your levels next to a table of their variables. Navigate with the arro
 | AWS Parameter Store | `ssm` | one parameter per variable |
 | AWS Secrets Manager | `secretsmanager` | one secret per level |
 
-Options, IAM permissions, layouts and trade-offs are in [Storage backends](docs/backends.md).
+Options, IAM permissions, layouts and trade-offs are in [Storage backends](docs/backends/README.md).
 
 ### Development
 

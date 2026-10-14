@@ -1,7 +1,7 @@
 # Quickstart
 
 Five minutes from zero to a working store. This uses a local JSON file, so you need no cloud account or database.
-When you are ready for AWS or PostgreSQL, see [Storage backends](backends.md).
+When you are ready for AWS or PostgreSQL, see [Storage backends](backends/README.md).
 
 ## 1. Install
 
@@ -112,5 +112,5 @@ See [Transferring a store](cli.md#transferring-a-store-between-backends).
 | install with AWS, PostgreSQL or all extras | [Installation](installation.md) |
 | understand every manager method | [Python usage](python-usage.md) |
 | script the store or use it in CI | [CLI guide](cli.md) |
-| use AWS Parameter Store, Secrets Manager or PostgreSQL | [Storage backends](backends.md) |
+| use AWS Parameter Store, Secrets Manager or PostgreSQL | [Storage backends](backends/README.md) |
 | work on this project | [Development](development.md) |
