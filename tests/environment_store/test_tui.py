@@ -61,3 +61,24 @@ def test_add_and_delete_variable(manager):
             assert len(manager.get_variables()) == 1
 
     asyncio.run(scenario())
+
+
+def test_new_child_level(manager):
+    async def scenario():
+        app = EnvironmentStoreApp(manager)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("down")  # acme
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            app.screen.query_one("#level", Input).value = "api"
+            app.screen.query_one("#name", Input).value = "KEY"
+            app.screen.query_one("#value", Input).value = "v"
+            await pilot.click("#save")
+            await pilot.pause()
+            assert manager.get_variable("KEY", organisation="acme", project="api") == "v"
+            assert set(manager.get_projects("acme")) == {"web", "api"}
+            assert app.path == ("acme", "api")
+
+    asyncio.run(scenario())

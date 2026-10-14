@@ -57,6 +57,44 @@ class VariableForm(ModalScreen[tuple[str, str] | None]):
         self.dismiss(None)
 
 
+class NewLevelForm(ModalScreen[tuple[str, str, str] | None]):
+    """Prompt for a child level name and its first variable. Returns ``(level, name, value)``."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, kind: str, parent: str) -> None:
+        super().__init__()
+        self._kind, self._where = kind, parent
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label(f"New {self._kind} under {self._where}")
+            yield Label("A level exists once it holds a variable, so add its first one.")
+            yield Input(placeholder=f"{self._kind} name", id="level")
+            yield Input(placeholder="VARIABLE_NAME", id="name")
+            yield Input(placeholder="value", id="value")
+            with Horizontal(id="buttons"):
+                yield Button("Create", variant="primary", id="save")
+                yield Button("Cancel", id="cancel")
+
+    def on_mount(self) -> None:
+        self.query_one("#level", Input).focus()
+
+    @on(Input.Submitted)
+    @on(Button.Pressed, "#save")
+    def save(self) -> None:
+        level = self.query_one("#level", Input).value.strip()
+        name = self.query_one("#name", Input).value.strip()
+        if not level or not name:
+            self.notify("Level name and variable name must not be empty", severity="error")
+            return
+        self.dismiss((level, name, self.query_one("#value", Input).value))
+
+    @on(Button.Pressed, "#cancel")
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class ConfirmDelete(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
 
@@ -86,13 +124,14 @@ class EnvironmentStoreApp(App[None]):
     #tree { width: 36; border: round $primary; }
     #main { border: round $primary; }
     #path { padding: 0 1; text-style: bold; }
-    VariableForm, ConfirmDelete { align: center middle; }
+    VariableForm, NewLevelForm, ConfirmDelete { align: center middle; }
     #dialog { width: 60; height: auto; padding: 1 2; border: thick $primary; background: $surface; }
     #buttons { height: auto; margin-top: 1; }
     #buttons Button { margin-right: 2; }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("a", "add", "Add"),
+        Binding("n", "new_level", "New level"),
         Binding("e", "edit", "Edit"),
         Binding("d", "delete", "Delete"),
         Binding("r", "toggle_resolved", "Resolved"),
@@ -226,6 +265,44 @@ class EnvironmentStoreApp(App[None]):
 
     def action_add(self) -> None:
         self.push_screen(VariableForm(), self._save)
+
+    def action_new_level(self) -> None:
+        if len(self.path) >= len(LEVELS):
+            self.notify("A service has no child levels", severity="warning")
+            return
+        kind = LEVELS[len(self.path)]
+        parent = describe(self.path)
+        parent_path = self.path
+
+        def done(result: tuple[str, str, str] | None) -> None:
+            if result is None:
+                return
+            level, name, value = result
+            new_path = parent_path + (level,)
+            try:
+                self.manager.set_variable(name, value, **path_kwargs(new_path))
+            except Exception as exc:  # noqa: BLE001
+                self.notify(f"{type(exc).__name__}: {exc}", severity="error")
+                return
+            self.notify(f"Created {kind} {level}")
+            self._reveal(new_path)
+
+        self.push_screen(NewLevelForm(kind, parent), done)
+
+    def _reveal(self, path: Path) -> None:
+        """Reload the tree along ``path`` and move the cursor to its last node."""
+        tree = self.query_one("#tree", Tree)
+        node = tree.root
+        for depth in range(len(path)):
+            self._load_children(node)
+            node.expand()
+            match = next((c for c in node.children if c.data == path[: depth + 1]), None)
+            if match is None:
+                return
+            node = match
+        # The tree rebuilds its lines lazily, so move the cursor once it has refreshed.
+        self.call_after_refresh(tree.move_cursor, node)
+        tree.focus()
 
     def action_edit(self) -> None:
         name = self._selected_name()

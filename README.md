@@ -152,6 +152,7 @@ until you press `v`.
 | `a`      | add a variable at the selected level                                |
 | `e`      | edit the highlighted variable                                       |
 | `d`      | delete the highlighted variable (asks for confirmation)             |
+| `n`      | new child level (organisation at root, then project, environment, service); asks for a name and a first variable, since a level exists once it holds a variable |
 | `r`      | toggle the resolved view (merged with parent levels, deeper wins)   |
 | `v`      | show / hide values                                                  |
 | `F5`     | reload the tree and the table                                       |
