@@ -110,6 +110,32 @@ uv pip install "environment-store[aws]"
 pip install "environment-store[aws]"
 ```
 
+### Transferring a store to another backend
+
+`transfer` copies every variable from the main store (the usual `--backend ...` options) into a destination
+store (the same options with a `--dest-` prefix, or `ENVIRONMENT_STORE_DEST_*` variables), keeping the hierarchy.
+Use it to move from a local JSON file to AWS or PostgreSQL, or between any two backends:
+
+```bash
+# JSON file -> PostgreSQL (run `environment-store migrate` on the destination first)
+environment-store --backend json --json-file ./store.json transfer \
+  --dest-backend postgres --dest-database-url postgresql+psycopg://user:pw@localhost/environment_store
+
+# only one project, to AWS Parameter Store; preview first
+environment-store --backend json --json-file ./store.json transfer -o acme -p web --dry-run \
+  --dest-backend ssm --dest-region eu-central-1 --dest-prefix myapp
+```
+
+- The source is never modified; to "move", delete the source yourself after checking the result.
+- Variables that do not exist in the destination are created, identical ones are left alone. Variables that
+  exist with a **different** value are skipped and listed, and the command exits with code `3`; add `--overwrite`
+  to replace them.
+- `--dry-run` reports what would happen without writing, `--format json` prints the result as JSON.
+- Source and destination must be different stores. Only variables are transferred, not backend specifics
+  such as timestamps.
+
+The logic is `EnvironmentStoreManager.import_from(source, ...)`, so other frontends can reuse it.
+
 ## Terminal UI
 
 An interactive terminal UI built with [Textual](https://textual.textualize.io/). It needs the `tui` extra
@@ -361,7 +387,8 @@ or web app are thin presentation layers over `EnvironmentStoreManager`. **All lo
 
 When you add a feature, add it to the manager first and call it from the frontends. A frontend should only
 parse input, call the manager and render the result. Keep the CLI and TUI feature-equivalent
-(`x` in the TUI is `delete-level` in the CLI, `n` is `set` on a new path, and so on).
+(`x` in the TUI is `delete-level` in the CLI, `n` is `set` on a new path, and so on). Bulk administration
+commands (`import`, `transfer`, `migrate`) are CLI-only.
 
 ## Testing the library locally
 
