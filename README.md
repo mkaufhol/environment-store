@@ -1,7 +1,5 @@
 # Environment store
 
-### STATUS: WIP
-
 This library provides a simple interface to manage environment variables on different cloud providers and also locally.
 It provides a high level `EnvironmentStoreManager` class that can be used to store and retrieve hierarchical
 environment variables.
@@ -68,22 +66,53 @@ Alternatively you can also use this library without the hierarchical structure:
 └── Variable_16
 ```
 
+## Installation
+
+The core package only depends on `pydantic`. The storage backends bring their own dependencies as extras:
+
+```bash
+pip install environment-store            # core + JsonFileAdapter
+pip install "environment-store[aws]"     # + ParameterStoreAdapter, SecretsManagerAdapter (boto3)
+pip install "environment-store[postgres]"  # + PostgreSQLAdapter (psycopg, sqlalchemy)
+```
+
 ## EnvironmentStoreManager usage
 
 ### Initialization
 
 To initialize the `EnvironmentStoreManager` you need to provide an adapter that implements the `AbstractAdapter` interface.
-The current implemented adapters are listed in the next section.
+The available adapters are listed below.
 
 ```python
+from environment_store import EnvironmentStoreManager
 from environment_store.adapters.aws.ssm_parameter_store import ParameterStoreAdapter
-from environment_store.core import EnvironmentStoreManager
 
 adapter = ParameterStoreAdapter(region="us-east-1")
 manager = EnvironmentStoreManager(adapter=adapter)
 ```
 
-### STATUS: WIP
+### Reading and writing variables
+
+```python
+manager.set_variable("DB_HOST", "localhost", organisation="acme", project="webapp")
+manager.set_variables({"LOG_LEVEL": "INFO"}, organisation="acme")
+
+manager.get_variable("DB_HOST", organisation="acme", project="webapp")  # exact level only
+manager.get_variables(organisation="acme")  # exact level only
+
+# Merge the variables of a level with all of its parent levels, child values win
+manager.get_service_variables("acme", "webapp", "dev", "api")
+manager.get_variables_as_dict(
+    organisation="acme", project="webapp"
+)  # exact level, as {name: value}
+
+manager.get_organisations()
+manager.get_projects("acme")
+manager.delete_variable("DB_HOST", organisation="acme", project="webapp")
+```
+
+A level can only be addressed if all of its parents are given (a `service` needs an `environment`, a `project`
+needs an `organisation`, ...), otherwise a `ValueError` is raised.
 
 ---
 
@@ -94,9 +123,35 @@ manager = EnvironmentStoreManager(adapter=adapter)
 The `JsonFileAdapter` stores the environment variables in a local JSON file. It is useful for testing and development purposes.
 
 ```python
-from environment_store import EnvironmentStoreManager, JsonFileAdapter
+from environment_store import EnvironmentStoreManager
+from environment_store.adapters.json import JsonFileAdapter
 
 adapter = JsonFileAdapter("path/to/file.json")
+manager = EnvironmentStoreManager(adapter=adapter)
+```
+
+# Databases
+
+## PostgreSQLAdapter
+
+Stores the variables in one table of a PostgreSQL database (version 15+). Install the `postgres` extra.
+
+The schema is managed with [yoyo](https://ollycope.com/software/yoyo/latest/) migrations, which you have to apply
+before using the adapter. Copy `src/environment_store/adapters/postgresql/yoyo-database-example.ini` to
+`yoyo-database.ini` in the same directory, point it to your database and run:
+
+```bash
+src/environment_store/adapters/postgresql/scripts/init_database.sh
+```
+
+```python
+from environment_store import EnvironmentStoreManager
+from environment_store.adapters.postgresql import PostgreSQLAdapter
+
+# Either a SQLAlchemy engine or a database URL
+adapter = PostgreSQLAdapter(
+    "postgresql+psycopg://user:password@localhost:5432/environment_store"
+)
 manager = EnvironmentStoreManager(adapter=adapter)
 ```
 
@@ -104,14 +159,13 @@ manager = EnvironmentStoreManager(adapter=adapter)
 
 ## AWS
 
-## Connect to AWS
+Install the `aws` extra. The connection to AWS works the same way as for boto3 (environment variables, shared
+credentials file, instance roles, ...):
+https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration
 
-### STATUS: WIP
+Names (organisation, project, environment, service, variable and prefix segments) may only contain `a-zA-Z0-9_.-`.
 
-At its core it just wraps boto3 functions into easier to use methods to create a simpler environment variable management solutions.
-So the connection with AWS is the same as for boto3: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration
-
-## ParameterStoreAdapter
+### ParameterStoreAdapter
 
 Stores every variable as one AWS Parameter Store parameter. The hierarchy is the parameter path:
 `/<prefix>/<organisation>/<project>/<environment>/<service>/<NAME>` (root variables live at `/<NAME>`).
@@ -127,7 +181,7 @@ manager = EnvironmentStoreManager(adapter=adapter)
 
 The underlying `ParameterStore` class is a simple wrapper around the boto3 ssm client and can also be used standalone.
 
-## SecretsManagerAdapter
+### SecretsManagerAdapter
 
 Stores each hierarchy level as **one** Secrets Manager secret holding a JSON object of its variables, e.g.
 `myapp/acme/webapp/dev/api` -> `{"DB_HOST": "...", "DB_PORT": "..."}`. The root level is the secret named
@@ -143,22 +197,15 @@ adapter = SecretsManagerAdapter(region="us-east-1", prefix="myapp")
 manager = EnvironmentStoreManager(adapter=adapter)
 ```
 
-Names (organisation, project, environment, service, variable and prefix segments) may only contain `a-zA-Z0-9_.-`.
-
-# WIP
-
-This project is currently in early development and conception phase. Not ready to use yet.
-
 ---
 
 # Development
 
-### Docs WIP
-
 This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
 - To install the dependencies, run `uv sync` (installs the dev, testing and stubs groups).
 - To build the package, run `uv build`.
-- To run the tests, run `uv run pytest`.
+- To run the tests, run `uv run pytest`. The PostgreSQL tests are skipped unless
+  `ENVIRONMENT_STORE_TEST_POSTGRES_URL` points to a throwaway database (its `environment_store` table is truncated).
 - To lint and format, run `uv run ruff check` and `uv run ruff format`.
 - To type check, run `uv run ty check`.
 
