@@ -207,8 +207,8 @@ uv run environment-store --backend json --json-file ./store.json list
 uv run environment-store --backend json --json-file ./store.json tui
 ```
 
-From anywhere else, `uvx` can run the clone without installing it. Add `--refresh` if uv reuses a cached build and you
-want your latest local changes:
+From anywhere else, `uvx` can run the clone without installing it. Quote the requirement (the `[full]` and the spaces
+would otherwise be interpreted by your shell):
 
 ```bash
 uvx --from "environment-store[full] @ path/to/repo" environment-store \
@@ -219,6 +219,21 @@ uvx --from "environment-store[full] @ path/to/repo" environment-store \
 ```
 
 Use `[aws]`, `[postgres]` or `[tui]` instead of `[full]` to install only what you need.
+
+**Stale code?** By default uv builds a path dependency once and reuses that build until `pyproject.toml` changes. The
+version number does not change while you develop either, so `uvx` can keep running old code, and `--refresh` and
+`--reinstall` do not help. This project therefore sets `cache-keys` in `[tool.uv]` (`pyproject.toml`), so uv
+rebuilds whenever a `.py` or `.sql` file under `src/` changes and plain `uvx` always runs your latest code. If you
+ever see old behaviour anyway (for example on a branch without that setting), use one of these:
+
+```bash
+uv run --project path/to/repo --all-extras environment-store --backend json --json-file ./store.json list
+uv tool install --editable "path/to/repo[full]"       # then just run: environment-store ...
+uvx --no-cache --from "environment-store[full] @ path/to/repo" environment-store -h   # slow: rebuilds everything
+```
+
+`uv run --project` and an editable `uv tool install` always use your working tree, which makes them the best choice
+for daily development.
 
 To test the built package in a separate virtual environment:
 
