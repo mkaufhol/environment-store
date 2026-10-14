@@ -214,7 +214,13 @@ environment-store list -o acme -p web -e dev --resolved --format json
 environment-store import .env -o acme -p web -e dev
 environment-store children -o acme
 environment-store delete DB_HOST -o acme -p web -e dev --yes
+environment-store delete-level -o acme -p web --dry-run          # what would be removed?
+environment-store delete-level -o acme -p web --confirm web      # project and everything below it
 ```
+
+`delete-level` removes a level (organisation, project, environment or service) together with all of its
+variables and every level below it. The root level cannot be deleted. You must confirm with the exact name of
+the level: pass `--confirm NAME`, or on a terminal type the name when prompted (the same check as in the TUI).
 
 An agent skill describing efficient CLI usage lives in
 [.claude/skills/environment-store-cli/SKILL.md](.claude/skills/environment-store-cli/SKILL.md).
@@ -343,6 +349,18 @@ This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
 - To type check, run `uv run ty check`.
 
 This project uses pre-commit for code quality checks. To install the pre-commit hooks, run `pre-commit install`.
+
+## Architecture: one shared layer
+
+The CLI (`environment_store/cli.py`), the TUI (`environment_store/tui/`) and any future frontend such as an API
+or web app are thin presentation layers over `EnvironmentStoreManager`. **All logic lives in the core layer**
+(`environment_store/core/`): hierarchy rules and helpers (`core/hierarchy.py`), listing child levels
+(`get_child_levels`), merged variables (`get_resolved_variables`), counting and recursively deleting a level
+(`count_level`, `delete_level`) including the safety check that the exact level name is confirmed.
+
+When you add a feature, add it to the manager first and call it from the frontends. A frontend should only
+parse input, call the manager and render the result. Keep the CLI and TUI feature-equivalent
+(`x` in the TUI is `delete-level` in the CLI, `n` is `set` on a new path, and so on).
 
 ## Testing the library locally
 

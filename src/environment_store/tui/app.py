@@ -8,18 +8,15 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static, Tree
 
 from environment_store.core import EnvironmentStoreManager
+from environment_store.core.hierarchy import (
+    LEVELS,
+    Path,
+    child_kind,
+    describe,
+    level_kind,
+    to_kwargs,
+)
 from environment_store.core.schemas import Variable
-
-LEVELS = ("organisation", "project", "environment", "service")
-Path = tuple[str, ...]
-
-
-def path_kwargs(path: Path) -> dict[str, str | None]:
-    return {level: (path[i] if i < len(path) else None) for i, level in enumerate(LEVELS)}
-
-
-def describe(path: Path) -> str:
-    return " / ".join(path) if path else "root"
 
 
 class VariableForm(ModalScreen[tuple[str, str] | None]):
@@ -95,7 +92,7 @@ class NewLevelForm(ModalScreen[tuple[str, str, str] | None]):
         self.dismiss(None)
 
 
-class ConfirmDeleteLevel(ModalScreen[bool]):
+class ConfirmDeleteLevel(ModalScreen[str | None]):
     """Warn about deleting a level and require typing its name to confirm."""
 
     BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
@@ -130,15 +127,15 @@ class ConfirmDeleteLevel(ModalScreen[bool]):
     @on(Input.Submitted, "#confirm")
     def confirm_submitted(self, event: Input.Submitted) -> None:
         if event.value == self._level_name:
-            self.dismiss(True)
+            self.dismiss(event.value)
 
     @on(Button.Pressed, "#yes")
     def yes(self) -> None:
-        self.dismiss(True)
+        self.dismiss(self.query_one("#confirm", Input).value)
 
     @on(Button.Pressed, "#no")
     def action_cancel(self) -> None:
-        self.dismiss(False)
+        self.dismiss(None)
 
 
 class ConfirmDelete(ModalScreen[bool]):
@@ -215,23 +212,11 @@ class EnvironmentStoreApp(App[None]):
         self.refresh_table()
 
     # --- data -------------------------------------------------------------
-    def _children(self, path: Path) -> list[str]:
-        m = self.manager
-        if len(path) == 0:
-            return m.get_organisations()
-        if len(path) == 1:
-            return m.get_projects(path[0])
-        if len(path) == 2:
-            return m.get_environments(path[0], path[1])
-        if len(path) == 3:
-            return m.get_services(path[0], path[1], path[2])
-        return []
-
     def _load_children(self, node) -> None:
         node.remove_children()
         path: Path = node.data
         try:
-            names = sorted(self._children(path))
+            names = self.manager.get_child_levels(**to_kwargs(path))
         except Exception as exc:  # noqa: BLE001 - show backend errors instead of crashing
             self.notify(f"{type(exc).__name__}: {exc}", severity="error")
             return
@@ -243,17 +228,10 @@ class EnvironmentStoreApp(App[None]):
                 node.add(name, data=child)
 
     def _variables(self) -> list[Variable]:
-        p, kw = self.path, path_kwargs(self.path)
-        if not self.resolved or not p:
-            return self.manager.get_variables(**kw)
-        m = self.manager
-        if len(p) == 1:
-            return m.get_organisation_variables(p[0])
-        if len(p) == 2:
-            return m.get_project_variables(p[0], p[1])
-        if len(p) == 3:
-            return m.get_environment_variables(p[0], p[1], p[2])
-        return m.get_service_variables(p[0], p[1], p[2], p[3])
+        kwargs = to_kwargs(self.path)
+        if self.resolved:
+            return self.manager.get_resolved_variables(**kwargs)
+        return self.manager.get_variables(**kwargs)
 
     def refresh_table(self) -> None:
         table = self.query_one("#vars", DataTable)
@@ -304,7 +282,7 @@ class EnvironmentStoreApp(App[None]):
         if result is None:
             return
         try:
-            self.manager.set_variable(result[0], result[1], **path_kwargs(self.path))
+            self.manager.set_variable(result[0], result[1], **to_kwargs(self.path))
         except Exception as exc:  # noqa: BLE001
             self.notify(f"{type(exc).__name__}: {exc}", severity="error")
             return
@@ -315,10 +293,10 @@ class EnvironmentStoreApp(App[None]):
         self.push_screen(VariableForm(), self._save)
 
     def action_new_level(self) -> None:
-        if len(self.path) >= len(LEVELS):
+        kind = child_kind(self.path)
+        if kind is None:
             self.notify("A service has no child levels", severity="warning")
             return
-        kind = LEVELS[len(self.path)]
         parent = describe(self.path)
         parent_path = self.path
 
@@ -328,7 +306,7 @@ class EnvironmentStoreApp(App[None]):
             level, name, value = result
             new_path = parent_path + (level,)
             try:
-                self.manager.set_variable(name, value, **path_kwargs(new_path))
+                self.manager.set_variable(name, value, **to_kwargs(new_path))
             except Exception as exc:  # noqa: BLE001
                 self.notify(f"{type(exc).__name__}: {exc}", severity="error")
                 return
@@ -342,18 +320,18 @@ class EnvironmentStoreApp(App[None]):
         if not path:
             self.notify("The root level cannot be deleted", severity="warning")
             return
-        kind, name = LEVELS[len(path) - 1], path[-1]
+        kind, name = level_kind(path), path[-1]
         try:
-            variables, sub_levels = self.manager.count_level(**path_kwargs(path))
+            variables, sub_levels = self.manager.count_level(**to_kwargs(path))
         except Exception as exc:  # noqa: BLE001
             self.notify(f"{type(exc).__name__}: {exc}", severity="error")
             return
 
-        def done(confirmed: bool | None) -> None:
-            if not confirmed:
+        def done(typed_name: str | None) -> None:
+            if typed_name is None:
                 return
             try:
-                deleted = self.manager.delete_level(**path_kwargs(path))
+                deleted = self.manager.delete_level(**to_kwargs(path), confirm=typed_name)
             except Exception as exc:  # noqa: BLE001
                 self.notify(f"{type(exc).__name__}: {exc}", severity="error")
                 return
@@ -388,7 +366,7 @@ class EnvironmentStoreApp(App[None]):
             if self.resolved:
                 self.notify("Switch off the resolved view to edit", severity="warning")
             return
-        current = self.manager.get_variable(name, **path_kwargs(self.path)) or ""
+        current = self.manager.get_variable(name, **to_kwargs(self.path)) or ""
         self.push_screen(VariableForm(name, current), self._save)
 
     def action_delete(self) -> None:
@@ -402,7 +380,7 @@ class EnvironmentStoreApp(App[None]):
             if not confirmed:
                 return
             try:
-                self.manager.delete_variable(name, **path_kwargs(self.path))
+                self.manager.delete_variable(name, **to_kwargs(self.path))
             except Exception as exc:  # noqa: BLE001
                 self.notify(f"{type(exc).__name__}: {exc}", severity="error")
                 return
