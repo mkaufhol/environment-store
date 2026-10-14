@@ -147,8 +147,9 @@ until you press `v`.
 
 | Key      | Action                                                              |
 |----------|---------------------------------------------------------------------|
-| `↑` `↓`  | move; selecting a tree node shows that level's variables            |
-| `→` `←`  | expand / collapse a tree node                                       |
+| `↑` `↓` / `k` `j` | move up / down; selecting a tree node shows that level's variables |
+| `→` / `l` | in the tree: expand the node, then step into its first child; on a node without children switch to the variables table |
+| `←` / `h` | in the tree: collapse the node, or go to its parent if it is collapsed; in the table: back to the tree |
 | `a`      | add a variable at the selected level                                |
 | `e`      | edit the highlighted variable                                       |
 | `d`      | delete the highlighted variable (asks for confirmation)             |
