@@ -17,9 +17,39 @@ from environment_store.adapters.aws.secrets_manager import SecretsManagerAdapter
 adapter = SecretsManagerAdapter(region="eu-central-1", prefix="myapp")
 ```
 
+## CLI and TUI
+
+Select this backend with `--backend secretsmanager` plus the options below. They go **before** the command (or `tui`),
+or can be set as environment variables so you do not repeat them.
+
+| Option | Environment variable | Required |
+|---|---|---|
+| `--backend secretsmanager` | `ENVIRONMENT_STORE_BACKEND=secretsmanager` | yes |
+| `--region REGION` | `ENVIRONMENT_STORE_REGION` or `AWS_REGION` | yes |
+| `--prefix PREFIX` | `ENVIRONMENT_STORE_PREFIX` | no, default `environment-store` |
+
 ```bash
-environment-store --backend secretsmanager --region eu-central-1 --prefix myapp list
+# CLI
+environment-store --backend secretsmanager --region eu-central-1 --prefix myapp list -o acme
+
+# TUI
+environment-store --backend secretsmanager --region eu-central-1 --prefix myapp tui
+
+# the same with environment variables
+export ENVIRONMENT_STORE_BACKEND=secretsmanager ENVIRONMENT_STORE_REGION=eu-central-1 ENVIRONMENT_STORE_PREFIX=myapp
+environment-store list -o acme
+environment-store tui
 ```
+
+As the destination of [`transfer`](../cli.md#transferring-a-store-between-backends) use the `--dest-` variant of
+each option (`ENVIRONMENT_STORE_DEST_*`):
+
+```bash
+environment-store --backend json --json-file ./store.json transfer \
+  --dest-backend secretsmanager --dest-region eu-central-1 --dest-prefix myapp --dry-run
+```
+
+`--parameter-type` does not apply to this backend. AWS credentials come from the boto3 chain; there is no credential option.
 
 Things to know:
 

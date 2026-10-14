@@ -9,8 +9,35 @@ from environment_store.adapters.json import JsonFileAdapter
 manager = EnvironmentStoreManager(adapter=JsonFileAdapter("./store.json"))
 ```
 
+## CLI and TUI
+
+Select this backend with `--backend json` plus the options below. They go **before** the command (or `tui`),
+or can be set as environment variables so you do not repeat them.
+
+| Option | Environment variable | Required |
+|---|---|---|
+| `--backend json` | `ENVIRONMENT_STORE_BACKEND=json` | yes |
+| `--json-file PATH` | `ENVIRONMENT_STORE_JSON_FILE` | yes (file is created on first write) |
+
 ```bash
-environment-store --backend json --json-file ./store.json list
+# CLI
+environment-store --backend json --json-file ./store.json list -o acme
+
+# TUI
+environment-store --backend json --json-file ./store.json tui
+
+# the same with environment variables
+export ENVIRONMENT_STORE_BACKEND=json ENVIRONMENT_STORE_JSON_FILE=./store.json
+environment-store list -o acme
+environment-store tui
+```
+
+As the destination of [`transfer`](../cli.md#transferring-a-store-between-backends) use the `--dest-` variant of
+each option (`ENVIRONMENT_STORE_DEST_*`):
+
+```bash
+environment-store --backend json --json-file ./a.json transfer \
+  --dest-backend json --dest-json-file ./b.json --dry-run
 ```
 
 The file nests levels as objects; string entries are variables, object entries are child levels:
