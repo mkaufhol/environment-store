@@ -165,7 +165,7 @@ In the resolved view the table is read-only; switch it off with `r` to edit or d
 ### Initialization
 
 To initialize the `EnvironmentStoreManager` you need to provide an adapter that implements the `AbstractAdapter` interface.
-The available adapters are listed below.
+The available adapters are described in the [storage backends overview](docs/storage-backends/README.md).
 
 ```python
 from environment_store import EnvironmentStoreManager
@@ -220,86 +220,10 @@ An agent skill describing efficient CLI usage lives in
 
 ---
 
-# Local file storage
+# Storage backends
 
-## JsonFileAdapter
-
-The `JsonFileAdapter` stores the environment variables in a local JSON file. It is useful for testing and development purposes.
-
-```python
-from environment_store import EnvironmentStoreManager
-from environment_store.adapters.json import JsonFileAdapter
-
-adapter = JsonFileAdapter("path/to/file.json")
-manager = EnvironmentStoreManager(adapter=adapter)
-```
-
-# Databases
-
-## PostgreSQLAdapter
-
-Stores the variables in one table of a PostgreSQL database (version 15+). Install the `postgres` extra.
-
-The schema is managed with [yoyo](https://ollycope.com/software/yoyo/latest/) migrations, which you have to apply
-before using the adapter. Copy `src/environment_store/adapters/postgresql/yoyo-database-example.ini` to
-`yoyo-database.ini` in the same directory, point it to your database and run:
-
-```bash
-src/environment_store/adapters/postgresql/scripts/init_database.sh
-```
-
-```python
-from environment_store import EnvironmentStoreManager
-from environment_store.adapters.postgresql import PostgreSQLAdapter
-
-# Either a SQLAlchemy engine or a database URL
-adapter = PostgreSQLAdapter(
-    "postgresql+psycopg://user:password@localhost:5432/environment_store"
-)
-manager = EnvironmentStoreManager(adapter=adapter)
-```
-
-# Cloud providers
-
-## AWS
-
-Install the `aws` extra. The connection to AWS works the same way as for boto3 (environment variables, shared
-credentials file, instance roles, ...):
-https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration
-
-Names (organisation, project, environment, service, variable and prefix segments) may only contain `a-zA-Z0-9_.-`.
-
-### ParameterStoreAdapter
-
-Stores every variable as one AWS Parameter Store parameter. The hierarchy is the parameter path:
-`/<prefix>/<organisation>/<project>/<environment>/<service>/<NAME>` (root variables live at `/<NAME>`).
-Values are written as `SecureString` by default (`parameter_type="String"` to change that).
-
-```python
-from environment_store import EnvironmentStoreManager
-from environment_store.adapters.aws.ssm_parameter_store import ParameterStoreAdapter
-
-adapter = ParameterStoreAdapter(region="us-east-1", prefix="myapp")
-manager = EnvironmentStoreManager(adapter=adapter)
-```
-
-The underlying `ParameterStore` class is a simple wrapper around the boto3 ssm client and can also be used standalone.
-
-### SecretsManagerAdapter
-
-Stores each hierarchy level as **one** Secrets Manager secret holding a JSON object of its variables, e.g.
-`myapp/acme/webapp/dev/api` -> `{"DB_HOST": "...", "DB_PORT": "..."}`. The root level is the secret named
-`<prefix>` (default `environment-store`). This keeps the number of billed secrets low, but updates are
-read-modify-write: concurrent writers on the same level can overwrite each other (last write wins).
-A level's secret is deleted (without recovery window) once its last variable is deleted.
-
-```python
-from environment_store import EnvironmentStoreManager
-from environment_store.adapters.aws.secrets_manager import SecretsManagerAdapter
-
-adapter = SecretsManagerAdapter(region="us-east-1", prefix="myapp")
-manager = EnvironmentStoreManager(adapter=adapter)
-```
+Variables can be stored in a local JSON file, a PostgreSQL database, AWS Parameter Store or AWS Secrets Manager.
+See the [storage backends overview](docs/storage-backends/README.md) for a comparison and the setup of each backend.
 
 ---
 
