@@ -319,3 +319,21 @@ This project uses pre-commit for code quality checks. To install the pre-commit 
 
 To test the library locally, you can install the built package with
 `pip install dist/environment_store-0.1.0-py3-none-any.whl` in a different virtual environment.
+
+### Running the CLI or TUI from a clone
+
+Run the tools straight from a cloned repository, without installing anything, using `uvx` and the
+path to the clone. Add `--refresh` to pick up local changes if uv reuses a cached build:
+
+```bash
+# CLI
+uvx --from "environment-store[full] @ path/to/repo" environment-store \
+  --backend json --json-file ./store.json list -o acme
+
+# TUI
+uvx --from "environment-store[full] @ path/to/repo" environment-store \
+  --backend json --json-file ./store.json tui
+```
+
+Use `[aws]`, `[postgres]` or `[tui]` instead of `[full]` to install only what you need. Inside the clone itself,
+`uv run environment-store ...` does the same using the project environment.
