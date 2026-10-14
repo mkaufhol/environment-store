@@ -49,6 +49,8 @@ environment-store list ... --mask                             # values shown as 
 environment-store delete NAME [NAME...] -o acme --yes
 environment-store import .env -o acme -p web -e dev           # .env or flat JSON, `-` = stdin
 environment-store import vars.json ... --dry-run              # preview, writes nothing
+environment-store delete-level -o acme -p web --dry-run      # preview: sub-levels and variables affected
+environment-store delete-level -o acme -p web --confirm web  # delete the level and EVERYTHING below it
 environment-store children                                    # list organisations
 environment-store children -o acme [-p web [-e dev]]          # projects / environments / services
 ```
@@ -74,13 +76,21 @@ Postgres only: `environment-store migrate --status` lists pending schema migrati
 - `delete` prompts only on an interactive TTY; agents must pass `--yes`, so confirm with the user first.
 - Setting at a higher level (root/org) changes the resolved result for everything below it unless overridden.
 
-## 5. Output & errors
+## 5. Deleting a level
+
+`delete-level` removes a whole organisation/project/environment/service with all variables and all levels below
+it. It is irreversible and cannot target the root. It always needs `--confirm NAME` with the exact name of the
+deepest level given (agents run without a terminal, so there is no prompt). Always run `--dry-run` first, show the
+user the numbers and get an explicit yes before passing `--confirm`. Never fill `--confirm` from the user's
+general request such as "clean up".
+
+## 6. Output & errors
 
 - Data goes to stdout; status messages (`Set ...`, `Deleted ...`) and errors go to stderr as `error: ...`.
 - Exit codes: `0` ok, `1` runtime/backend error or variable not found, `2` invalid hierarchy/arguments.
 - Common fixes: "No backend selected" → set `--backend`/env; "requires organisation" → add the missing parent flag; "missing dependency" → install the extra (`environment-store[aws]` or `[postgres]`).
 - Backend naming limits: AWS backends allow only `a-zA-Z0-9_.-` in names and prefix.
 
-## 6. Don't use `tui`
+## 7. Don't use `tui`
 
 `environment-store tui` opens an interactive full-screen UI for humans. Agents must not run it; use the commands above.

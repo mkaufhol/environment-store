@@ -147,3 +147,45 @@ def test_migrate_applies_and_reports(monkeypatch, capsys):
     assert main([*base, "migrate", "--status"]) == 0
     assert capsys.readouterr().out == "m3\n"
     assert len(calls) == 1
+
+
+def _seed(store):
+    store("set", "ROOT", "r")
+    store("set", "A", "1", "-o", "acme")
+    store("set", "B", "2", "-o", "acme", "-p", "web")
+    store("set", "C", "3", "-o", "acme", "-p", "web", "-e", "dev")
+
+
+def test_delete_level_requires_confirm_when_not_interactive(store, capsys, monkeypatch):
+    import io
+
+    _seed(store)
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    assert store("delete-level", "-o", "acme") == 1
+    assert "--confirm acme" in capsys.readouterr().err
+    assert store("delete-level", "-o", "acme", "--confirm", "nope") == 1
+    assert "exact name" in capsys.readouterr().err
+    store("children", "--format", "json")
+    assert json.loads(capsys.readouterr().out) == ["acme"]
+
+
+def test_delete_level_dry_run_and_delete(store, capsys):
+    _seed(store)
+    capsys.readouterr()
+    assert store("delete-level", "-o", "acme", "-p", "web", "--dry-run") == 0
+    assert "1 level(s) below it, 2 variable(s)" in capsys.readouterr().err
+    store("children", "-o", "acme")
+    assert capsys.readouterr().out == "web\n"
+    assert store("delete-level", "-o", "acme", "-p", "web", "--confirm", "web") == 0
+    assert "2 variable(s)" in capsys.readouterr().err
+    store("children", "-o", "acme")
+    assert capsys.readouterr().out == ""
+    store("get", "A", "-o", "acme")
+    assert capsys.readouterr().out == "1\n"
+
+
+def test_delete_level_refuses_root_and_skipped_levels(store, capsys):
+    assert store("delete-level", "--confirm", "x") == 1
+    assert "root level" in capsys.readouterr().err
+    assert store("delete-level", "-p", "web", "--confirm", "web") == 2
+    assert "requires organisation" in capsys.readouterr().err

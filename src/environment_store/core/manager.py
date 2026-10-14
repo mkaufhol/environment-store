@@ -1,5 +1,7 @@
 from .abstract_adapter import AbstractAdapter
 from .decorators import validate_hierarchy
+from .exceptions import ConfirmationMismatchError
+from .hierarchy import Path, level_kind, to_kwargs, to_path
 from .schemas import Variable
 
 
@@ -281,29 +283,62 @@ class EnvironmentStoreManager:
         """
         return self.adapter.delete_variables(names, organisation, project, environment, service)
 
-    def _child_levels(self, path: tuple[str, ...]) -> list[str]:
-        if len(path) == 0:
-            return self.get_organisations()
-        if len(path) == 1:
-            return self.get_projects(path[0])
-        if len(path) == 2:
-            return self.get_environments(path[0], path[1])
-        if len(path) == 3:
-            return self.get_services(path[0], path[1], path[2])
-        return []
+    @validate_hierarchy
+    def get_child_levels(
+        self,
+        organisation: str | None = None,
+        project: str | None = None,
+        environment: str | None = None,
+        service: str | None = None,
+    ) -> list[str]:
+        """
+        Get the names of the levels directly below a level (sorted).
 
-    def _level_paths(self, path: tuple[str, ...]) -> list[tuple[str, ...]]:
+        Without arguments these are the organisations, below an organisation its projects and so on.
+        A service has no child levels.
+        """
+        path = to_path(organisation, project, environment, service)
+        if len(path) == 0:
+            names = self.get_organisations()
+        elif len(path) == 1:
+            names = self.get_projects(path[0])
+        elif len(path) == 2:
+            names = self.get_environments(path[0], path[1])
+        elif len(path) == 3:
+            names = self.get_services(path[0], path[1], path[2])
+        else:
+            names = []
+        return sorted(names)
+
+    def _level_paths(self, path: Path) -> list[Path]:
         """The level at ``path`` and all levels below it, deepest levels first."""
-        paths: list[tuple[str, ...]] = []
-        for child in self._child_levels(path):
+        paths: list[Path] = []
+        for child in self.get_child_levels(**to_kwargs(path)):
             paths.extend(self._level_paths(path + (child,)))
         paths.append(path)
         return paths
 
-    @staticmethod
-    def _path_kwargs(path: tuple[str, ...]) -> dict[str, str | None]:
-        levels = ("organisation", "project", "environment", "service")
-        return {level: (path[i] if i < len(path) else None) for i, level in enumerate(levels)}
+    @validate_hierarchy
+    def get_resolved_variables(
+        self,
+        organisation: str | None = None,
+        project: str | None = None,
+        environment: str | None = None,
+        service: str | None = None,
+    ) -> list[Variable]:
+        """
+        Get the variables of a level merged with all its parent levels, deeper levels winning.
+        """
+        path = to_path(organisation, project, environment, service)
+        if len(path) == 0:
+            return self.get_root_variables()
+        if len(path) == 1:
+            return self.get_organisation_variables(path[0])
+        if len(path) == 2:
+            return self.get_project_variables(path[0], path[1])
+        if len(path) == 3:
+            return self.get_environment_variables(path[0], path[1], path[2])
+        return self.get_service_variables(path[0], path[1], path[2], path[3])
 
     @validate_hierarchy
     def count_level(
@@ -319,9 +354,8 @@ class EnvironmentStoreManager:
         :return: ``(variables, sub_levels)``: the number of variables on the level and on all levels
             below it, and the number of levels below it.
         """
-        path = tuple(v for v in (organisation, project, environment, service) if v is not None)
-        paths = self._level_paths(path)
-        variables = sum(len(self.get_variables(**self._path_kwargs(p))) for p in paths)
+        paths = self._level_paths(to_path(organisation, project, environment, service))
+        variables = sum(len(self.get_variables(**to_kwargs(p))) for p in paths)
         return variables, len(paths) - 1
 
     @validate_hierarchy
@@ -331,6 +365,8 @@ class EnvironmentStoreManager:
         project: str | None = None,
         environment: str | None = None,
         service: str | None = None,
+        *,
+        confirm: str,
     ) -> int:
         """
         Delete a hierarchy level: all of its variables and all levels below it, recursively.
@@ -338,12 +374,19 @@ class EnvironmentStoreManager:
         The root level cannot be deleted this way, so ``organisation`` is required. A level
         exists as long as it holds variables, so removing them removes the level.
 
+        :param confirm: Must equal the name of the level to delete (the deepest given level).
+            Every frontend has to pass what the user typed, so this safety check lives here.
+        :raises ConfirmationMismatchError: If ``confirm`` does not match the level name
         :return: The number of deleted variables
         """
-        path = tuple(v for v in (organisation, project, environment, service) if v is not None)
+        path = to_path(organisation, project, environment, service)
+        if confirm != path[-1]:
+            raise ConfirmationMismatchError(
+                f"To delete {level_kind(path)} {path[-1]!r}, confirm with its exact name"
+            )
         deleted = 0
         for level_path in self._level_paths(path):
-            kwargs = self._path_kwargs(level_path)
+            kwargs = to_kwargs(level_path)
             names = [variable.name for variable in self.get_variables(**kwargs)]
             if names:
                 self.delete_variables(names, **kwargs)

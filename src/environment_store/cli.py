@@ -9,10 +9,11 @@ from collections.abc import Sequence
 from typing import Any
 
 from environment_store.core import EnvironmentStoreManager
+from environment_store.core.exceptions import ConfirmationMismatchError
+from environment_store.core.hierarchy import LEVELS, describe, level_kind, to_path
 from environment_store.core.schemas import Variable
 
 BACKENDS = ("json", "postgres", "ssm", "secretsmanager")
-LEVELS = ("organisation", "project", "environment", "service")
 FORMATS = ("dotenv", "export", "json", "table")
 
 EXIT_ERROR = 1
@@ -82,10 +83,6 @@ def _env(name: str) -> str | None:
 
 def _hierarchy(args: argparse.Namespace) -> dict[str, str | None]:
     return {level: getattr(args, level) for level in LEVELS}
-
-
-def _depth(hierarchy: dict[str, str | None]) -> int:
-    return sum(1 for value in hierarchy.values() if value is not None)
 
 
 def _quote_dotenv(value: str) -> str:
@@ -219,7 +216,7 @@ def cmd_set(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
 def cmd_list(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
     hierarchy = _hierarchy(args)
     if args.resolved:
-        variables = _resolved(manager, hierarchy)
+        variables = manager.get_resolved_variables(**hierarchy)
     else:
         variables = manager.get_variables(**hierarchy)
     if args.names_only:
@@ -227,31 +224,6 @@ def cmd_list(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
     else:
         _out(format_variables(variables, args.format, show_values=not args.mask))
     return 0
-
-
-def _resolved(
-    manager: EnvironmentStoreManager, hierarchy: dict[str, str | None]
-) -> list[Variable]:
-    """Variables merged down the hierarchy, deeper levels overriding shallower ones."""
-    depth = _depth(hierarchy)
-    org, project, env, service = (hierarchy[level] for level in LEVELS)
-    if any(hierarchy[LEVELS[i]] is None for i in range(depth)):
-        raise ValueError(
-            "hierarchy levels cannot be skipped (organisation > project > environment > service)"
-        )
-    if depth == 0:
-        return manager.get_root_variables()
-    assert org is not None
-    if depth == 1:
-        return manager.get_organisation_variables(org)
-    assert project is not None
-    if depth == 2:
-        return manager.get_project_variables(org, project)
-    assert env is not None
-    if depth == 3:
-        return manager.get_environment_variables(org, project, env)
-    assert service is not None
-    return manager.get_service_variables(org, project, env, service)
 
 
 def cmd_delete(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
@@ -288,22 +260,38 @@ def cmd_import(manager: EnvironmentStoreManager, args: argparse.Namespace) -> in
 
 
 def cmd_children(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
-    h = _hierarchy(args)
-    org, project, env = h["organisation"], h["project"], h["environment"]
-    if h["service"] is not None:
-        raise CliError("Services have no children.")
-    if org is None:
-        names = manager.get_organisations()
-    elif project is None:
-        names = manager.get_projects(org)
-    elif env is None:
-        names = manager.get_environments(org, project)
-    else:
-        names = manager.get_services(org, project, env)
+    names = manager.get_child_levels(**_hierarchy(args))
     if args.format == "json":
-        _out(json.dumps(sorted(names)))
+        _out(json.dumps(names))
     else:
-        _out("\n".join(sorted(names)))
+        _out("\n".join(names))
+    return 0
+
+
+def cmd_delete_level(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
+    hierarchy = _hierarchy(args)
+    path = to_path(**hierarchy)
+    if not path:
+        raise CliError("Give at least --organisation: the root level cannot be deleted.")
+    variables, sub_levels = manager.count_level(**hierarchy)
+    name, where = path[-1], _describe(args)
+    summary = (
+        f"{level_kind(path)} {name!r} ({where}): {sub_levels} level(s) below it, "
+        f"{variables} variable(s) in total"
+    )
+    if args.dry_run:
+        print(f"Would delete {summary}", file=sys.stderr)
+        return 0
+    confirm = args.confirm
+    if confirm is None:
+        if not sys.stdin.isatty():
+            raise CliError(
+                f"Pass --confirm {name} to delete the {level_kind(path)} non-interactively."
+            )
+        print(f"WARNING: this permanently deletes {summary}.", file=sys.stderr)
+        confirm = input(f"Type '{name}' to confirm: ")
+    deleted = manager.delete_level(**hierarchy, confirm=confirm)
+    print(f"Deleted {level_kind(path)} {name!r} ({deleted} variable(s))", file=sys.stderr)
     return 0
 
 
@@ -346,8 +334,7 @@ def cmd_tui(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
 
 
 def _describe(args: argparse.Namespace) -> str:
-    parts = [f"{level}={getattr(args, level)}" for level in LEVELS if getattr(args, level)]
-    return " ".join(parts) if parts else "root level"
+    return describe(to_path(**_hierarchy(args)))
 
 
 def _hierarchy_parser() -> argparse.ArgumentParser:
@@ -444,6 +431,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_import)
 
     p = sub.add_parser(
+        "delete-level",
+        aliases=["rm-level"],
+        parents=[hierarchy],
+        help="delete a level (organisation, project, ...) with everything below it",
+    )
+    p.add_argument(
+        "--confirm",
+        metavar="NAME",
+        help="the exact name of the level to delete (prompted for on a terminal if omitted)",
+    )
+    p.add_argument("--dry-run", action="store_true", help="show what would be deleted")
+    p.set_defaults(func=cmd_delete_level)
+
+    p = sub.add_parser(
         "children",
         parents=[hierarchy],
         help="list child levels: organisations, or the projects/environments/services below a level",
@@ -475,6 +476,9 @@ def main(
             manager = build_manager(args)
         return args.func(manager, args)
     except CliError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    except ConfirmationMismatchError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR
     except (ValueError, KeyError) as exc:

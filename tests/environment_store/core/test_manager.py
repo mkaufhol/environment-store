@@ -118,16 +118,55 @@ class TestDeleteLevel:
         )
 
     def test_delete_level_removes_level_and_descendants(self, manager):
-        assert manager.delete_level(organisation="acme", project="web") == 3
+        assert manager.delete_level(organisation="acme", project="web", confirm="web") == 3
         assert manager.get_projects("acme") == []
         assert [v.name for v in manager.get_variables(organisation="acme")] == ["A"]
         assert manager.get_organisations() == ["acme", "other"]
 
     def test_delete_organisation_leaves_root_and_siblings(self, manager):
-        assert manager.delete_level(organisation="acme") == 4
+        assert manager.delete_level(organisation="acme", confirm="acme") == 4
         assert manager.get_organisations() == ["other"]
         assert manager.get_variable("ROOT") == "r"
 
     def test_delete_level_requires_organisation_for_deeper_levels(self, manager):
         with pytest.raises(ValueError, match="requires organisation"):
-            manager.delete_level(organisation=None, project="web")
+            manager.delete_level(organisation=None, project="web", confirm="web")
+
+    def test_delete_level_requires_exact_name(self, manager):
+        from environment_store.core.exceptions import ConfirmationMismatchError
+
+        for wrong in ("", "ACME", "web"):
+            with pytest.raises(ConfirmationMismatchError):
+                manager.delete_level(organisation="acme", confirm=wrong)
+        assert manager.count_level(organisation="acme") == (4, 3)
+
+    def test_delete_level_requires_confirm_keyword(self, manager):
+        with pytest.raises(TypeError):
+            manager.delete_level(organisation="acme")
+
+    def test_get_child_levels(self, manager):
+        assert manager.get_child_levels() == ["acme", "other"]
+        assert manager.get_child_levels(organisation="acme") == ["web"]
+        assert manager.get_child_levels(organisation="acme", project="web") == ["dev"]
+        assert manager.get_child_levels(
+            organisation="acme", project="web", environment="dev"
+        ) == ["api"]
+        assert (
+            manager.get_child_levels(
+                organisation="acme", project="web", environment="dev", service="api"
+            )
+            == []
+        )
+
+    def test_get_resolved_variables(self, manager):
+        manager.set_variable("A", "svc", organisation="acme", project="web", environment="dev")
+        resolved = {
+            v.name: v.value
+            for v in manager.get_resolved_variables(
+                organisation="acme", project="web", environment="dev"
+            )
+        }
+        assert resolved == {"ROOT": "r", "A": "svc", "B": "2", "C": "3"}
+        assert [v.name for v in manager.get_resolved_variables()] == ["ROOT"]
+        with pytest.raises(ValueError, match="requires organisation"):
+            manager.get_resolved_variables(project="web")
