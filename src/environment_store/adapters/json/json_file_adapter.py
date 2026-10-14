@@ -23,6 +23,14 @@ class JsonFileAdapter(AbstractAdapter):
                 return {}
             return json.loads(content)
 
+    @staticmethod
+    def _prune_empty(data: dict) -> None:
+        """Drop levels that no longer hold any variable (a level exists while it has variables)."""
+        for key in [k for k, v in data.items() if isinstance(v, dict)]:
+            JsonFileAdapter._prune_empty(data[key])
+            if not data[key]:
+                del data[key]
+
     def _save_data(self, data: dict) -> None:
         """Save data to the JSON file."""
         with open(self.file_path, "w") as f:
@@ -173,30 +181,35 @@ class JsonFileAdapter(AbstractAdapter):
                 service, {}
             ):
                 del data[organisation][project][environment][service][name]
+                self._prune_empty(data)
                 self._save_data(data)
                 return True
             return False
         elif environment is not None and project is not None and organisation is not None:
             if name in data.get(organisation, {}).get(project, {}).get(environment, {}):
                 del data[organisation][project][environment][name]
+                self._prune_empty(data)
                 self._save_data(data)
                 return True
             return False
         elif project is not None and organisation is not None:
             if name in data.get(organisation, {}).get(project, {}):
                 del data[organisation][project][name]
+                self._prune_empty(data)
                 self._save_data(data)
                 return True
             return False
         elif organisation is not None:
             if name in data.get(organisation, {}):
                 del data[organisation][name]
+                self._prune_empty(data)
                 self._save_data(data)
                 return True
             return False
         else:
             if name in data:
                 del data[name]
+                self._prune_empty(data)
                 self._save_data(data)
                 return True
             return False

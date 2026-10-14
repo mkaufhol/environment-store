@@ -92,3 +92,42 @@ class TestEnvironmentStoreManager:
         with pytest.raises(ValueError) as exc_info:
             EnvironmentStoreManager.overwrite_hierarchy_variables([], None)  # ty: ignore[invalid-argument-type]
         assert "overwrite_variables must be a list" in str(exc_info.value)
+
+
+class TestDeleteLevel:
+    @pytest.fixture
+    def manager(self, tmp_path):
+        from environment_store.adapters.json.json_file_adapter import JsonFileAdapter
+
+        m = EnvironmentStoreManager(JsonFileAdapter(str(tmp_path / "s.json")))
+        m.set_variable("ROOT", "r")
+        m.set_variable("A", "1", organisation="acme")
+        m.set_variable("B", "2", organisation="acme", project="web")
+        m.set_variable("C", "3", organisation="acme", project="web", environment="dev")
+        m.set_variable(
+            "D", "4", organisation="acme", project="web", environment="dev", service="api"
+        )
+        m.set_variable("E", "5", organisation="other")
+        return m
+
+    def test_count_level(self, manager):
+        assert manager.count_level(organisation="acme") == (4, 3)
+        assert manager.count_level(organisation="acme", project="web", environment="dev") == (
+            2,
+            1,
+        )
+
+    def test_delete_level_removes_level_and_descendants(self, manager):
+        assert manager.delete_level(organisation="acme", project="web") == 3
+        assert manager.get_projects("acme") == []
+        assert [v.name for v in manager.get_variables(organisation="acme")] == ["A"]
+        assert manager.get_organisations() == ["acme", "other"]
+
+    def test_delete_organisation_leaves_root_and_siblings(self, manager):
+        assert manager.delete_level(organisation="acme") == 4
+        assert manager.get_organisations() == ["other"]
+        assert manager.get_variable("ROOT") == "r"
+
+    def test_delete_level_requires_organisation_for_deeper_levels(self, manager):
+        with pytest.raises(ValueError, match="requires organisation"):
+            manager.delete_level(organisation=None, project="web")

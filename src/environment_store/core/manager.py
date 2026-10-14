@@ -281,6 +281,75 @@ class EnvironmentStoreManager:
         """
         return self.adapter.delete_variables(names, organisation, project, environment, service)
 
+    def _child_levels(self, path: tuple[str, ...]) -> list[str]:
+        if len(path) == 0:
+            return self.get_organisations()
+        if len(path) == 1:
+            return self.get_projects(path[0])
+        if len(path) == 2:
+            return self.get_environments(path[0], path[1])
+        if len(path) == 3:
+            return self.get_services(path[0], path[1], path[2])
+        return []
+
+    def _level_paths(self, path: tuple[str, ...]) -> list[tuple[str, ...]]:
+        """The level at ``path`` and all levels below it, deepest levels first."""
+        paths: list[tuple[str, ...]] = []
+        for child in self._child_levels(path):
+            paths.extend(self._level_paths(path + (child,)))
+        paths.append(path)
+        return paths
+
+    @staticmethod
+    def _path_kwargs(path: tuple[str, ...]) -> dict[str, str | None]:
+        levels = ("organisation", "project", "environment", "service")
+        return {level: (path[i] if i < len(path) else None) for i, level in enumerate(levels)}
+
+    @validate_hierarchy
+    def count_level(
+        self,
+        organisation: str,
+        project: str | None = None,
+        environment: str | None = None,
+        service: str | None = None,
+    ) -> tuple[int, int]:
+        """
+        Count what ``delete_level`` would remove.
+
+        :return: ``(variables, sub_levels)``: the number of variables on the level and on all levels
+            below it, and the number of levels below it.
+        """
+        path = tuple(v for v in (organisation, project, environment, service) if v is not None)
+        paths = self._level_paths(path)
+        variables = sum(len(self.get_variables(**self._path_kwargs(p))) for p in paths)
+        return variables, len(paths) - 1
+
+    @validate_hierarchy
+    def delete_level(
+        self,
+        organisation: str,
+        project: str | None = None,
+        environment: str | None = None,
+        service: str | None = None,
+    ) -> int:
+        """
+        Delete a hierarchy level: all of its variables and all levels below it, recursively.
+
+        The root level cannot be deleted this way, so ``organisation`` is required. A level
+        exists as long as it holds variables, so removing them removes the level.
+
+        :return: The number of deleted variables
+        """
+        path = tuple(v for v in (organisation, project, environment, service) if v is not None)
+        deleted = 0
+        for level_path in self._level_paths(path):
+            kwargs = self._path_kwargs(level_path)
+            names = [variable.name for variable in self.get_variables(**kwargs)]
+            if names:
+                self.delete_variables(names, **kwargs)
+                deleted += len(names)
+        return deleted
+
     @staticmethod
     def overwrite_hierarchy_variables(
         variables: list[Variable],

@@ -8,7 +8,7 @@ from textual.widgets import DataTable, Input, Tree
 
 from environment_store.adapters.json.json_file_adapter import JsonFileAdapter
 from environment_store.core import EnvironmentStoreManager
-from environment_store.tui.app import EnvironmentStoreApp
+from environment_store.tui.app import ConfirmDeleteLevel, EnvironmentStoreApp
 
 
 @pytest.fixture
@@ -80,5 +80,75 @@ def test_new_child_level(manager):
             assert manager.get_variable("KEY", organisation="acme", project="api") == "v"
             assert set(manager.get_projects("acme")) == {"web", "api"}
             assert app.path == ("acme", "api")
+
+    asyncio.run(scenario())
+
+
+def test_delete_level_requires_typing_name(manager):
+    manager.set_variable("C", "env", organisation="acme", project="web", environment="dev")
+
+    async def scenario():
+        app = EnvironmentStoreApp(manager)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("down")  # acme
+            await pilot.pause()
+            await pilot.press("x")
+            await pilot.pause()
+            button = app.screen.query_one("#yes")
+            assert button.disabled
+            app.screen.query_one("#confirm", Input).value = "wrong"
+            await pilot.pause()
+            assert button.disabled
+            app.screen.query_one("#confirm", Input).value = "acme"
+            await pilot.pause()
+            assert not button.disabled
+            await pilot.click("#yes")
+            await pilot.pause()
+            assert manager.get_organisations() == []
+            assert [v.name for v in manager.get_variables()] == ["ROOT"]
+            assert app.path == ()
+            assert len(app.query_one(Tree).root.children) == 0
+
+    asyncio.run(scenario())
+
+
+def test_delete_level_cancel_and_root(manager):
+    async def scenario():
+        app = EnvironmentStoreApp(manager)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("x")  # root: refused
+            await pilot.pause()
+            assert not isinstance(app.screen, ConfirmDeleteLevel)
+            await pilot.press("down")
+            await pilot.pause()
+            await pilot.press("x")
+            await pilot.pause()
+            await pilot.click("#no")
+            await pilot.pause()
+            assert manager.get_organisations() == ["acme"]
+
+    asyncio.run(scenario())
+
+
+def test_delete_nested_level_refreshes_parent(manager):
+    async def scenario():
+        app = EnvironmentStoreApp(manager)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._reveal(("acme", "web"))
+            await pilot.pause()
+            assert app.path == ("acme", "web")
+            await pilot.press("x")
+            await pilot.pause()
+            app.screen.query_one("#confirm", Input).value = "web"
+            await pilot.pause()
+            await pilot.click("#yes")
+            await pilot.pause()
+            assert manager.get_projects("acme") == []
+            assert app.path == ("acme",)
+            acme = app.query_one(Tree).root.children[0]
+            assert len(acme.children) == 0
 
     asyncio.run(scenario())
