@@ -76,4 +76,4 @@ The CLI is also available as `python -m environment_store`.
 
 ## Next
 
-[Quickstart](quickstart.md) · [Storage backends](backends.md)
+[Quickstart](quickstart.md) · [Storage backends](backends/README.md)

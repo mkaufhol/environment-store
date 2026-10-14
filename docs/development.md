@@ -160,7 +160,7 @@ design decisions, packaging, wiring into the CLI, and docs. In short:
    `AdapterContract` in your test module.
 3. Add an optional extra (and add it to `full`), import the SDK lazily, export the class.
 4. Register it in `cli.py` (`BACKENDS`, `_add_backend_options`, `build_manager`, `_backend_identity`).
-5. Document it in [backends.md](backends.md), [installation.md](installation.md) and [cli.md](cli.md).
+5. Document it in [backends/](backends/README.md), [installation.md](installation.md) and [cli.md](cli.md).
 
 ## Database migrations
 

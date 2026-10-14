@@ -1,7 +1,7 @@
 # Using environment-store from Python
 
 Everything goes through `EnvironmentStoreManager`. It works the same for every
-[storage backend](backends.md); only the adapter you pass in differs.
+[storage backend](backends/README.md); only the adapter you pass in differs.
 
 - [Create a manager](#create-a-manager)
 - [The hierarchy](#the-hierarchy)
@@ -23,7 +23,7 @@ from environment_store.adapters.json import JsonFileAdapter
 manager = EnvironmentStoreManager(adapter=JsonFileAdapter("./store.json"))
 ```
 
-Other adapters (see [Storage backends](backends.md) for their options):
+Other adapters (see [Storage backends](backends/README.md) for their options):
 
 ```python
 from environment_store.adapters.postgresql import PostgreSQLAdapter

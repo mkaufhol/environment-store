@@ -7,7 +7,7 @@
 | [Python usage](python-usage.md) | `EnvironmentStoreManager`: writing, reading, resolving, discovering, deleting, copying |
 | [Command line interface](cli.md) | every command and option, `transfer`, exit codes, scripting recipes |
 | [Terminal UI](tui.md) | screen layout, key bindings, resolved view, creating and deleting levels |
-| [Storage backends](backends.md) | JSON file, PostgreSQL (and migrations), AWS Parameter Store, AWS Secrets Manager |
+| [Storage backends](backends/README.md) | JSON file, PostgreSQL (and migrations), AWS Parameter Store, AWS Secrets Manager |
 | [Development](development.md) | setup, architecture, tests, adding features, migrations |
 | [Adding a storage adapter](adding-an-adapter.md) | developer guide: contract, worked example, shared tests, packaging, CLI wiring |
 

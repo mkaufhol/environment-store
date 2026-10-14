@@ -35,7 +35,7 @@ You do not touch `manager.py`, `tui/app.py` or any command implementation.
 - [ ] Optional extra in `pyproject.toml` **and** added to `full`; third-party imports are lazy
 - [ ] Tests: shared contract suite plus backend-specific tests
 - [ ] CLI: `BACKENDS`, options, `build_manager`, `_backend_identity`
-- [ ] Docs: [backends.md](backends.md), [installation.md](installation.md), [cli.md](cli.md), the agent skill
+- [ ] Docs: [backends/](backends/README.md), [installation.md](installation.md), [cli.md](cli.md), the agent skill
 - [ ] `uv run pytest`, `uv run ruff check`, `uv run ty check` pass
 
 ## 1. Understand the contract
@@ -223,7 +223,7 @@ Decide and document these before you write much code:
    message that names the allowed characters. Validate **every** name that ends up in a key: organisation, project,
    environment, service, variable and any configured prefix. Backends stricter than others cause problems when users
    [`transfer`](cli.md#transferring-a-store-between-backends) between them, so document your limits in
-   [backends.md](backends.md).
+   [backends/](backends/README.md).
 3. **Is a prefix or namespace needed?** If the backend is shared with other data (an AWS account, a bucket), accept
    an optional `prefix` and ignore everything outside it, so several stores and unrelated entries can coexist.
 4. **How do empty levels disappear?** Either derive levels from stored variables (SQL `SELECT DISTINCT`, key
@@ -358,7 +358,7 @@ document it. Such bulk administration commands are CLI-only.
 
 ## 7. Document it
 
-- [backends.md](backends.md): a section with the Python example, the CLI example, the storage layout, the allowed
+- [backends/](backends/README.md): a section with the Python example, the CLI example, the storage layout, the allowed
   characters and limits, required permissions, concurrency behaviour and any setup step. Add a row to the overview
   table.
 - [installation.md](installation.md) and the extras table in the [README](../README.md): the new extra, and that
