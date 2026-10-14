@@ -55,6 +55,7 @@ The full walkthrough is in the **[Quickstart](docs/quickstart.md)**.
 | [Terminal UI](docs/tui.md) | layout and key bindings |
 | [Storage backends](docs/backends.md) | JSON, PostgreSQL, Parameter Store, Secrets Manager |
 | [Development](docs/development.md) | setup, architecture, tests, contributing |
+| [Adding a storage adapter](docs/adding-an-adapter.md) | developer guide for new backends |
 
 ### Installation
 
@@ -135,7 +136,8 @@ uv run pytest && uv run ruff check && uv run ty check
 
 The CLI, the TUI and any future frontend are thin layers over `EnvironmentStoreManager`; all logic lives in
 `environment_store/core/`. Architecture, testing, adding features and adapters, and database migrations are in the
-[development guide](docs/development.md).
+[development guide](docs/development.md). To add a new storage backend follow
+[Adding a storage adapter](docs/adding-an-adapter.md).
 
 ## License
 

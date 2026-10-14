@@ -122,6 +122,8 @@ uv run pytest -k delete_level                   # by name
   is needed.
 - The TUI is tested headlessly with Textual's `run_test()` pilot (`tests/environment_store/test_tui.py`).
 - The CLI is tested by calling `main([...])` with a temporary JSON file (`tests/environment_store/test_cli.py`).
+- Every adapter runs the same shared behavioural suite, `AdapterContract` in
+  `tests/environment_store/adapters/contract.py`. See [Adding a storage adapter](adding-an-adapter.md#4-test-it-with-the-shared-contract).
 
 ### PostgreSQL tests
 
@@ -149,19 +151,16 @@ uv run pytest tests/environment_store/adapters/postgresql
 
 ## Adding a storage adapter
 
-1. Create `adapters/<name>/` with a class that subclasses `AbstractAdapter` and implements its ten abstract methods
-   (`set_variable`, `set_variables`, `get_variable`, `get_variables`, `delete_variable`, `delete_variables`,
-   `get_organisations`, `get_projects`, `get_environments`, `get_services`). Read the docstrings in
-   [`abstract_adapter.py`](../src/environment_store/core/abstract_adapter.py).
-2. Respect the hierarchy rules, and make a level disappear once its last variable is deleted (so the manager's
-   `delete_level` and the TUI stay correct).
-3. If it needs third-party packages, add an optional extra in `pyproject.toml` **and** add it to `full`. Import the
-   package lazily so the core installs without it.
-4. Export the adapter in the package's `__init__.py`.
-5. Register it in the CLI: add it to `BACKENDS`, `build_manager` and `_backend_identity` in `cli.py`, and add its
-   options to `_add_backend_options` (this also provides the `--dest-*` options for `transfer`).
-6. Tests: mirror the existing adapter tests; use a fake or in-memory service if possible.
-7. Document it in [backends.md](backends.md), [installation.md](installation.md) and [cli.md](cli.md).
+The full guide is **[Adding a storage adapter](adding-an-adapter.md)**: the contract, a complete worked example,
+design decisions, packaging, wiring into the CLI, and docs. In short:
+
+1. Subclass `AbstractAdapter` in `adapters/<name>/` and implement its ten abstract methods; levels are implicit and
+   disappear with their last variable.
+2. Run the shared contract tests (`tests/environment_store/adapters/contract.py`) against it by subclassing
+   `AdapterContract` in your test module.
+3. Add an optional extra (and add it to `full`), import the SDK lazily, export the class.
+4. Register it in `cli.py` (`BACKENDS`, `_add_backend_options`, `build_manager`, `_backend_identity`).
+5. Document it in [backends.md](backends.md), [installation.md](installation.md) and [cli.md](cli.md).
 
 ## Database migrations
 

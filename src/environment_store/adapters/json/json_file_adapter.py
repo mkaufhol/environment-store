@@ -45,6 +45,8 @@ class JsonFileAdapter(AbstractAdapter):
         environment: str | None = None,
         service: str | None = None,
     ) -> None:
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Variable name must be a non-empty string")
         data = self._load_data()
         if (
             service is not None
@@ -222,6 +224,8 @@ class JsonFileAdapter(AbstractAdapter):
         environment: str | None = None,
         service: str | None = None,
     ) -> dict[str, list[str]]:
+        if not names:
+            raise ValueError("names must not be empty")
         deleted = []
         not_found = []
         for name in names:

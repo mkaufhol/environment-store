@@ -5,6 +5,10 @@ from sqlalchemy.exc import IntegrityError
 from environment_store.adapters.postgresql import PostgreSQLAdapter
 from environment_store.core.exceptions import VariableExistsError, VariableNotFoundError
 from environment_store.core.schemas import Variable
+from tests.environment_store.adapters.contract import (
+    AdapterContract,
+    StrictCreateUpdateContract,
+)
 
 LEVELS = [
     {},
@@ -106,8 +110,9 @@ class TestPostgreSQLAdapter:
         assert result == {"deleted": ["A", "B"], "not_found": ["C"]}
         assert adapter.get_variables(organisation="acme") == []
 
-    def test_delete_variables_empty_list(self, adapter):
-        assert adapter.delete_variables([]) == {"deleted": [], "not_found": []}
+    def test_delete_variables_empty_list_raises(self, adapter):
+        with pytest.raises(ValueError):
+            adapter.delete_variables([])
 
     def test_hierarchy_listing(self, adapter):
         adapter.set_variable("A", "1", organisation="zeta")
@@ -184,3 +189,7 @@ def test_migrations_are_applied_by_fixture(engine):
     url = engine.url.render_as_string(hide_password=False)
     assert pending_migrations(url) == []
     assert apply_migrations(url) == []
+
+
+class TestPostgreSQLAdapterContract(AdapterContract, StrictCreateUpdateContract):
+    """The shared adapter contract, see docs/adding-an-adapter.md."""
