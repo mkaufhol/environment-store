@@ -111,21 +111,39 @@ manager = EnvironmentStoreManager(adapter=adapter)
 At its core it just wraps boto3 functions into easier to use methods to create a simpler environment variable management solutions.
 So the connection with AWS is the same as for boto3: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration
 
-## ParameterStore
+## ParameterStoreAdapter
 
-### STATUS: WIP
+Stores every variable as one AWS Parameter Store parameter. The hierarchy is the parameter path:
+`/<prefix>/<organisation>/<project>/<environment>/<service>/<NAME>` (root variables live at `/<NAME>`).
+Values are written as `SecureString` by default (`parameter_type="String"` to change that).
 
-The `ParameterStore` class is just a simple wrapper around the parameter store functions of the boto3 ssm client.
-It provides simple CRUD operations for parameter store entries. It can be used as standalone for a simpler interaction
-with the parameter store or used in combination with the high level `EnvironmentVariableManager` class.
+```python
+from environment_store import EnvironmentStoreManager
+from environment_store.adapters.aws.ssm_parameter_store import ParameterStoreAdapter
 
-## SecretsManager
+adapter = ParameterStoreAdapter(region="us-east-1", prefix="myapp")
+manager = EnvironmentStoreManager(adapter=adapter)
+```
 
-### STATUS: NOT IMPLEMENTED YET
+The underlying `ParameterStore` class is a simple wrapper around the boto3 ssm client and can also be used standalone.
 
-The `SecretsManager` class is a wrapper around the boto3 secrets manager client. It is not a 100% wrapper, because it
-only implements functionality needed by the `EnvironmentVariableManager` class. But if you need more functionality, you
-can easily access the underlying boto3 client with the `client` attribute.
+## SecretsManagerAdapter
+
+Stores each hierarchy level as **one** Secrets Manager secret holding a JSON object of its variables, e.g.
+`myapp/acme/webapp/dev/api` -> `{"DB_HOST": "...", "DB_PORT": "..."}`. The root level is the secret named
+`<prefix>` (default `environment-store`). This keeps the number of billed secrets low, but updates are
+read-modify-write: concurrent writers on the same level can overwrite each other (last write wins).
+A level's secret is deleted (without recovery window) once its last variable is deleted.
+
+```python
+from environment_store import EnvironmentStoreManager
+from environment_store.adapters.aws.secrets_manager import SecretsManagerAdapter
+
+adapter = SecretsManagerAdapter(region="us-east-1", prefix="myapp")
+manager = EnvironmentStoreManager(adapter=adapter)
+```
+
+Names (organisation, project, environment, service, variable and prefix segments) may only contain `a-zA-Z0-9_.-`.
 
 # WIP
 
