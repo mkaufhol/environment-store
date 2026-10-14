@@ -1,0 +1,261 @@
+from typing import ClassVar
+
+from textual import on
+from textual.app import App, ComposeResult
+from textual.binding import Binding, BindingType
+from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static, Tree
+
+from environment_store.core import EnvironmentStoreManager
+from environment_store.core.schemas import Variable
+
+LEVELS = ("organisation", "project", "environment", "service")
+Path = tuple[str, ...]
+
+
+def path_kwargs(path: Path) -> dict[str, str | None]:
+    return {level: (path[i] if i < len(path) else None) for i, level in enumerate(LEVELS)}
+
+
+def describe(path: Path) -> str:
+    return " / ".join(path) if path else "root"
+
+
+class VariableForm(ModalScreen[tuple[str, str] | None]):
+    """Prompt for a variable name and value. Returns ``(name, value)`` or ``None``."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, name: str = "", value: str = "") -> None:
+        super().__init__()
+        self._name, self._value = name, value
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label("Edit variable" if self._name else "Add variable")
+            yield Input(self._name, placeholder="NAME", id="name", disabled=bool(self._name))
+            yield Input(self._value, placeholder="value", id="value")
+            with Horizontal(id="buttons"):
+                yield Button("Save", variant="primary", id="save")
+                yield Button("Cancel", id="cancel")
+
+    def on_mount(self) -> None:
+        self.query_one("#value" if self._name else "#name", Input).focus()
+
+    @on(Input.Submitted)
+    @on(Button.Pressed, "#save")
+    def save(self) -> None:
+        name = self.query_one("#name", Input).value.strip()
+        if not name:
+            self.notify("Name must not be empty", severity="error")
+            return
+        self.dismiss((name, self.query_one("#value", Input).value))
+
+    @on(Button.Pressed, "#cancel")
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class ConfirmDelete(ModalScreen[bool]):
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, name: str, where: str) -> None:
+        super().__init__()
+        self._text = f"Delete {name} at {where}?"
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label(self._text)
+            with Horizontal(id="buttons"):
+                yield Button("Delete", variant="error", id="yes")
+                yield Button("Cancel", id="no")
+
+    @on(Button.Pressed, "#yes")
+    def yes(self) -> None:
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#no")
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
+class EnvironmentStoreApp(App[None]):
+    TITLE = "environment-store"
+    CSS = """
+    #tree { width: 36; border: round $primary; }
+    #main { border: round $primary; }
+    #path { padding: 0 1; text-style: bold; }
+    VariableForm, ConfirmDelete { align: center middle; }
+    #dialog { width: 60; height: auto; padding: 1 2; border: thick $primary; background: $surface; }
+    #buttons { height: auto; margin-top: 1; }
+    #buttons Button { margin-right: 2; }
+    """
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("a", "add", "Add"),
+        Binding("e", "edit", "Edit"),
+        Binding("d", "delete", "Delete"),
+        Binding("r", "toggle_resolved", "Resolved"),
+        Binding("v", "toggle_values", "Values"),
+        Binding("f5", "refresh", "Refresh"),
+        Binding("q", "quit", "Quit"),
+    ]
+
+    def __init__(self, manager: EnvironmentStoreManager) -> None:
+        super().__init__()
+        self.manager = manager
+        self.path: Path = ()
+        self.resolved = False
+        self.show_values = False
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Horizontal():
+            yield Tree[Path]("root", data=(), id="tree")
+            with Vertical(id="main"):
+                yield Static(id="path")
+                yield DataTable(id="vars", cursor_type="row", zebra_stripes=True)
+        yield Footer()
+
+    def on_mount(self) -> None:
+        table = self.query_one("#vars", DataTable)
+        table.add_columns("Name", "Value")
+        tree = self.query_one("#tree", Tree)
+        tree.show_root = True
+        self._load_children(tree.root)
+        tree.root.expand()
+        tree.focus()
+        self.refresh_table()
+
+    # --- data -------------------------------------------------------------
+    def _children(self, path: Path) -> list[str]:
+        m = self.manager
+        if len(path) == 0:
+            return m.get_organisations()
+        if len(path) == 1:
+            return m.get_projects(path[0])
+        if len(path) == 2:
+            return m.get_environments(path[0], path[1])
+        if len(path) == 3:
+            return m.get_services(path[0], path[1], path[2])
+        return []
+
+    def _load_children(self, node) -> None:
+        node.remove_children()
+        path: Path = node.data
+        try:
+            names = sorted(self._children(path))
+        except Exception as exc:  # noqa: BLE001 - show backend errors instead of crashing
+            self.notify(f"{type(exc).__name__}: {exc}", severity="error")
+            return
+        for name in names:
+            child = path + (name,)
+            if len(child) == len(LEVELS):
+                node.add_leaf(name, data=child)
+            else:
+                node.add(name, data=child)
+
+    def _variables(self) -> list[Variable]:
+        p, kw = self.path, path_kwargs(self.path)
+        if not self.resolved or not p:
+            return self.manager.get_variables(**kw)
+        m = self.manager
+        if len(p) == 1:
+            return m.get_organisation_variables(p[0])
+        if len(p) == 2:
+            return m.get_project_variables(p[0], p[1])
+        if len(p) == 3:
+            return m.get_environment_variables(p[0], p[1], p[2])
+        return m.get_service_variables(p[0], p[1], p[2], p[3])
+
+    def refresh_table(self) -> None:
+        table = self.query_one("#vars", DataTable)
+        table.clear()
+        mode = "resolved" if self.resolved else "own variables"
+        self.query_one("#path", Static).update(f"{describe(self.path)}  ({mode})")
+        try:
+            variables = sorted(self._variables(), key=lambda v: v.name)
+        except Exception as exc:  # noqa: BLE001
+            self.notify(f"{type(exc).__name__}: {exc}", severity="error")
+            return
+        for v in variables:
+            table.add_row(v.name, v.value if self.show_values else "***", key=v.name)
+
+    def _selected_name(self) -> str | None:
+        table = self.query_one("#vars", DataTable)
+        if table.row_count == 0:
+            return None
+        return table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+
+    # --- events -----------------------------------------------------------
+    @on(Tree.NodeHighlighted)
+    def node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        self.path = event.node.data or ()
+        self.refresh_table()
+
+    @on(Tree.NodeExpanded)
+    def node_expanded(self, event: Tree.NodeExpanded) -> None:
+        if not event.node.children:
+            self._load_children(event.node)
+
+    # --- actions ----------------------------------------------------------
+    def action_toggle_resolved(self) -> None:
+        self.resolved = not self.resolved
+        self.refresh_table()
+
+    def action_toggle_values(self) -> None:
+        self.show_values = not self.show_values
+        self.refresh_table()
+
+    def action_refresh(self) -> None:
+        tree = self.query_one("#tree", Tree)
+        self._load_children(tree.root)
+        tree.root.expand()
+        self.refresh_table()
+
+    def _save(self, result: tuple[str, str] | None) -> None:
+        if result is None:
+            return
+        try:
+            self.manager.set_variable(result[0], result[1], **path_kwargs(self.path))
+        except Exception as exc:  # noqa: BLE001
+            self.notify(f"{type(exc).__name__}: {exc}", severity="error")
+            return
+        self.notify(f"Saved {result[0]}")
+        self.refresh_table()
+
+    def action_add(self) -> None:
+        self.push_screen(VariableForm(), self._save)
+
+    def action_edit(self) -> None:
+        name = self._selected_name()
+        if name is None or self.resolved:
+            if self.resolved:
+                self.notify("Switch off the resolved view to edit", severity="warning")
+            return
+        current = self.manager.get_variable(name, **path_kwargs(self.path)) or ""
+        self.push_screen(VariableForm(name, current), self._save)
+
+    def action_delete(self) -> None:
+        name = self._selected_name()
+        if name is None or self.resolved:
+            if self.resolved:
+                self.notify("Switch off the resolved view to delete", severity="warning")
+            return
+
+        def done(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+            try:
+                self.manager.delete_variable(name, **path_kwargs(self.path))
+            except Exception as exc:  # noqa: BLE001
+                self.notify(f"{type(exc).__name__}: {exc}", severity="error")
+                return
+            self.notify(f"Deleted {name}")
+            self.refresh_table()
+
+        self.push_screen(ConfirmDelete(name, describe(self.path)), done)
+
+
+def run(manager: EnvironmentStoreManager) -> None:
+    EnvironmentStoreApp(manager).run()

@@ -307,6 +307,17 @@ def cmd_children(manager: EnvironmentStoreManager, args: argparse.Namespace) -> 
     return 0
 
 
+def cmd_tui(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
+    try:
+        from environment_store.tui import run
+    except ImportError as exc:
+        raise CliError(
+            "The TUI needs the tui extra: pip install 'environment-store[tui]'."
+        ) from exc
+    run(manager)
+    return 0
+
+
 def _describe(args: argparse.Namespace) -> str:
     parts = [f"{level}={getattr(args, level)}" for level in LEVELS if getattr(args, level)]
     return " ".join(parts) if parts else "root level"
@@ -412,6 +423,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--format", choices=("lines", "json"), default="lines")
     p.set_defaults(func=cmd_children)
+
+    p = sub.add_parser("tui", help="open the interactive terminal UI (requires the tui extra)")
+    p.set_defaults(func=cmd_tui)
 
     return parser
 
