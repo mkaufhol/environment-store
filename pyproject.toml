@@ -69,6 +69,10 @@ build-backend = "uv_build"
 
 [tool.ruff]
 line-length = 96
+extend-exclude = [
+    "src/environment_store/adapters/postgresql/queries.py",
+    "src/environment_store/adapters/postgresql/models.py",
+]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -84,3 +88,9 @@ skips = ["B101"]
 
 [tool.ty.environment]
 python-version = "3.12"
+
+[tool.ty.src]
+exclude = [
+    "src/environment_store/adapters/postgresql/queries.py",
+    "src/environment_store/adapters/postgresql/models.py",
+]
