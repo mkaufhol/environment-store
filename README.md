@@ -74,7 +74,7 @@ The core package only depends on `pydantic`. The storage backends bring their ow
 |------------|--------------------------------------------------------|
 | _(none)_   | core + `JsonFileAdapter`                               |
 | `aws`      | `ParameterStoreAdapter`, `SecretsManagerAdapter` (boto3) |
-| `postgres` | `PostgreSQLAdapter` (psycopg, sqlalchemy)              |
+| `postgres` | `PostgreSQLAdapter` (psycopg, sqlalchemy, yoyo-migrations) |
 | `tui`      | terminal UI, `environment-store tui` ([Textual](https://textual.textualize.io/)) |
 | `full`     | everything above: `aws` + `postgres` + `tui`           |
 
@@ -240,9 +240,37 @@ manager = EnvironmentStoreManager(adapter=adapter)
 
 Stores the variables in one table of a PostgreSQL database (version 15+). Install the `postgres` extra.
 
-The schema is managed with [yoyo](https://ollycope.com/software/yoyo/latest/) migrations, which you have to apply
-before using the adapter. Copy `src/environment_store/adapters/postgresql/yoyo-database-example.ini` to
-`yoyo-database.ini` in the same directory, point it to your database and run:
+The schema is managed with [yoyo](https://ollycope.com/software/yoyo/latest/) migrations (shipped inside the
+package, `yoyo-migrations` comes with the `postgres` extra) which you have to apply before using the adapter.
+
+### Running the migrations with the CLI
+
+```bash
+export ENVIRONMENT_STORE_BACKEND=postgres
+export ENVIRONMENT_STORE_DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/environment_store
+
+environment-store migrate --status   # list pending migrations, apply nothing
+environment-store migrate            # apply all pending migrations (safe to re-run)
+```
+
+Or without environment variables: `environment-store --backend postgres --database-url <url> migrate`.
+The database itself must already exist. `migrate` prints the ids of the applied migrations and
+only works with `--backend postgres`.
+
+### Running the migrations from Python
+
+```python
+from environment_store.adapters.postgresql import apply_migrations, pending_migrations
+
+pending_migrations(url)  # -> list of migration ids
+apply_migrations(url)  # -> list of applied migration ids
+```
+
+### Running the migrations from a clone
+
+If you work on the repository you can also use the yoyo CLI directly. Copy
+`src/environment_store/adapters/postgresql/yoyo-database-example.ini` to `yoyo-database.ini` in the same directory,
+point it to your database and run:
 
 ```bash
 src/environment_store/adapters/postgresql/scripts/init_database.sh

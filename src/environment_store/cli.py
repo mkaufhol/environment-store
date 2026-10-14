@@ -307,6 +307,33 @@ def cmd_children(manager: EnvironmentStoreManager, args: argparse.Namespace) -> 
     return 0
 
 
+def cmd_migrate(args: argparse.Namespace) -> int:
+    if args.backend != "postgres":
+        raise CliError(
+            "migrate is only available for the postgres backend (--backend postgres)."
+        )
+    if not args.database_url:
+        raise CliError(
+            "The postgres backend needs --database-url or ENVIRONMENT_STORE_DATABASE_URL."
+        )
+    from environment_store.adapters.postgresql import apply_migrations, pending_migrations
+
+    if args.status:
+        pending = pending_migrations(args.database_url)
+        for migration_id in pending:
+            print(migration_id)
+        print(f"{len(pending)} pending migration(s)", file=sys.stderr)
+        return 0
+    applied = apply_migrations(args.database_url)
+    for migration_id in applied:
+        print(migration_id)
+    print(
+        f"Applied {len(applied)} migration(s)" if applied else "Database is up to date",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def cmd_tui(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
     try:
         from environment_store.tui import run
@@ -424,6 +451,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--format", choices=("lines", "json"), default="lines")
     p.set_defaults(func=cmd_children)
 
+    p = sub.add_parser("migrate", help="apply the database migrations (postgres backend only)")
+    p.add_argument(
+        "--status", action="store_true", help="only list pending migrations, apply nothing"
+    )
+    p.set_defaults(func=cmd_migrate, needs_manager=False)
+
     p = sub.add_parser("tui", help="open the interactive terminal UI (requires the tui extra)")
     p.set_defaults(func=cmd_tui)
 
@@ -436,6 +469,8 @@ def main(
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if not getattr(args, "needs_manager", True):
+            return args.func(args)
         if manager is None:
             manager = build_manager(args)
         return args.func(manager, args)

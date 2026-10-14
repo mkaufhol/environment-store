@@ -516,10 +516,12 @@ full = [
     { name = "psycopg" },
     { name = "sqlalchemy" },
     { name = "textual" },
+    { name = "yoyo-migrations" },
 ]
 postgres = [
     { name = "psycopg" },
     { name = "sqlalchemy" },
+    { name = "yoyo-migrations" },
 ]
 tui = [
     { name = "textual" },
@@ -558,6 +560,8 @@ requires-dist = [
     { name = "sqlalchemy", marker = "extra == 'postgres'", specifier = ">=2.0.48" },
     { name = "textual", marker = "extra == 'full'", specifier = ">=8.2" },
     { name = "textual", marker = "extra == 'tui'", specifier = ">=8.2" },
+    { name = "yoyo-migrations", marker = "extra == 'full'", specifier = ">=9.0.0" },
+    { name = "yoyo-migrations", marker = "extra == 'postgres'", specifier = ">=9.0.0" },
 ]
 provides-extras = ["aws", "postgres", "tui", "full"]
 

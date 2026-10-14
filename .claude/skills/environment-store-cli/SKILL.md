@@ -53,6 +53,10 @@ environment-store children                                    # list organisatio
 environment-store children -o acme [-p web [-e dev]]          # projects / environments / services
 ```
 
+Postgres only: `environment-store migrate --status` lists pending schema migrations and
+`environment-store migrate` applies them. Run it once on a fresh database (the database must already exist);
+"relation environment_store does not exist" errors mean migrations haven't been applied.
+
 ## 3. Efficient workflows
 
 - **Discover first:** `children` (then `children -o X`, `-o X -p Y`, ...) to learn exact names before reading or writing. Names are case-sensitive.
