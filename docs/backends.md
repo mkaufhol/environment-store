@@ -185,5 +185,4 @@ Check the current AWS pricing and quotas before deciding.
 
 ## Adding another backend
 
-Implement `AbstractAdapter`, see [Python usage](python-usage.md#writing-your-own-adapter) and
-[Development](development.md#adding-a-storage-adapter).
+Follow the guide [Adding a storage adapter](adding-an-adapter.md).

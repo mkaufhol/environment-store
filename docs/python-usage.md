@@ -203,5 +203,5 @@ Subclass `environment_store.core.abstract_adapter.AbstractAdapter` and implement
 `get_organisations`, `get_projects`, `get_environments` and `get_services`. (`create_variable`, `update_variable`
 and `variable_exists` are optional extras that some adapters offer.) The docstrings in
 [`abstract_adapter.py`](../src/environment_store/core/abstract_adapter.py) describe the contract for each method.
-Pass an instance to `EnvironmentStoreManager`. See [Development](development.md#adding-a-storage-adapter) for the
-checklist.
+Pass an instance to `EnvironmentStoreManager`. See [Adding a storage adapter](adding-an-adapter.md) for the full guide,
+including a worked example and the shared contract tests.

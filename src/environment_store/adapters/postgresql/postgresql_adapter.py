@@ -126,6 +126,10 @@ class PostgreSQLAdapter(AbstractAdapter):
         environment: str | None = None,
         service: str | None = None,
     ) -> dict[str, list[str]]:
+        if not names:
+            raise ValueError("names must not be empty")
+        for name in names:
+            self._validate_name(name)
         deleted: list[str] = []
         not_found: list[str] = []
         with self.engine.begin() as conn:

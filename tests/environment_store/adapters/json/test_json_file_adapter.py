@@ -7,6 +7,7 @@ from environment_store.adapters.json.json_file_adapter import (
     JsonFileAdapter,
 )
 from environment_store.core.schemas import Variable
+from tests.environment_store.adapters.contract import AdapterContract
 
 
 @pytest.fixture
@@ -305,3 +306,7 @@ def test_adapter_is_importable_from_the_package():
     from environment_store.adapters.json import JsonFileAdapter as Exported
 
     assert Exported is JsonFileAdapter
+
+
+class TestJsonFileAdapterContract(AdapterContract):
+    """The shared adapter contract, see docs/adding-an-adapter.md."""
