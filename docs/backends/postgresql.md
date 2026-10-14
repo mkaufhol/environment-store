@@ -14,11 +14,43 @@ adapter = PostgreSQLAdapter(
 adapter = PostgreSQLAdapter(engine)
 ```
 
+## CLI and TUI
+
+Select this backend with `--backend postgres` plus the options below. They go **before** the command (or `tui`),
+or can be set as environment variables so you do not repeat them.
+
+| Option | Environment variable | Required |
+|---|---|---|
+| `--backend postgres` | `ENVIRONMENT_STORE_BACKEND=postgres` | yes |
+| `--database-url URL` | `ENVIRONMENT_STORE_DATABASE_URL` | yes, a SQLAlchemy URL like `postgresql+psycopg://user:password@host:5432/db` |
+
 ```bash
+# CLI
+environment-store --backend postgres \
+  --database-url "postgresql+psycopg://user:password@localhost:5432/environment_store" \
+  list -o acme
+
+# TUI
+environment-store --backend postgres \
+  --database-url "postgresql+psycopg://user:password@localhost:5432/environment_store" tui
+
+# the same with environment variables
 export ENVIRONMENT_STORE_BACKEND=postgres
 export ENVIRONMENT_STORE_DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/environment_store
-environment-store list
+environment-store list -o acme
+environment-store tui
 ```
+
+As the destination of [`transfer`](../cli.md#transferring-a-store-between-backends) use the `--dest-` variant of
+each option (`ENVIRONMENT_STORE_DEST_*`):
+
+```bash
+environment-store --backend json --json-file ./store.json transfer \
+  --dest-backend postgres --dest-database-url "$URL" --dry-run
+```
+
+`migrate` only works with this backend and only needs the URL: `environment-store --backend postgres --database-url "$URL" migrate`.
+Run it before the first use, see [Create the schema first](#create-the-schema-first).
 
 ## Create the schema first
 
