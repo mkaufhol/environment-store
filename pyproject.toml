@@ -39,6 +39,7 @@ environment-store = "environment_store.cli:main"
 Homepage = "https://github.com/mkaufhol/environment-store"
 Repository = "https://github.com/mkaufhol/environment-store"
 Issues = "https://github.com/mkaufhol/environment-store/issues"
+Changelog = "https://github.com/mkaufhol/environment-store/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 aws = ["boto3>=1.42.68"]
