@@ -82,10 +82,11 @@ class ParameterStore:
         :param recursive: If set to True, the path will be searched recursively and all parameters below the path will be returned.
         :return: The fetched parameters as a ParametersByPathResponse object.
         """
-        response = self.client.get_parameters_by_path(
-            Path=path, Recursive=recursive, WithDecryption=True
-        )
-        return ParametersByPathResponse.model_validate(response)
+        paginator = self.client.get_paginator("get_parameters_by_path")
+        parameters = []
+        for page in paginator.paginate(Path=path, Recursive=recursive, WithDecryption=True):
+            parameters.extend(page["Parameters"])
+        return ParametersByPathResponse.model_validate({"Parameters": parameters})
 
     @clean_and_validate_string
     def get_parameters_by_path_as_dict(
