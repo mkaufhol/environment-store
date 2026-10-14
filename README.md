@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/environment-store-logo.svg" alt="Environment store logo" width="200">
+  <img src="https://raw.githubusercontent.com/mkaufhol/environment-store/main/docs/assets/environment-store-logo.svg" alt="Environment store logo" width="200">
 </p>
 
 <h1 align="center">Environment store</h1>
@@ -11,7 +11,7 @@ interactive **terminal UI**.
 - **Hierarchical:** organisation > project > environment > service. Child levels override their parents.
 - **Pluggable backends:** the same API, CLI and TUI for every store, and a `transfer` command to move between them.
 - **Three interfaces:** `EnvironmentStoreManager` in Python, the `environment-store` CLI, and a Textual-based TUI.
-- **Agent friendly:** ships a [skill](.claude/skills/environment-store-cli/SKILL.md) that teaches LLM agents to use the CLI safely.
+- **Agent friendly:** ships a [skill](https://github.com/mkaufhol/environment-store/blob/main/.claude/skills/environment-store-cli/SKILL.md) that teaches LLM agents to use the CLI safely.
 
 ```
 root                      LOG_LEVEL=info
@@ -46,20 +46,20 @@ manager.set_variable("DB_HOST", "localhost", organisation="acme", project="webap
 manager.get_resolved_variables(organisation="acme", project="webapp")
 ```
 
-The full walkthrough is in the **[Quickstart](docs/quickstart.md)**.
+The full walkthrough is in the **[Quickstart](https://github.com/mkaufhol/environment-store/blob/main/docs/quickstart.md)**.
 
 ## Documentation
 
 | Guide | |
 |---|---|
-| [Quickstart](docs/quickstart.md) | five minutes from install to your first variables |
-| [Installation](docs/installation.md) | extras, uv, pip, git, `uvx` |
-| [Python usage](docs/python-usage.md) | the `EnvironmentStoreManager` API |
-| [Command line interface](docs/cli.md) | all commands, `transfer`, exit codes, recipes |
-| [Terminal UI](docs/tui.md) | layout and key bindings |
-| [Storage backends](docs/backends/README.md) | JSON, PostgreSQL, Parameter Store, Secrets Manager |
-| [Development](docs/development.md) | setup, architecture, tests, contributing |
-| [Adding a storage adapter](docs/adding-an-adapter.md) | developer guide for new backends |
+| [Quickstart](https://github.com/mkaufhol/environment-store/blob/main/docs/quickstart.md) | five minutes from install to your first variables |
+| [Installation](https://github.com/mkaufhol/environment-store/blob/main/docs/installation.md) | extras, uv, pip, git, `uvx` |
+| [Python usage](https://github.com/mkaufhol/environment-store/blob/main/docs/python-usage.md) | the `EnvironmentStoreManager` API |
+| [Command line interface](https://github.com/mkaufhol/environment-store/blob/main/docs/cli.md) | all commands, `transfer`, exit codes, recipes |
+| [Terminal UI](https://github.com/mkaufhol/environment-store/blob/main/docs/tui.md) | layout and key bindings |
+| [Storage backends](https://github.com/mkaufhol/environment-store/blob/main/docs/backends/README.md) | JSON, PostgreSQL, Parameter Store, Secrets Manager |
+| [Development](https://github.com/mkaufhol/environment-store/blob/main/docs/development.md) | setup, architecture, tests, contributing |
+| [Adding a storage adapter](https://github.com/mkaufhol/environment-store/blob/main/docs/adding-an-adapter.md) | developer guide for new backends |
 
 ### Installation
 
@@ -76,7 +76,7 @@ The core package depends only on `pydantic` and includes the JSON backend and th
 uv add "environment-store[full]"
 ```
 
-More, including installing from git and running without installing, in the [installation guide](docs/installation.md).
+More, including installing from git and running without installing, in the [installation guide](https://github.com/mkaufhol/environment-store/blob/main/docs/installation.md).
 
 ### Python
 
@@ -92,7 +92,7 @@ manager.delete_level(organisation="acme", project="webapp", confirm="webapp")
 ```
 
 Reading, writing, resolving, discovering, deleting and copying are covered in the
-[Python guide](docs/python-usage.md).
+[Python guide](https://github.com/mkaufhol/environment-store/blob/main/docs/python-usage.md).
 
 ### Command line
 
@@ -108,7 +108,7 @@ environment-store migrate            # PostgreSQL schema
 
 Commands: `get`, `set`, `list`, `delete`, `import`, `children`, `delete-level`, `transfer`, `migrate`, `tui`.
 Choose the backend with `--backend` or `ENVIRONMENT_STORE_BACKEND`. Data goes to stdout, messages to stderr, and
-exit codes are stable. See the [CLI guide](docs/cli.md) for every option.
+exit codes are stable. See the [CLI guide](https://github.com/mkaufhol/environment-store/blob/main/docs/cli.md) for every option.
 
 ### Terminal UI
 
@@ -118,7 +118,7 @@ environment-store tui
 
 A tree of your levels next to a table of their variables. Navigate with the arrow keys or `hjkl`; `a` add, `e` edit,
 `d` delete, `n` new level, `x` delete a level (you must type its name), `r` resolved view, `v` show values,
-`q` quit. See the [TUI guide](docs/tui.md).
+`q` quit. See the [TUI guide](https://github.com/mkaufhol/environment-store/blob/main/docs/tui.md).
 
 ### Storage backends
 
@@ -129,7 +129,7 @@ A tree of your levels next to a table of their variables. Navigate with the arro
 | AWS Parameter Store | `ssm` | one parameter per variable |
 | AWS Secrets Manager | `secretsmanager` | one secret per level |
 
-Options, IAM permissions, layouts and trade-offs are in [Storage backends](docs/backends/README.md).
+Options, IAM permissions, layouts and trade-offs are in [Storage backends](https://github.com/mkaufhol/environment-store/blob/main/docs/backends/README.md).
 
 ### Development
 
@@ -140,9 +140,9 @@ uv run pytest && uv run ruff check && uv run ty check
 
 The CLI, the TUI and any future frontend are thin layers over `EnvironmentStoreManager`; all logic lives in
 `environment_store/core/`. Architecture, testing, adding features and adapters, and database migrations are in the
-[development guide](docs/development.md). To add a new storage backend follow
-[Adding a storage adapter](docs/adding-an-adapter.md).
+[development guide](https://github.com/mkaufhol/environment-store/blob/main/docs/development.md). To add a new storage backend follow
+[Adding a storage adapter](https://github.com/mkaufhol/environment-store/blob/main/docs/adding-an-adapter.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/mkaufhol/environment-store/blob/main/LICENSE).
