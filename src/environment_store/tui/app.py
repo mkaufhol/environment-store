@@ -19,6 +19,51 @@ from environment_store.core.hierarchy import (
 from environment_store.core.schemas import Variable
 
 
+class HierarchyTree(Tree[Path]):
+    """The level tree. Arrow keys and vim keys do the same: up/down (k/j), collapse/parent (h/left),
+    expand/child/switch to the variables (l/right)."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("k", "cursor_up", "Up", show=False),
+        Binding("j", "cursor_down", "Down", show=False),
+        Binding("h,left", "collapse_or_parent", "Collapse", show=False),
+        Binding("l,right", "expand_or_descend", "Expand", show=False),
+    ]
+
+    def action_collapse_or_parent(self) -> None:
+        node = self.cursor_node
+        if node is None:
+            return
+        if node.is_expanded and not node.is_root:
+            node.collapse()
+        elif node.parent is not None:
+            self.move_cursor(node.parent)
+
+    def action_expand_or_descend(self) -> None:
+        node = self.cursor_node
+        if node is None:
+            return
+        if node.allow_expand and not node.is_expanded:
+            node.expand()
+        elif node.is_expanded and node.children:
+            self.action_cursor_down()
+        else:
+            self.app.query_one("#vars", DataTable).focus()
+
+
+class VariableTable(DataTable):
+    """The variables table. j/k move like up/down, h/left goes back to the tree."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("k", "cursor_up", "Up", show=False),
+        Binding("j", "cursor_down", "Down", show=False),
+        Binding("h,left", "focus_tree", "Tree", show=False),
+    ]
+
+    def action_focus_tree(self) -> None:
+        self.app.query_one("#tree", Tree).focus()
+
+
 class VariableForm(ModalScreen[tuple[str, str] | None]):
     """Prompt for a variable name and value. Returns ``(name, value)`` or ``None``."""
 
@@ -195,10 +240,10 @@ class EnvironmentStoreApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal():
-            yield Tree[Path]("root", data=(), id="tree")
+            yield HierarchyTree("root", data=(), id="tree")
             with Vertical(id="main"):
                 yield Static(id="path")
-                yield DataTable(id="vars", cursor_type="row", zebra_stripes=True)
+                yield VariableTable(id="vars", cursor_type="row", zebra_stripes=True)
         yield Footer()
 
     def on_mount(self) -> None:

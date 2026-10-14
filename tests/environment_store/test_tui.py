@@ -152,3 +152,60 @@ def test_delete_nested_level_refreshes_parent(manager):
             assert len(acme.children) == 0
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("down", "up", "right", "left"),
+    [("down", "up", "right", "left"), ("j", "k", "l", "h")],
+)
+def test_arrow_and_vim_navigation(manager, down, up, right, left):
+    async def scenario():
+        app = EnvironmentStoreApp(manager)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            tree = app.query_one(Tree)
+            await pilot.press(down)  # root -> acme
+            await pilot.pause()
+            assert app.path == ("acme",)
+            await pilot.press(right)  # expand acme
+            await pilot.pause()
+            await pilot.press(right)  # descend into web
+            await pilot.pause()
+            assert app.path == ("acme", "web")
+            await pilot.press(left)  # web is collapsed -> parent
+            await pilot.pause()
+            assert app.path == ("acme",)
+            await pilot.press(left)  # collapse acme
+            await pilot.pause()
+            assert tree.cursor_node is not None
+            assert not tree.cursor_node.is_expanded
+            await pilot.press(up)
+            await pilot.pause()
+            assert app.path == ()
+            await pilot.press(down, right, right)  # acme: expand, descend, ...
+            await pilot.press(right, right)  # web has no children -> focus the table
+            await pilot.pause()
+            assert app.focused is app.query_one(DataTable)
+            await pilot.press(left)
+            await pilot.pause()
+            assert app.focused is tree
+
+    asyncio.run(scenario())
+
+
+def test_vim_keys_move_table_cursor(manager):
+    manager.set_variable("Z", "z")
+
+    async def scenario():
+        app = EnvironmentStoreApp(manager)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            table = app.query_one(DataTable)
+            table.focus()
+            await pilot.pause()
+            await pilot.press("j")
+            assert table.cursor_row == 1
+            await pilot.press("k")
+            assert table.cursor_row == 0
+
+    asyncio.run(scenario())
