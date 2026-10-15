@@ -7,6 +7,7 @@ import pytest
 from moto import mock_aws
 
 from environment_store.adapters.aws.secrets_manager import SecretsManagerAdapter
+from environment_store.adapters.aws.secrets_manager.adapter import MAX_SECRET_SIZE
 from environment_store.adapters.aws.ssm_parameter_store import ParameterStoreAdapter
 from environment_store.core.schemas import Variable
 from tests.environment_store.adapters.contract import (
@@ -34,15 +35,17 @@ def aws_credentials(monkeypatch):
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
 
 
-@pytest.fixture(params=["ssm", "ssm-prefix", "secrets"])
+@pytest.fixture(params=["ssm", "ssm-prefix", "secrets", "secrets-prefix"])
 def adapter(request):
     with mock_aws():
         if request.param == "ssm":
             yield ParameterStoreAdapter(region="us-east-1")
         elif request.param == "ssm-prefix":
             yield ParameterStoreAdapter(region="us-east-1", prefix="/myapp/config")
-        else:
+        elif request.param == "secrets":
             yield SecretsManagerAdapter(region="us-east-1")
+        else:
+            yield SecretsManagerAdapter(region="us-east-1", prefix="myapp/config")
 
 
 class TestAdapterContract(AdapterContract, StrictCreateUpdateContract):
@@ -103,36 +106,78 @@ class TestSecretsManagerAdapter:
         with pytest.raises(ValueError):
             SecretsManagerAdapter(region="us-east-1", prefix="/")
 
-    def test_one_json_secret_per_level(self, adapter):
+    def _secret_names(self, adapter):
+        return [s["Name"] for s in adapter.secrets_manager.client.list_secrets()["SecretList"]]
+
+    def _secret_data(self, adapter, name="app"):
+        client = adapter.secrets_manager.client
+        return json.loads(client.get_secret_value(SecretId=name)["SecretString"])
+
+    def test_single_json_secret_for_all_levels(self, adapter):
+        adapter.set_variable("ROOT", "r")
+        adapter.set_variable("ORG", "o", organisation="acme")
         adapter.set_variables(
             [Variable(name="A", value="1"), Variable(name="B", value="2")], **FULL
         )
-        client = adapter.secrets_manager.client
-        names = [s["Name"] for s in client.list_secrets()["SecretList"]]
-        assert names == ["app/acme/webapp/dev/api"]
-        value = client.get_secret_value(SecretId="app/acme/webapp/dev/api")["SecretString"]
-        assert json.loads(value) == {"A": "1", "B": "2"}
+        assert self._secret_names(adapter) == ["app"]
+        assert self._secret_data(adapter) == {
+            "ROOT": "r",
+            "acme/ORG": "o",
+            "acme/webapp/dev/api/A": "1",
+            "acme/webapp/dev/api/B": "2",
+        }
 
-    def test_root_secret_name_is_prefix(self, adapter):
-        adapter.set_variable("K", "v")
-        names = [s["Name"] for s in adapter.secrets_manager.client.list_secrets()["SecretList"]]
-        assert names == ["app"]
+    def test_default_prefix(self):
+        with mock_aws():
+            adapter = SecretsManagerAdapter(region="us-east-1")
+            adapter.set_variable("K", "v", organisation="acme")
+            assert self._secret_names(adapter) == ["environment-store"]
+            assert self._secret_data(adapter, "environment-store") == {"acme/K": "v"}
 
-    def test_empty_level_secret_is_removed_and_name_reusable(self, adapter):
+    def test_nested_prefix_is_secret_name(self):
+        with mock_aws():
+            adapter = SecretsManagerAdapter(region="us-east-1", prefix="/myapp/config/")
+            adapter.set_variable("K", "v", **FULL)
+            assert self._secret_names(adapter) == ["myapp/config"]
+            assert self._secret_data(adapter, "myapp/config") == {"acme/webapp/dev/api/K": "v"}
+
+    def test_prefixes_are_separate_stores(self, adapter):
+        other = SecretsManagerAdapter(prefix="other", secrets_manager=adapter.secrets_manager)
+        adapter.set_variable("K", "app", organisation="acme")
+        other.set_variable("K", "other", organisation="globex")
+        assert adapter.get_organisations() == ["acme"]
+        assert other.get_organisations() == ["globex"]
+        assert other.get_variable("K", organisation="acme") is None
+
+    def test_empty_store_secret_is_removed_and_name_reusable(self, adapter):
         adapter.set_variable("K", "v", organisation="acme")
+        adapter.set_variable("K", "v", organisation="globex")
         adapter.delete_variable("K", organisation="acme")
-        assert adapter.secrets_manager.client.list_secrets()["SecretList"] == []
+        assert self._secret_names(adapter) == ["app"]
+        adapter.delete_variable("K", organisation="globex")
+        assert self._secret_names(adapter) == []
         adapter.set_variable("K", "again", organisation="acme")
         assert adapter.get_variable("K", organisation="acme") == "again"
 
+    def test_delete_duplicate_names(self, adapter):
+        adapter.set_variable("K", "v")
+        assert adapter.delete_variables(["K", "K"]) == {"deleted": ["K", "K"], "not_found": []}
+        assert adapter.get_variable("K") is None
+
     def test_non_object_secret_raises(self, adapter):
-        adapter.secrets_manager.client.create_secret(Name="app/acme", SecretString='["x"]')
+        adapter.secrets_manager.client.create_secret(Name="app", SecretString='["x"]')
         with pytest.raises(TypeError):
             adapter.get_variables(organisation="acme")
 
-    def test_ignores_secrets_outside_prefix(self, adapter):
-        boto3.client("secretsmanager", region_name="us-east-1").create_secret(
-            Name="app-other/x", SecretString="{}"
-        )
+    def test_too_large_store_raises_and_keeps_data(self, adapter):
+        adapter.set_variable("K", "v")
+        with pytest.raises(ValueError, match="65536 bytes"):
+            adapter.set_variable("BIG", "x" * MAX_SECRET_SIZE)
+        assert self._secret_data(adapter) == {"K": "v"}
+
+    def test_ignores_other_secrets(self, adapter):
+        client = boto3.client("secretsmanager", region_name="us-east-1")
+        client.create_secret(Name="app-other", SecretString='{"x/K": "1"}')
+        client.create_secret(Name="app/legacy", SecretString='{"K": "1"}')
         adapter.set_variable("K", "v", organisation="acme")
         assert adapter.get_organisations() == ["acme"]
