@@ -6,12 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0rc2] - 2026-10-15
+
 ### Added
 
 - `environment-store export` prints the resolved variables of a level as shell code for `eval`
   (`--unset` removes them again).
 - `EnvironmentStoreManager.load_into_environ()` loads the resolved variables of a level into
   `os.environ`, like `dotenv.load_dotenv`.
+
+### Changed
+
+- **Breaking:** the AWS Secrets Manager backend stores the whole store in a single secret named
+  after the prefix (default `environment-store`) instead of one secret per hierarchy level.
+  Variables are keyed by their path, e.g. `acme/webapp/dev/api/DB_HOST`. This cuts the number
+  of billed secrets to one per store, but the store is limited to 64 KiB. Level secrets
+  written by 0.1.0rc1 are no longer read; root level variables keep working unchanged.
 
 ## [0.1.0rc1] - 2026-10-14
 
@@ -29,4 +39,6 @@ First public pre-release.
 - Optional extras: `aws`, `postgres`, `tui` and `full`.
 - Agent skill for using the CLI safely.
 
+[Unreleased]: https://github.com/mkaufhol/environment-store/compare/v0.1.0rc2...HEAD
+[0.1.0rc2]: https://github.com/mkaufhol/environment-store/compare/v0.1.0rc1...v0.1.0rc2
 [0.1.0rc1]: https://github.com/mkaufhol/environment-store/releases/tag/v0.1.0rc1

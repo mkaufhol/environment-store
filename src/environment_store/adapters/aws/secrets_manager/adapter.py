@@ -1,13 +1,20 @@
 """
 AbstractAdapter implementation backed by AWS Secrets Manager.
 
-Every hierarchy level is stored as ONE secret containing a JSON object of its variables:
+The whole store lives in ONE secret named ``<prefix>``, holding a flat JSON object whose keys
+are the variable paths below the prefix:
 
-    <prefix>/<organisation>/<project>/<environment>/<service>   ->   {"NAME": "value", ...}
+    <prefix>   ->   {
+        "NAME": "root value",
+        "<organisation>/NAME": "...",
+        "<organisation>/<project>/<environment>/<service>/NAME": "...",
+    }
 
-The root level is the secret named ``<prefix>`` itself. This keeps the number of (billed)
-secrets small, but writes are read-modify-write: two concurrent writers on the same level
-can overwrite each other's changes (last write wins).
+Secrets Manager bills per secret, so this is the cheapest layout. Names cannot contain ``/``,
+so every key splits unambiguously into a level and a variable name. The trade-offs: writes are
+read-modify-write on the single secret, so two concurrent writers anywhere in the store can
+overwrite each other's changes (last write wins), and the whole store must fit into one secret
+value (``MAX_SECRET_SIZE`` bytes).
 """
 
 import json
@@ -19,14 +26,17 @@ from environment_store.core.schemas import Variable
 from ..hierarchy import child_names, level_segments, validate_segment
 from .secrets_manager import SecretsManager
 
+# Maximum size of a secret value accepted by AWS Secrets Manager
+MAX_SECRET_SIZE = 65536
+
 
 class SecretsManagerAdapter(AbstractAdapter):
     """
-    Store environment variables in AWS Secrets Manager.
+    Store environment variables in AWS Secrets Manager, all in a single secret.
 
     :param region: The AWS region to use. Ignored if ``secrets_manager`` is given.
-    :param prefix: Path prefix below which all secrets are stored (e.g. ``"myapp/config"``).
-        It is also the name of the root level secret.
+    :param prefix: Name of the secret holding the store (e.g. ``"myapp/config"``). Use different
+        prefixes to keep several stores apart.
     :param secrets_manager: An existing ``SecretsManager`` to use instead of creating one.
     """
 
@@ -41,37 +51,53 @@ class SecretsManagerAdapter(AbstractAdapter):
                 raise ValueError("Either region or secrets_manager must be provided")
             secrets_manager = SecretsManager(region=region, clean_string=False)
         self.secrets_manager = secrets_manager
-        self.prefix = [validate_segment(s, "prefix") for s in prefix.strip("/").split("/") if s]
-        if not self.prefix:
+        prefix_segments = [
+            validate_segment(s, "prefix") for s in prefix.strip("/").split("/") if s
+        ]
+        if not prefix_segments:
             raise ValueError("prefix must not be empty")
+        self.secret_name = "/".join(prefix_segments)
 
-    def _secret_name(self, segments: list[str]) -> str:
-        return "/".join(self.prefix + segments)
+    @staticmethod
+    def _key(segments: list[str], name: str) -> str:
+        return "/".join(segments + [name])
 
-    def _read(self, segments: list[str]) -> dict[str, str]:
-        raw = self.secrets_manager.get_secret_string(self._secret_name(segments))
+    def _load(self) -> dict[str, str]:
+        """Return all variables of the store, keyed by their path below the prefix."""
+        raw = self.secrets_manager.get_secret_string(self.secret_name)
         if raw is None:
             return {}
         data = json.loads(raw)
         if not isinstance(data, dict):
-            raise TypeError(
-                f"Secret {self._secret_name(segments)!r} is not a JSON object of variables"
-            )
+            raise TypeError(f"Secret {self.secret_name!r} is not a JSON object of variables")
         return data
 
-    def _write(self, segments: list[str], data: dict[str, str]) -> None:
-        name = self._secret_name(segments)
-        if data:
-            self.secrets_manager.put_secret_string(name, json.dumps(data))
-        else:
-            self.secrets_manager.delete_secret(name)
+    def _save(self, data: dict[str, str]) -> None:
+        if not data:
+            self.secrets_manager.delete_secret(self.secret_name)
+            return
+        raw = json.dumps(data, sort_keys=True)
+        size = len(raw.encode("utf-8"))
+        if size > MAX_SECRET_SIZE:
+            raise ValueError(
+                f"Secret {self.secret_name!r} would be {size} bytes, more than the "
+                f"{MAX_SECRET_SIZE} bytes Secrets Manager allows. Split the store across "
+                "several prefixes."
+            )
+        self.secrets_manager.put_secret_string(self.secret_name, raw)
+
+    def _level_variables(self, data: dict[str, str], segments: list[str]) -> dict[str, str]:
+        """The variables stored directly at the level ``segments``."""
+        result = {}
+        for key, value in data.items():
+            *level, name = key.split("/")
+            if level == segments:
+                result[name] = value
+        return result
 
     def _levels(self) -> list[list[str]]:
-        """Hierarchy path of every secret below the prefix (excluding the root secret)."""
-        root = self._secret_name([])
-        names = self.secrets_manager.list_secret_names(root + "/")
-        depth = len(self.prefix)
-        return [n.split("/")[depth:] for n in names]
+        """The hierarchy path of every level that holds at least one variable."""
+        return [key.split("/")[:-1] for key in self._load()]
 
     def set_variable(
         self,
@@ -94,15 +120,15 @@ class SecretsManagerAdapter(AbstractAdapter):
         environment: str | None = None,
         service: str | None = None,
     ) -> None:
-        """Write all variables of the level in a single secret update (atomic per level)."""
+        """Write all variables in a single secret update (atomic)."""
         segments = level_segments(organisation, project, environment, service)
         if not variables:
             return
         for variable in variables:
             validate_segment(variable.name, "variable name")
-        data = self._read(segments)
-        data.update({v.name: v.value for v in variables})
-        self._write(segments, data)
+        data = self._load()
+        data.update({self._key(segments, v.name): v.value for v in variables})
+        self._save(data)
 
     def get_variable(
         self,
@@ -114,7 +140,7 @@ class SecretsManagerAdapter(AbstractAdapter):
     ) -> str | None:
         segments = level_segments(organisation, project, environment, service)
         validate_segment(name, "variable name")
-        return self._read(segments).get(name)
+        return self._load().get(self._key(segments, name))
 
     def get_variables(
         self,
@@ -124,7 +150,8 @@ class SecretsManagerAdapter(AbstractAdapter):
         service: str | None = None,
     ) -> list[Variable]:
         segments = level_segments(organisation, project, environment, service)
-        return [Variable(name=k, value=v) for k, v in self._read(segments).items()]
+        variables = self._level_variables(self._load(), segments)
+        return [Variable(name=k, value=v) for k, v in variables.items()]
 
     def delete_variable(
         self,
@@ -146,19 +173,19 @@ class SecretsManagerAdapter(AbstractAdapter):
         environment: str | None = None,
         service: str | None = None,
     ) -> dict[str, list[str]]:
-        """Delete variables; the level's secret is removed once its last variable is gone."""
+        """Delete variables; the secret is removed once the store's last variable is gone."""
         if not names:
             raise ValueError("names must not be empty")
         segments = level_segments(organisation, project, environment, service)
         for name in names:
             validate_segment(name, "variable name")
-        data = self._read(segments)
-        deleted = [n for n in names if n in data]
-        not_found = [n for n in names if n not in data]
+        data = self._load()
+        deleted = [n for n in names if self._key(segments, n) in data]
+        not_found = [n for n in names if self._key(segments, n) not in data]
         if deleted:
             for name in deleted:
-                del data[name]
-            self._write(segments, data)
+                data.pop(self._key(segments, name), None)
+            self._save(data)
         return {"deleted": deleted, "not_found": not_found}
 
     def get_organisations(self) -> list[str]:

@@ -1,6 +1,6 @@
 [project]
 name = "environment-store"
-version = "0.1.0rc1"
+version = "0.1.0rc2"
 description = "Python library to store and manage environment variables persistently."
 authors = [
     {name = "Maalik Kaufhold",email = "mail@maalikaufhold.de"}
