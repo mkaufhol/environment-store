@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0rc2] - 2026-10-15
+
+### Added
+
+- `environment-store export` prints the resolved variables of a level as shell code for `eval`
+  (`--unset` removes them again).
+- `EnvironmentStoreManager.load_into_environ()` loads the resolved variables of a level into
+  `os.environ`, like `dotenv.load_dotenv`.
+
 ### Changed
 
 - **Breaking:** the AWS Secrets Manager backend stores the whole store in a single secret named
@@ -30,5 +39,6 @@ First public pre-release.
 - Optional extras: `aws`, `postgres`, `tui` and `full`.
 - Agent skill for using the CLI safely.
 
-[Unreleased]: https://github.com/mkaufhol/environment-store/compare/v0.1.0rc1...HEAD
+[Unreleased]: https://github.com/mkaufhol/environment-store/compare/v0.1.0rc2...HEAD
+[0.1.0rc2]: https://github.com/mkaufhol/environment-store/compare/v0.1.0rc1...v0.1.0rc2
 [0.1.0rc1]: https://github.com/mkaufhol/environment-store/releases/tag/v0.1.0rc1

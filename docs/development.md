@@ -256,7 +256,11 @@ uv add --editable "environment-store[full] @ path/to/repo"
   agents to use the CLI efficiently and safely. Update it whenever a CLI command, option, exit code or safety rule
   changes. It deliberately tells agents not to use the interactive `tui`.
 
-## Releasing
+## Branches and releasing
+
+Work flows `feature branch -> develop -> main`. Open pull requests against `develop`; it collects changes and never
+publishes anything. Release by merging `develop` into `main`. Only code on `main` may be published to PyPI: the
+**Release** workflow fails for a tag or a PyPI run whose commit is not on `main`.
 
 Releases are published from GitHub Actions with PyPI trusted publishing, so no API token is stored.
 
@@ -270,7 +274,7 @@ One-time setup:
 
 Per release:
 
-1. Bump `version` in `pyproject.toml`, add a section to `CHANGELOG.md`, run `uv lock` and merge to `main`.
+1. Bump `version` in `pyproject.toml`, add a section to `CHANGELOG.md`, run `uv lock`, merge to `develop` and then `develop` into `main`.
 2. Optional dry run: run the **Release** workflow manually with target `testpypi`.
 3. Tag and push: `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`.
    The workflow checks that the tag matches the package version, builds, publishes to PyPI
