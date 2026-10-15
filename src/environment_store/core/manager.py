@@ -1,4 +1,5 @@
-from collections.abc import Iterator
+import os
+from collections.abc import Iterator, MutableMapping
 
 from .abstract_adapter import AbstractAdapter
 from .decorators import validate_hierarchy
@@ -341,6 +342,37 @@ class EnvironmentStoreManager:
         if len(path) == 3:
             return self.get_environment_variables(path[0], path[1], path[2])
         return self.get_service_variables(path[0], path[1], path[2], path[3])
+
+    @validate_hierarchy
+    def load_into_environ(
+        self,
+        organisation: str | None = None,
+        project: str | None = None,
+        environment: str | None = None,
+        service: str | None = None,
+        *,
+        override: bool = False,
+        environ: MutableMapping[str, str] | None = None,
+    ) -> dict[str, str]:
+        """
+        Load the resolved variables of a level into ``os.environ``, like ``dotenv.load_dotenv``.
+
+        Variables that already exist in the environment are kept unless ``override`` is true.
+        ``environ`` selects another mapping than ``os.environ``. Returns the variables that were set.
+        """
+        target = os.environ if environ is None else environ
+        loaded = {
+            variable.name: variable.value
+            for variable in self.get_resolved_variables(
+                organisation=organisation,
+                project=project,
+                environment=environment,
+                service=service,
+            )
+            if override or variable.name not in target
+        }
+        target.update(loaded)
+        return loaded
 
     @validate_hierarchy
     def iter_levels(

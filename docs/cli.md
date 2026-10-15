@@ -86,6 +86,17 @@ environment-store list -o acme --mask                              # values show
 Formats (`--format`): `dotenv` (default, quotes values that need it), `export` (`export NAME='value'`, for
 `eval`), `json` and `table`.
 
+### `export`: load a level into the shell
+
+```bash
+eval "$(environment-store export -o acme -p webapp -e prod -s api)"          # export the resolved variables
+eval "$(environment-store export -o acme -p webapp -e prod -s api --unset)"  # remove them again
+```
+
+Prints the **resolved** variables (parent levels included, deeper wins) as `export NAME='value'` lines. A program
+cannot change its parent shell's environment, so the shell must `eval` the output. Names that are not valid shell
+identifiers make the command fail without printing anything, so `eval` never runs half an export.
+
 ### `delete` (alias `rm`): delete variables
 
 ```bash
@@ -202,7 +213,7 @@ Behaviour:
 Load the variables a service needs into the current shell:
 
 ```bash
-eval "$(environment-store list -o acme -p webapp -e prod -s api --resolved --format export)"
+eval "$(environment-store export -o acme -p webapp -e prod -s api)"
 ```
 
 Write a `.env` file for local development:

@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import shlex
 import sys
 from collections.abc import Sequence
@@ -240,6 +241,34 @@ def cmd_list(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
         _out("\n".join(sorted(v.name for v in variables)))
     else:
         _out(format_variables(variables, args.format, show_values=not args.mask))
+    return 0
+
+
+_SHELL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def cmd_export(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
+    """
+    Print the resolved variables of a level as shell code for ``eval``.
+
+    A child process cannot change its parent's environment, so the shell has to evaluate this output.
+    """
+    variables = manager.get_resolved_variables(**_hierarchy(args))
+    invalid = sorted(v.name for v in variables if not _SHELL_NAME.fullmatch(v.name))
+    if invalid:
+        raise CliError(
+            f"Cannot export names that are not valid shell identifiers: {', '.join(invalid)}."
+        )
+    variables = sorted(variables, key=lambda v: v.name)
+    if args.unset:
+        _out("\n".join(f"unset {v.name}" for v in variables))
+    else:
+        _out(format_variables(variables, "export"))
+    print(
+        f"{'Unsetting' if args.unset else 'Exporting'} {len(variables)} variable(s) "
+        f"resolved at {_describe(args)}",
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -483,6 +512,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--names-only", action="store_true", help="print only variable names")
     p.add_argument("--mask", action="store_true", help="hide values (shown as ***)")
     p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser(
+        "export",
+        parents=[hierarchy],
+        help="print the resolved variables of a level as shell code, to load with eval",
+        description=(
+            "Print the resolved variables (parent levels included, deeper levels win) as "
+            "`export NAME='value'` lines. A program cannot change its parent shell's environment, "
+            'so load them with: eval "$(environment-store export -o acme -p webapp)"'
+        ),
+    )
+    p.add_argument(
+        "--unset",
+        action="store_true",
+        help="print `unset NAME` lines instead, to remove the variables again",
+    )
+    p.set_defaults(func=cmd_export)
 
     p = sub.add_parser("delete", aliases=["rm"], parents=[hierarchy], help="delete variables")
     p.add_argument("names", nargs="+", metavar="name")
