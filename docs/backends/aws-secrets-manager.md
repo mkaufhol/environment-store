@@ -2,14 +2,21 @@
 
 Needs the `aws` extra. The connection works exactly like boto3 (see the [AWS notes](README.md#aws-backends)).
 
-One secret **per hierarchy level**, holding a JSON object of that level's variables:
+The whole store is **one secret** named `<prefix>` (default `environment-store`). It holds a flat JSON object whose
+keys are the variable paths `organisation/project/environment/service/NAME` (root level variables are just `NAME`):
 
 ```
-myapp/acme/webapp/dev/api   ->   {"DB_HOST": "...", "DB_PORT": "..."}
+myapp   ->   {
+  "LOG_LEVEL": "info",
+  "acme/SENTRY_DSN": "...",
+  "acme/webapp/dev/api/DB_HOST": "...",
+  "acme/webapp/dev/api/DB_PORT": "..."
+}
 ```
 
-The root level is the secret named `<prefix>` (default `environment-store`). This keeps the number of billed secrets
-low.
+Secrets Manager bills per secret, so one secret per store is the cheapest layout. Use a different prefix for every
+store you want to keep apart (for example `myapp/prod` and `myapp/staging`); a prefix containing `/` is simply the
+name of the secret.
 
 ```python
 from environment_store.adapters.aws.secrets_manager import SecretsManagerAdapter
@@ -53,9 +60,12 @@ environment-store --backend json --json-file ./store.json transfer \
 
 Things to know:
 
-- Updates are **read-modify-write**. Two writers changing the same level at the same time can overwrite each other
-  (last write wins).
-- A level's secret is **deleted without a recovery window** once its last variable is deleted.
+- Updates are **read-modify-write** on the single secret. Two writers changing the store at the same time can
+  overwrite each other, even on different levels (last write wins).
+- The whole store must fit into one secret value: Secrets Manager allows **64 KiB** (65536 bytes) of JSON. A write
+  that would exceed it fails with a `ValueError` and leaves the secret unchanged; split the store across prefixes.
+- The secret is **deleted without a recovery window** once the store's last variable is deleted.
+- IAM policies can only grant access to a whole store (one secret), not to individual levels.
 - IAM permissions used: `secretsmanager:GetSecretValue`, `PutSecretValue`, `CreateSecret`, `DeleteSecret` and
   `ListSecrets`, plus KMS permissions for a customer-managed key.
 
@@ -63,10 +73,11 @@ Things to know:
 
 | | Parameter Store | Secrets Manager |
 |---|---|---|
-| Granularity | one parameter per variable | one secret per level |
+| Granularity | one parameter per variable | one secret per store (prefix) |
 | Cost model | standard parameters are free of charge | billed per secret, so fewer secrets are cheaper |
-| Concurrent writes | independent per variable | last write wins per level |
-| Per-variable IAM | possible (by path) | per level only |
+| Concurrent writes | independent per variable | last write wins per store |
+| Size limit | 4 KiB per standard parameter | 64 KiB for the whole store |
+| Per-variable IAM | possible (by path) | per store only |
 
 Check the current AWS pricing and quotas before deciding.
 

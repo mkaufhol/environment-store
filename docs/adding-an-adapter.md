@@ -206,7 +206,7 @@ Look at the real adapters for patterns with a real backend:
 | [`json_file_adapter.py`](../src/environment_store/adapters/json/json_file_adapter.py) | the simplest persistent adapter (load, change, save a file) |
 | [`postgresql_adapter.py`](../src/environment_store/adapters/postgresql/postgresql_adapter.py) | SQL, transactions, migrations, accepting an existing engine |
 | [`ssm_parameter_store/adapter.py`](../src/environment_store/adapters/aws/ssm_parameter_store/adapter.py) | mapping the hierarchy to key paths, pagination, name validation |
-| [`secrets_manager/adapter.py`](../src/environment_store/adapters/aws/secrets_manager/adapter.py) | one document per level, read-modify-write, deleting empty levels |
+| [`secrets_manager/adapter.py`](../src/environment_store/adapters/aws/secrets_manager/adapter.py) | a whole store in one document, read-modify-write, size limits |
 
 Both AWS adapters take the low-level client wrapper as an optional constructor argument
 (`parameter_store=`, `secrets_manager=`). Do the same for your backend: injecting the client makes the adapter easy
@@ -217,7 +217,7 @@ to test with a fake.
 Decide and document these before you write much code:
 
 1. **How is the hierarchy encoded?** A key path (`/prefix/org/project/env/service/NAME`), columns (PostgreSQL), nested
-   documents (JSON), one document per level (Secrets Manager). Pick the encoding that lets you list the children of a
+   documents (JSON), path keys inside one document (Secrets Manager). Pick the encoding that lets you list the children of a
    level cheaply, because `get_projects` and friends need that.
 2. **What are the allowed characters and lengths?** Reject what the backend cannot store with a `ValueError` and a
    message that names the allowed characters. Validate **every** name that ends up in a key: organisation, project,
@@ -227,7 +227,7 @@ Decide and document these before you write much code:
 3. **Is a prefix or namespace needed?** If the backend is shared with other data (an AWS account, a bucket), accept
    an optional `prefix` and ignore everything outside it, so several stores and unrelated entries can coexist.
 4. **How do empty levels disappear?** Either derive levels from stored variables (SQL `SELECT DISTINCT`, key
-   listing), or clean up containers when the last variable is deleted (JSON, Secrets Manager).
+   listing, path keys in a document), or clean up containers when the last variable is deleted (JSON).
 5. **Concurrency.** Say in the docs what happens with simultaneous writers. Last-write-wins is acceptable, but say so
    (see the Secrets Manager notes).
 6. **Secrets.** Prefer encrypted storage where the backend offers it, and never log values.

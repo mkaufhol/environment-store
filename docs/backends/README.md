@@ -8,7 +8,7 @@ A backend (an *adapter* in code) decides where variables are stored. The manager
 | [JSON file](json-file.md) | `json` | _(none)_ | local development, tests, small setups |
 | [PostgreSQL](postgresql.md) | `postgres` | `postgres` | a shared store in your own database |
 | [AWS Parameter Store](aws-parameter-store.md) | `ssm` | `aws` | AWS workloads, one parameter per variable |
-| [AWS Secrets Manager](aws-secrets-manager.md) | `secretsmanager` | `aws` | AWS workloads, one secret per level |
+| [AWS Secrets Manager](aws-secrets-manager.md) | `secretsmanager` | `aws` | AWS workloads, one secret per store |
 
 Move between backends at any time with [`transfer`](../cli.md#transferring-a-store-between-backends).
 
