@@ -127,7 +127,7 @@ A tree of your levels next to a table of their variables. Navigate with the arro
 | JSON file | `json` | one local file |
 | PostgreSQL (15+) | `postgres` | one row per variable; run `environment-store migrate` first |
 | AWS Parameter Store | `ssm` | one parameter per variable |
-| AWS Secrets Manager | `secretsmanager` | one secret per level |
+| AWS Secrets Manager | `secretsmanager` | one secret per prefix |
 
 Options, IAM permissions, layouts and trade-offs are in [Storage backends](https://github.com/mkaufhol/environment-store/blob/main/docs/backends/README.md).
 
