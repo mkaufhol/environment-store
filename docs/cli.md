@@ -97,6 +97,21 @@ Prints the **resolved** variables (parent levels included, deeper wins) as `expo
 cannot change its parent shell's environment, so the shell must `eval` the output. Names that are not valid shell
 identifiers make the command fail without printing anything, so `eval` never runs half an export.
 
+### `export-dotenv`: write a level to a `.env` file
+
+```bash
+environment-store export-dotenv -o acme -p webapp -e prod -s api                       # writes ./.env
+environment-store export-dotenv -o acme -p webapp -e prod --file deploy/prod.env       # custom path and name
+environment-store export-dotenv -o acme -p webapp -e prod -f deploy/                   # writes deploy/.env
+environment-store export-dotenv -o acme -p webapp -e prod --force                      # overwrite an existing file
+```
+
+Writes the **resolved** variables (parent levels included, deeper wins) as `NAME=value` lines, quoted like
+`list --format dotenv`, so the file can be read back with `import`. `--file`/`-f` takes a file path or an existing
+directory (a directory gets a `.env` inside it); the default is `.env` in the current directory. An existing file is
+only replaced with `--force`. New files are created with mode `0600`, since values are often secrets. Names that
+are not valid identifiers make the command fail before anything is written.
+
 ### `delete` (alias `rm`): delete variables
 
 ```bash

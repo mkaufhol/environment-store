@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `environment-store export-dotenv` writes the resolved variables of a level to a `.env` file
+  (`--file` sets the path or name, default `./.env`; `--force` overwrites an existing file).
+
 ## [0.1.0rc2] - 2026-10-15
 
 ### Added
