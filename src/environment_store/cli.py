@@ -272,6 +272,39 @@ def cmd_export(manager: EnvironmentStoreManager, args: argparse.Namespace) -> in
     return 0
 
 
+def cmd_export_dotenv(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
+    """
+    Write the resolved variables of a level to a ``.env`` file.
+
+    ``--file`` may name a file or an existing directory; a directory gets a ``.env`` file inside it.
+    The file is created with mode 0600 because values are often secrets.
+    """
+    path = args.file
+    if os.path.isdir(path) or path.endswith(os.sep):
+        path = os.path.join(path, ".env")
+    variables = manager.get_resolved_variables(**_hierarchy(args))
+    invalid = sorted(v.name for v in variables if not _SHELL_NAME.fullmatch(v.name))
+    if invalid:
+        raise CliError(
+            f"Cannot export names that are not valid dotenv identifiers: {', '.join(invalid)}."
+        )
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_TRUNC if args.force else os.O_EXCL)
+    try:
+        fd = os.open(path, flags, 0o600)
+    except FileExistsError as exc:
+        raise CliError(f"{path} already exists. Use --force to overwrite it.") from exc
+    except OSError as exc:
+        raise CliError(f"Cannot write {path}: {exc}") from exc
+    content = format_variables(variables, "dotenv")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(content + "\n" if content else "")
+    print(
+        f"Wrote {len(variables)} variable(s) resolved at {_describe(args)} to {path}",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def cmd_delete(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
     if not args.yes and sys.stdin.isatty():
         answer = input(f"Delete {', '.join(args.names)} at {_describe(args)}? [y/N] ")
@@ -529,6 +562,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="print `unset NAME` lines instead, to remove the variables again",
     )
     p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser(
+        "export-dotenv",
+        parents=[hierarchy],
+        help="write the resolved variables of a level to a .env file",
+        description=(
+            "Write the resolved variables (parent levels included, deeper levels win) as "
+            "NAME=value lines to a .env file (default: ./.env). An existing file is only "
+            "replaced with --force."
+        ),
+    )
+    p.add_argument(
+        "-f",
+        "--file",
+        default=".env",
+        metavar="PATH",
+        help="file to write, or a directory to write .env into (default: .env)",
+    )
+    p.add_argument("--force", action="store_true", help="overwrite the file if it exists")
+    p.set_defaults(func=cmd_export_dotenv)
 
     p = sub.add_parser("delete", aliases=["rm"], parents=[hierarchy], help="delete variables")
     p.add_argument("names", nargs="+", metavar="name")

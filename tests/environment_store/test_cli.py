@@ -306,3 +306,51 @@ def test_export_rejects_invalid_shell_names(store, capsys):
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "BAD-NAME" in captured.err
+
+
+def test_export_dotenv_writes_resolved_file_in_cwd(store, tmp_path, monkeypatch):
+    import os
+    import stat
+
+    monkeypatch.chdir(tmp_path)
+    store("set", "A", "root")
+    store("set", "B", "two words", "-o", "acme")
+    store("set", "A", "child", "-o", "acme", "-p", "web")
+    assert store("export-dotenv", "-o", "acme", "-p", "web") == 0
+    env_file = tmp_path / ".env"
+    assert env_file.read_text() == 'A=child\nB="two words"\n'
+    assert parse_dotenv(env_file.read_text()) == {"A": "child", "B": "two words"}
+    if os.name == "posix":
+        assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
+
+
+def test_export_dotenv_custom_file_and_directory(store, tmp_path):
+    store("set", "A", "1")
+    target = tmp_path / "prod.env"
+    assert store("export-dotenv", "--file", str(target)) == 0
+    assert target.read_text() == "A=1\n"
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    assert store("export-dotenv", "-f", str(out_dir)) == 0
+    assert (out_dir / ".env").read_text() == "A=1\n"
+
+
+def test_export_dotenv_refuses_overwrite_without_force(store, tmp_path, capsys):
+    store("set", "A", "new")
+    target = tmp_path / "x.env"
+    target.write_text("A=old\n")
+    capsys.readouterr()
+    assert store("export-dotenv", "-f", str(target)) == 1
+    assert "--force" in capsys.readouterr().err
+    assert target.read_text() == "A=old\n"
+    assert store("export-dotenv", "-f", str(target), "--force") == 0
+    assert target.read_text() == "A=new\n"
+
+
+def test_export_dotenv_rejects_invalid_names(store, tmp_path, capsys):
+    store("set", "BAD-NAME", "1")
+    target = tmp_path / "x.env"
+    capsys.readouterr()
+    assert store("export-dotenv", "-f", str(target)) == 1
+    assert "BAD-NAME" in capsys.readouterr().err
+    assert not target.exists()
