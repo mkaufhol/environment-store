@@ -11,8 +11,16 @@ from typing import Any
 
 from environment_store.core import EnvironmentStoreManager
 from environment_store.core.exceptions import ConfirmationMismatchError
-from environment_store.core.hierarchy import LEVELS, describe, level_kind, to_path
+from environment_store.core.hierarchy import (
+    LEVELS,
+    Path,
+    describe,
+    level_kind,
+    to_kwargs,
+    to_path,
+)
 from environment_store.core.schemas import Variable
+from environment_store.picker import PickerCancelled, pick_level
 
 BACKENDS = ("json", "postgres", "ssm", "secretsmanager")
 FORMATS = ("dotenv", "export", "json", "table")
@@ -306,7 +314,7 @@ def cmd_export_dotenv(manager: EnvironmentStoreManager, args: argparse.Namespace
 
 
 def cmd_delete(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
-    if not args.yes and sys.stdin.isatty():
+    if not args.yes and _can_prompt(args):
         answer = input(f"Delete {', '.join(args.names)} at {_describe(args)}? [y/N] ")
         if answer.strip().lower() not in ("y", "yes"):
             raise CliError("Aborted.")
@@ -347,6 +355,49 @@ def cmd_children(manager: EnvironmentStoreManager, args: argparse.Namespace) -> 
     return 0
 
 
+def _level_tree(manager: EnvironmentStoreManager, path: Path, depth: int | None) -> dict:
+    """The levels below ``path`` as nested ``{name: {...}}`` dicts, ``depth`` levels deep."""
+    if depth == 0:
+        return {}
+    below = None if depth is None else depth - 1
+    return {
+        name: _level_tree(manager, path + (name,), below)
+        for name in manager.get_child_levels(**to_kwargs(path))
+    }
+
+
+def _tree_lines(tree: dict, path: Path, prefix: str = "") -> list[str]:
+    lines = []
+    for i, (name, below) in enumerate(tree.items()):
+        last = i == len(tree) - 1
+        child = path + (name,)
+        lines.append(f"{prefix}{'└── ' if last else '├── '}{name} ({level_kind(child)})")
+        lines.extend(_tree_lines(below, child, prefix + ("    " if last else "│   ")))
+    return lines
+
+
+def _tree_paths(tree: dict, path: Path) -> list[str]:
+    lines = []
+    for name, below in tree.items():
+        child = path + (name,)
+        lines.append(describe(child))
+        lines.extend(_tree_paths(below, child))
+    return lines
+
+
+def cmd_levels(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
+    path = to_path(**_hierarchy(args))
+    tree = _level_tree(manager, path, args.depth)
+    if args.format == "json":
+        _out(json.dumps(tree, indent=2))
+    elif args.format == "paths":
+        _out("\n".join(_tree_paths(tree, path)))
+    else:
+        head = f"{describe(path)} ({level_kind(path)})" if path else "root"
+        _out("\n".join([head, *_tree_lines(tree, path)]))
+    return 0
+
+
 def cmd_delete_level(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
     hierarchy = _hierarchy(args)
     path = to_path(**hierarchy)
@@ -363,7 +414,7 @@ def cmd_delete_level(manager: EnvironmentStoreManager, args: argparse.Namespace)
         return 0
     confirm = args.confirm
     if confirm is None:
-        if not sys.stdin.isatty():
+        if not _can_prompt(args):
             raise CliError(
                 f"Pass --confirm {name} to delete the {level_kind(path)} non-interactively."
             )
@@ -445,19 +496,131 @@ def cmd_tui(manager: EnvironmentStoreManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def _interactive() -> bool:
+    return sys.stdin.isatty() and sys.stderr.isatty()
+
+
+def _can_prompt(args: argparse.Namespace) -> bool:
+    """Whether the user may be asked something: on a terminal and without --no-interaction."""
+    return not args.no_interaction and sys.stdin.isatty()
+
+
+def _resolve_level(manager: EnvironmentStoreManager, args: argparse.Namespace) -> None:
+    """
+    Fill in -o/-p/-e/-s from the interactive level picker when a command was given none of them.
+
+    Only on a terminal, and not with --root or --no-interaction. ``args.pick`` is ``"any"`` when the root level may
+    be chosen and ``"below-root"`` when it may not.
+    """
+    pick = getattr(args, "pick", None)
+    if pick is None:
+        return
+    given = any(_hierarchy(args).values())
+    if args.root:
+        if given:
+            raise CliError("--root cannot be combined with -o/-p/-e/-s.")
+        return
+    if given or args.no_interaction or not _interactive():
+        return
+    allow_root = pick == "any"
+    if allow_root and not manager.get_child_levels():
+        return  # nothing to choose from but the root level
+    try:
+        path = pick_level(
+            lambda path: manager.get_child_levels(**to_kwargs(path)),
+            f"Choose the level for {args.command}:",
+            allow_root=allow_root,
+        )
+    except PickerCancelled as exc:
+        raise CliError(str(exc) or "Aborted.") from exc
+    for level, value in to_kwargs(path).items():
+        setattr(args, level, value)
+    where = f"{describe(path)} ({level_kind(path)})" if path else "root"
+    print(f"Level: {where}", file=sys.stderr)
+
+
 def _describe(args: argparse.Namespace) -> str:
     return describe(to_path(**_hierarchy(args)))
 
 
-def _hierarchy_parser() -> argparse.ArgumentParser:
+HIERARCHY_HELP = (
+    "Variables live on a level of the hierarchy root > organisation > project > environment > "
+    "service. A deeper level is addressed by naming every level above it, so levels cannot be "
+    "skipped: -p needs -o, -e needs -p and -s needs -e. Names are case-sensitive. "
+    "Run `environment-store levels` to see which levels exist."
+)
+PICKER_HELP = (
+    "Without any of these options the command works on the root level. On a terminal it first "
+    "lets you pick the level from a tree of the existing levels instead; pass --root (or "
+    "--no-interaction) to skip that."
+)
+NO_INTERACTION_HELP = (
+    "never prompt, as if there were no terminal: no level picker (no -o/-p/-e/-s means the root "
+    "level), delete does not ask, delete-level needs --confirm (ENVIRONMENT_STORE_NO_INTERACTION)"
+)
+LEVEL_EXAMPLES = """\
+level examples:
+  (no options)                      root level, shared by every organisation
+  -o acme                           organisation acme
+  -o acme -p webapp                 project webapp of acme
+  -o acme -p webapp -e prod         environment prod of that project
+  -o acme -p webapp -e prod -s api  service api of that environment"""
+
+
+class _HelpFormatter(argparse.HelpFormatter):
+    """Wraps text paragraph by paragraph and keeps indented lines (examples) as written."""
+
+    def _fill_text(self, text: str, width: int, indent: str) -> str:
+        blocks = []
+        for block in text.split("\n\n"):
+            if "\n " in block:
+                blocks.append("\n".join(indent + line for line in block.splitlines()))
+            else:
+                blocks.append(super()._fill_text(block, width, indent))
+        return "\n\n".join(blocks)
+
+
+def _hierarchy_parser(pick: bool) -> argparse.ArgumentParser:
+    """
+    The -o/-p/-e/-s options. With ``pick`` the command opens the level picker when none are given.
+    """
     parent = argparse.ArgumentParser(add_help=False)
     group = parent.add_argument_group(
-        "hierarchy (organisation > project > environment > service)"
+        "hierarchy", f"{HIERARCHY_HELP}\n\n{PICKER_HELP}" if pick else HIERARCHY_HELP
     )
-    group.add_argument("-o", "--organisation", help="organisation (default: root level)")
-    group.add_argument("-p", "--project", help="project (requires --organisation)")
-    group.add_argument("-e", "--environment", help="environment (requires --project)")
-    group.add_argument("-s", "--service", help="service (requires --environment)")
+    group.add_argument(
+        "-o",
+        "--organisation",
+        metavar="NAME",
+        help="organisation, the top level below root (e.g. acme)",
+    )
+    group.add_argument(
+        "-p", "--project", metavar="NAME", help="project inside the organisation (needs -o)"
+    )
+    group.add_argument(
+        "-e",
+        "--environment",
+        metavar="NAME",
+        help="environment of the project, e.g. dev or prod (needs -o and -p)",
+    )
+    group.add_argument(
+        "-s",
+        "--service",
+        metavar="NAME",
+        help="service in the environment, e.g. api (needs -o, -p and -e)",
+    )
+    if pick:
+        group.add_argument(
+            "--root",
+            action="store_true",
+            help="use the root level without asking (only without -o/-p/-e/-s)",
+        )
+        group.add_argument(
+            "--no-interaction",
+            action="store_true",
+            default=argparse.SUPPRESS,  # keep the value of the global option
+            help=NO_INTERACTION_HELP,
+        )
     return parent
 
 
@@ -510,7 +673,12 @@ def _add_backend_options(group: argparse._ArgumentGroup, dest: bool) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="environment-store",
-        description="Manage hierarchical environment variables in a persistent store.",
+        description=(
+            "Manage hierarchical environment variables in a persistent store.\n\n"
+            f"{HIERARCHY_HELP} Run `environment-store COMMAND -h` for the options of a command."
+        ),
+        epilog=LEVEL_EXAMPLES,
+        formatter_class=_HelpFormatter,
     )
     _add_backend_options(
         parser.add_argument_group(
@@ -518,24 +686,35 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         dest=False,
     )
+    parser.add_argument(
+        "--no-interaction",
+        action="store_true",
+        default=(_env("NO_INTERACTION") or "").lower() in ("1", "true", "yes", "on"),
+        help=NO_INTERACTION_HELP,
+    )
 
-    hierarchy = _hierarchy_parser()
-    sub = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
+    hierarchy = _hierarchy_parser(pick=True)
+    hierarchy_no_pick = _hierarchy_parser(pick=False)
+    subparsers = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
-    p = sub.add_parser("get", parents=[hierarchy], help="print one variable's value")
+    def add(name: str, **kwargs: Any) -> argparse.ArgumentParser:
+        kwargs.setdefault("epilog", LEVEL_EXAMPLES)
+        return subparsers.add_parser(name, formatter_class=_HelpFormatter, **kwargs)
+
+    p = add("get", parents=[hierarchy], help="print one variable's value")
     p.add_argument("name")
     p.add_argument("--format", choices=("raw", "json"), default="raw")
     p.add_argument("--raw", action="store_true", help="do not append a trailing newline")
-    p.set_defaults(func=cmd_get)
+    p.set_defaults(func=cmd_get, pick="any")
 
-    p = sub.add_parser("set", parents=[hierarchy], help="create or update a variable")
+    p = add("set", parents=[hierarchy], help="create or update a variable")
     p.add_argument("name")
     p.add_argument("value", nargs="?", help="value (or use --stdin / --from-file)")
     p.add_argument("--stdin", action="store_true", help="read the value from stdin")
     p.add_argument("--from-file", help="read the value from a file")
-    p.set_defaults(func=cmd_set)
+    p.set_defaults(func=cmd_set, pick="any")
 
-    p = sub.add_parser("list", aliases=["ls"], parents=[hierarchy], help="list variables")
+    p = add("list", aliases=["ls"], parents=[hierarchy], help="list variables")
     p.add_argument("--format", choices=FORMATS, default="dotenv")
     p.add_argument(
         "--resolved",
@@ -544,9 +723,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--names-only", action="store_true", help="print only variable names")
     p.add_argument("--mask", action="store_true", help="hide values (shown as ***)")
-    p.set_defaults(func=cmd_list)
+    p.set_defaults(func=cmd_list, pick="any")
 
-    p = sub.add_parser(
+    p = add(
         "export",
         parents=[hierarchy],
         help="print the resolved variables of a level as shell code, to load with eval",
@@ -561,9 +740,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print `unset NAME` lines instead, to remove the variables again",
     )
-    p.set_defaults(func=cmd_export)
+    p.set_defaults(func=cmd_export, pick="any")
 
-    p = sub.add_parser(
+    p = add(
         "export-dotenv",
         parents=[hierarchy],
         help="write the resolved variables of a level to a .env file",
@@ -581,22 +760,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="file to write, or a directory to write .env into (default: .env)",
     )
     p.add_argument("--force", action="store_true", help="overwrite the file if it exists")
-    p.set_defaults(func=cmd_export_dotenv)
+    p.set_defaults(func=cmd_export_dotenv, pick="any")
 
-    p = sub.add_parser("delete", aliases=["rm"], parents=[hierarchy], help="delete variables")
+    p = add("delete", aliases=["rm"], parents=[hierarchy], help="delete variables")
     p.add_argument("names", nargs="+", metavar="name")
     p.add_argument("-y", "--yes", action="store_true", help="skip the confirmation prompt")
-    p.set_defaults(func=cmd_delete)
+    p.set_defaults(func=cmd_delete, pick="any")
 
-    p = sub.add_parser(
-        "import", parents=[hierarchy], help="set many variables from a .env or JSON file"
-    )
+    p = add("import", parents=[hierarchy], help="set many variables from a .env or JSON file")
     p.add_argument("file", help="path to the file, or - for stdin")
     p.add_argument("--input-format", choices=("auto", "dotenv", "json"), default="auto")
     p.add_argument("--dry-run", action="store_true", help="show names without writing")
-    p.set_defaults(func=cmd_import)
+    p.set_defaults(func=cmd_import, pick="any")
 
-    p = sub.add_parser(
+    p = add(
         "delete-level",
         aliases=["rm-level"],
         parents=[hierarchy],
@@ -608,19 +785,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="the exact name of the level to delete (prompted for on a terminal if omitted)",
     )
     p.add_argument("--dry-run", action="store_true", help="show what would be deleted")
-    p.set_defaults(func=cmd_delete_level)
+    p.set_defaults(func=cmd_delete_level, pick="below-root")
 
-    p = sub.add_parser(
+    p = add(
+        "levels",
+        aliases=["tree"],
+        parents=[hierarchy_no_pick],
+        help="show the existing levels (organisations, projects, ...) as a tree",
+        description=(
+            "Show the levels that exist in the store as a tree, with the kind of each level. "
+            "Use -o/-p/-e/-s to show only the levels below that level. A level exists as long "
+            "as it or a level below it holds a variable."
+        ),
+    )
+    p.add_argument(
+        "--format",
+        choices=("tree", "paths", "json"),
+        default="tree",
+        help="tree (default), paths (one 'acme / webapp / dev' per line) or json (nested object)",
+    )
+    p.add_argument(
+        "--depth", type=int, metavar="N", help="show at most N levels below the starting level"
+    )
+    p.set_defaults(func=cmd_levels)
+
+    p = add(
         "children",
-        parents=[hierarchy],
+        parents=[hierarchy_no_pick],
         help="list child levels: organisations, or the projects/environments/services below a level",
     )
     p.add_argument("--format", choices=("lines", "json"), default="lines")
     p.set_defaults(func=cmd_children)
 
-    p = sub.add_parser(
+    p = add(
         "transfer",
-        parents=[hierarchy],
+        parents=[hierarchy_no_pick],
         help="copy variables from this store (the main backend options) to another backend",
         description=(
             "Copy the variables of the main store (--backend ...) into the destination store "
@@ -639,13 +838,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--format", choices=("text", "json"), default="text")
     p.set_defaults(func=cmd_transfer)
 
-    p = sub.add_parser("migrate", help="apply the database migrations (postgres backend only)")
+    p = add(
+        "migrate", epilog=None, help="apply the database migrations (postgres backend only)"
+    )
     p.add_argument(
         "--status", action="store_true", help="only list pending migrations, apply nothing"
     )
     p.set_defaults(func=cmd_migrate, needs_manager=False)
 
-    p = sub.add_parser("tui", help="open the interactive terminal UI (requires the tui extra)")
+    p = add(
+        "tui", epilog=None, help="open the interactive terminal UI (requires the tui extra)"
+    )
     p.set_defaults(func=cmd_tui)
 
     return parser
@@ -661,6 +864,7 @@ def main(
             return args.func(args)
         if manager is None:
             manager = build_manager(args)
+        _resolve_level(manager, args)
         return args.func(manager, args)
     except CliError as exc:
         print(f"error: {exc}", file=sys.stderr)
