@@ -7,7 +7,8 @@ description: Read and manage hierarchical environment variables (organisation > 
 
 Manages variables in a hierarchy: **organisation > project > environment > service > variable**.
 Names are unique per level, not across levels. Levels cannot be skipped
-(`-p` needs `-o`, `-e` needs `-p`, `-s` needs `-e`). No hierarchy flags = root level.
+(`-p` needs `-o`, `-e` needs `-p`, `-s` needs `-e`). No hierarchy flags = root level (on a terminal the CLI would
+open an interactive level picker instead; pass `--no-interaction` or `--root` to make sure it never prompts).
 
 Run it as `environment-store ...` (or `uv run environment-store ...` / `python -m environment_store ...`).
 
@@ -52,6 +53,8 @@ environment-store import vars.json ... --dry-run              # preview, writes 
 environment-store delete-level -o acme -p web --dry-run      # preview: sub-levels and variables affected
 environment-store delete-level -o acme -p web --confirm web  # delete the level and EVERYTHING below it
 environment-store transfer --dest-backend postgres --dest-database-url URL --dry-run   # copy store -> other backend
+environment-store levels                                      # whole hierarchy as a tree (--format paths|json, --depth N)
+environment-store levels -o acme                              # only below acme
 environment-store children                                    # list organisations
 environment-store children -o acme [-p web [-e dev]]          # projects / environments / services
 ```
