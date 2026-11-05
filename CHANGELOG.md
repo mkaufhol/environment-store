@@ -10,6 +10,13 @@ All notable changes to this project are documented here. The format follows
 
 - `environment-store export-dotenv` writes the resolved variables of a level to a `.env` file
   (`--file` sets the path or name, default `./.env`; `--force` overwrites an existing file).
+- `environment-store levels` (alias `tree`) shows the existing levels as a tree, as `paths` or as nested `json`;
+  `-o`/`-p`/`-e` and `--depth` limit it to part of the hierarchy.
+- Commands that work on a level open an interactive tree picker when they get none of `-o`/`-p`/`-e`/`-s` and run
+  on a terminal. `--root` picks the root level without asking; without a terminal nothing changes.
+- `--no-interaction` (or `ENVIRONMENT_STORE_NO_INTERACTION=1`) makes the CLI never prompt, as if there were no
+  terminal: no level picker, no `delete` confirmation, and `delete-level` requires `--confirm`.
+- `-h` explains the hierarchy options in detail and shows examples of addressing each level.
 
 ## [0.1.0rc2] - 2026-10-15
 

@@ -48,7 +48,37 @@ Commands that work on a level take the hierarchy options. Without them they work
 | `-e`, `--environment` | environment | `-p` |
 | `-s`, `--service` | service | `-e` |
 
-Skipping a level is an error (exit code 2). Names are case-sensitive.
+Skipping a level is an error (exit code 2). Names are case-sensitive. `environment-store levels` shows which
+levels exist, and `environment-store COMMAND -h` explains these options for each command.
+
+### Picking a level interactively
+
+When a command that works on a level (`get`, `set`, `list`, `export`, `export-dotenv`, `delete`, `import`,
+`delete-level`) gets none of `-o`/`-p`/`-e`/`-s` and runs on a terminal, it first shows the existing levels as a
+tree and lets you choose one:
+
+```text
+Choose the level for export-dotenv:
+  ▾ root  (variables shared by every level)
+›   ▾ acme  (organisation)
+      ▸ shop  (project)
+      ▸ webapp  (project)
+    ▸ globex  (organisation)
+↑/↓ move  →/← expand/collapse  enter select  q cancel
+```
+
+`→`/`l` expands a level (its children are loaded on demand) or moves into it, `←`/`h` collapses it or jumps to
+its parent, `space` toggles, `enter` selects and `q`/`Esc` cancels (exit code 1). The picker is drawn on stderr, so
+`eval "$(environment-store export)"` works too. `delete-level` does not offer the root level.
+
+Pass `--root` to use the root level without being asked. Without a terminal (scripts, pipes, CI) the picker never
+opens and the command uses the root level, as before.
+
+For automation that may run on a terminal (cron jobs in a `tmux`, wrapper scripts, agents), pass `--no-interaction`
+(before or after the command) or set `ENVIRONMENT_STORE_NO_INTERACTION=1`. The CLI then never prompts, exactly as
+without a terminal: no level picker (no `-o`/`-p`/`-e`/`-s` means the root level), `delete` deletes without asking,
+and `delete-level` fails unless `--confirm NAME` is given. If the store holds only root variables, there is nothing to
+choose and the root level is used directly.
 
 ## Commands
 
@@ -133,6 +163,29 @@ cat .env | environment-store import - -o acme
 Reads a `.env` file (`KEY=value`, comments, `export KEY=...`, single and double quotes) or a flat JSON object of
 `NAME: value` pairs. `--input-format auto|dotenv|json` overrides the detection. `--dry-run` shows the names
 without writing.
+
+### `levels` (alias `tree`): show the hierarchy
+
+```bash
+environment-store levels                          # every level in the store, as a tree
+environment-store levels -o acme                  # only acme and the levels below it
+environment-store levels --depth 1                # only the organisations
+environment-store levels --format paths           # one "acme / webapp / dev" per line
+environment-store levels --format json            # {"acme": {"webapp": {"dev": {}}}}
+```
+
+```text
+root
+├── acme (organisation)
+│   └── webapp (project)
+│       ├── dev (environment)
+│       │   └── api (service)
+│       └── prod (environment)
+└── globex (organisation)
+```
+
+A level exists as long as it or a level below it holds a variable. The command walks the store one level at a
+time, so on the AWS backends a large store takes a few requests per level; `--depth` or `-o`/`-p` keep it short.
 
 ### `children`: discover the hierarchy
 

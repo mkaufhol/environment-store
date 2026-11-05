@@ -354,3 +354,145 @@ def test_export_dotenv_rejects_invalid_names(store, tmp_path, capsys):
     assert store("export-dotenv", "-f", str(target)) == 1
     assert "BAD-NAME" in capsys.readouterr().err
     assert not target.exists()
+
+
+@pytest.fixture
+def tree_store(store, capsys):
+    store("set", "R", "root")
+    store("set", "A", "1", "-o", "acme", "-p", "webapp", "-e", "dev", "-s", "api")
+    store("set", "B", "2", "-o", "acme", "-p", "webapp", "-e", "prod")
+    store("set", "C", "3", "-o", "globex")
+    capsys.readouterr()
+    return store
+
+
+def test_levels_tree(tree_store, capsys):
+    assert tree_store("levels") == 0
+    assert capsys.readouterr().out == (
+        "root\n"
+        "├── acme (organisation)\n"
+        "│   └── webapp (project)\n"
+        "│       ├── dev (environment)\n"
+        "│       │   └── api (service)\n"
+        "│       └── prod (environment)\n"
+        "└── globex (organisation)\n"
+    )
+
+
+def test_levels_subtree_depth_and_formats(tree_store, capsys):
+    assert tree_store("tree", "-o", "acme", "--depth", "2") == 0
+    assert capsys.readouterr().out == (
+        "acme (organisation)\n"
+        "└── webapp (project)\n"
+        "    ├── dev (environment)\n"
+        "    └── prod (environment)\n"
+    )
+    tree_store("levels", "-o", "acme", "-p", "webapp", "--format", "paths")
+    assert (
+        capsys.readouterr().out
+        == "acme / webapp / dev\nacme / webapp / dev / api\nacme / webapp / prod\n"
+    )
+    tree_store("levels", "--format", "json")
+    assert json.loads(capsys.readouterr().out) == {
+        "acme": {"webapp": {"dev": {"api": {}}, "prod": {}}},
+        "globex": {},
+    }
+
+
+def test_no_level_options_open_the_picker_on_a_terminal(
+    tree_store, capsys, monkeypatch, tmp_path
+):
+    calls = []
+
+    def fake_pick(load, title, allow_root=True):
+        calls.append((title, allow_root, load(()), load(("acme",))))
+        return ("acme", "webapp", "dev", "api")
+
+    monkeypatch.setattr("environment_store.cli._interactive", lambda: True)
+    monkeypatch.setattr("environment_store.cli.pick_level", fake_pick)
+    target = tmp_path / "out.env"
+    assert tree_store("export-dotenv", "-f", str(target)) == 0
+    assert calls == [
+        ("Choose the level for export-dotenv:", True, ["acme", "globex"], ["webapp"])
+    ]
+    assert "Level: acme / webapp / dev / api (service)" in capsys.readouterr().err
+    assert target.read_text() == "A=1\nR=root\n"
+
+
+def test_picker_is_skipped_with_options_root_flag_or_without_terminal(
+    tree_store, capsys, monkeypatch
+):
+    def fail(*args, **kwargs):
+        raise AssertionError("picker opened")
+
+    monkeypatch.setattr("environment_store.cli.pick_level", fail)
+    assert tree_store("get", "R") == 0  # no terminal under pytest
+    monkeypatch.setattr("environment_store.cli._interactive", lambda: True)
+    assert tree_store("get", "R", "--root") == 0
+    assert tree_store("get", "C", "-o", "globex") == 0
+    assert tree_store("children") == 0
+    assert capsys.readouterr().out == "root\nroot\n3\nacme\nglobex\n"
+
+
+def test_root_flag_conflicts_with_level_options(tree_store, capsys):
+    assert tree_store("get", "C", "-o", "globex", "--root") == 1
+    assert "--root cannot be combined" in capsys.readouterr().err
+
+
+def test_picker_cancel_and_delete_level_hides_root(tree_store, capsys, monkeypatch):
+    from environment_store.picker import PickerCancelled
+
+    seen = []
+
+    def cancel(load, title, allow_root=True):
+        seen.append(allow_root)
+        raise PickerCancelled
+
+    monkeypatch.setattr("environment_store.cli._interactive", lambda: True)
+    monkeypatch.setattr("environment_store.cli.pick_level", cancel)
+    assert tree_store("delete-level") == 1
+    assert seen == [False]
+    assert "Aborted." in capsys.readouterr().err
+
+
+def test_picker_skipped_when_only_root_exists(store, capsys, monkeypatch):
+    monkeypatch.setattr("environment_store.cli._interactive", lambda: True)
+    monkeypatch.setattr("environment_store.cli.pick_level", None)
+    assert store("list") == 0
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ("--no-interaction", "get", "R"),
+        ("get", "R", "--no-interaction"),
+    ],
+)
+def test_no_interaction_skips_the_picker(tree_store, capsys, monkeypatch, tmp_path, argv):
+    def fail(*args, **kwargs):
+        raise AssertionError("picker opened")
+
+    monkeypatch.setattr("environment_store.cli._interactive", lambda: True)
+    monkeypatch.setattr("environment_store.cli.pick_level", fail)
+    path = str(tmp_path / "store.json")
+    assert main(["--backend", "json", "--json-file", path, "set", "R", "root", "--root"]) == 0
+    assert main(["--backend", "json", "--json-file", path, *argv]) == 0
+    assert capsys.readouterr().out == "root\n"
+
+
+def test_no_interaction_from_environment(capsys, monkeypatch, tmp_path):
+    monkeypatch.setenv("ENVIRONMENT_STORE_NO_INTERACTION", "1")
+    monkeypatch.setattr("environment_store.cli._interactive", lambda: True)
+    monkeypatch.setattr("environment_store.cli.pick_level", None)
+    path = str(tmp_path / "store.json")
+    main(["--backend", "json", "--json-file", path, "set", "A", "1", "-o", "acme"])
+    assert main(["--backend", "json", "--json-file", path, "list"]) == 0
+
+
+def test_no_interaction_never_prompts_for_delete_level(store, capsys, monkeypatch):
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
+    monkeypatch.setattr("builtins.input", None)
+    store("set", "A", "1", "-o", "acme")
+    capsys.readouterr()
+    assert store("--no-interaction", "delete-level", "-o", "acme") == 1
+    assert "--confirm acme" in capsys.readouterr().err
