@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from textual.pilot import Pilot
-from textual.widgets import Input
+from textual.widgets import Input, Static
 
 from environment_store.core.models import StoreInfo
 from environment_store.core.secrets import Passphrase
@@ -60,6 +60,35 @@ def test_stores_screen_lists_every_store_with_its_encryption(
             ["with_key", "encrypted (keyfile)"],
             ["with_pass", "encrypted (passphrase)"],
         ]
+
+    run_app(store, scenario)
+
+
+def test_an_empty_backend_shows_how_to_create_a_store(store: EnvironmentStore) -> None:
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        hint = app.screen.query_one("#empty", Static)
+        assert hint.display
+        assert str(hint.content) == "No stores yet. Create one with envs create-store NAME"
+
+    run_app(store, scenario)
+
+
+def test_the_empty_hint_disappears_when_a_store_exists(
+    store: EnvironmentStore, other: EnvironmentStore
+) -> None:
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        other.create_store("new")
+        await pilot.press("r")
+        assert not app.screen.query_one("#empty", Static).display
+
+    run_app(store, scenario)
+
+
+def test_a_failing_listing_shows_no_empty_hint(store: EnvironmentStore) -> None:
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        store.close()
+        await pilot.press("r")
+        assert not app.screen.query_one("#empty", Static).display
 
     run_app(store, scenario)
 
@@ -181,7 +210,7 @@ def test_unlock_with_an_unknown_home_directory_notifies_and_stays_locked(
         await pilot.pause()
         assert isinstance(app.screen, UnlockScreen)
         [message] = notifications(app)
-        assert "~nosuchuser_zz/a.key" in message
+        assert message.startswith("unlocking with the key file '~nosuchuser_zz/a.key' failed: ")
 
     run_app(encrypted, scenario)
 
@@ -205,6 +234,24 @@ def test_unlock_with_a_typed_key_file_path_opens_the_store(
         await pilot.pause()
         assert isinstance(app.screen, VariablesScreen)
         assert rows(app) == [["SECRET", MASK]]
+
+    run_app(encrypted, scenario)
+
+
+def test_a_wrong_key_file_names_the_key_file(encrypted: EnvironmentStore, tmp_path: Path) -> None:
+    wrong = tmp_path / "wrong.key"
+    generate_key_file(wrong)
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        await set_input(pilot, "#path", str(wrong))
+        await pilot.click("#unlock")
+        await pilot.pause()
+        assert isinstance(app.screen, UnlockScreen)
+        assert notifications(app) == [
+            f"unlocking with the key file '{wrong}' failed: cannot decrypt store 'a': wrong key "
+            "or passphrase, or the stored data was modified"
+        ]
 
     run_app(encrypted, scenario)
 
@@ -239,6 +286,10 @@ def test_wrong_passphrase_notifies_and_the_store_stays_locked(
         await pilot.pause()
         assert isinstance(app.screen, UnlockScreen)
         [message] = notifications(app)
+        assert message == (
+            "unlocking with the typed passphrase failed: cannot decrypt store 'p': wrong key or "
+            "passphrase, or the stored data was modified"
+        )
         assert "wrong guess" not in message
         assert "hidden-value" not in message
         assert app.screen.query_one("#passphrase", Input).value == ""
@@ -258,7 +309,7 @@ def test_unreadable_key_file_notifies_with_the_path(
         await pilot.pause()
         assert isinstance(app.screen, UnlockScreen)
         [message] = notifications(app)
-        assert str(missing) in message
+        assert message.startswith(f"unlocking with the key file '{missing}' failed: cannot read")
 
     run_app(encrypted, scenario)
 
@@ -306,7 +357,7 @@ def test_unlock_shows_an_unknown_key_mode(store: EnvironmentStore) -> None:
         updated_at=info.updated_at,
     )
 
-    assert describe_encryption(unknown) == "encrypted (unknown key mode)"
+    assert describe_encryption(unknown) == "encrypted (unknown)"
 
 
 def test_escape_on_the_variables_screen_returns_to_the_stores(store: EnvironmentStore) -> None:

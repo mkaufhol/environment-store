@@ -1,7 +1,8 @@
 """`VariablesScreen`: the variables of one store, values masked until shown (PD 29).
 
 `v` shows or hides the values, `a` adds a variable, `e` or enter edits the selected one, `d`
-deletes it after a confirmation, `r` reloads and `escape` goes back to the stores. A write that
+deletes it after a confirmation, `r` reloads, `escape` goes back to the stores and `q` quits the
+app, as on the stores screen. A write that
 conflicts with a change made elsewhere (D7) writes nothing and offers to reload.
 """
 
@@ -41,6 +42,12 @@ def shown_value(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+class _VariableTable(DataTable[Text]):
+    """The variables table; its enter edits the selected variable, and the footer says so."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("enter", "select_cursor", "Edit")]
+
+
 class VariablesScreen(Screen[None]):
     """The variables of one opened store."""
 
@@ -51,6 +58,7 @@ class VariablesScreen(Screen[None]):
         Binding("d", "delete", "Delete"),
         Binding("r", "reload", "Reload"),
         Binding("escape", "back", "Back"),
+        Binding("q", "app.quit", "Quit"),
     ]
 
     _session: StoreSession
@@ -78,7 +86,7 @@ class VariablesScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         """Show the table between header and footer."""
         yield Header()
-        yield DataTable(id="variables", cursor_type="row")
+        yield _VariableTable(id="variables", cursor_type="row")
         yield Footer()
 
     def on_mount(self) -> None:

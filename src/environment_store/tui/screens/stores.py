@@ -1,16 +1,18 @@
 """`StoresScreen`: every store and whether it is encrypted; enter opens one (PD 29).
 
+`q` quits the app, here and on the variables screen; `escape` goes back from there.
+
 An encrypted store is opened with the project file's key when it names one (PD 5), without
 asking; otherwise, or when that key does not fit, the `UnlockScreen` asks for one.
 """
 
-from typing import ClassVar, override
+from typing import ClassVar, Final, override
 
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Header
+from textual.widgets import DataTable, Footer, Header, Static
 from textual.widgets.data_table import RowKey
 
 from environment_store.core.errors import EnvironmentStoreError
@@ -20,7 +22,16 @@ from environment_store.tui.screens.unlock import UnlockScreen, describe_encrypti
 from environment_store.tui.screens.variables import VariablesScreen
 from environment_store.tui.session import OpenedStore, StoreSession
 
-__all__ = ["StoresScreen"]
+__all__ = ["EMPTY_HINT", "StoresScreen"]
+
+EMPTY_HINT: Final = "No stores yet. Create one with envs create-store NAME"
+"""Shown instead of an empty table: the TUI does not create stores (D31)."""
+
+
+class _StoreTable(DataTable[Text]):
+    """The stores table; its enter opens the selected store, and the footer says so."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("enter", "select_cursor", "Open")]
 
 
 class StoresScreen(Screen[None]):
@@ -28,7 +39,7 @@ class StoresScreen(Screen[None]):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("r", "reload", "Reload"),
-        Binding("q", "app.quit", "Quit"),
+        Binding("q", "app.quit", "Quit"),  # quits the app on every screen, not only here
     ]
 
     _session: StoreSession
@@ -48,7 +59,8 @@ class StoresScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         """Show the table between header and footer."""
         yield Header()
-        yield DataTable(id="stores", cursor_type="row")
+        yield _StoreTable(id="stores", cursor_type="row")
+        yield Static(EMPTY_HINT, id="empty", markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -60,11 +72,15 @@ class StoresScreen(Screen[None]):
         """List the stores again."""
         table = self.query_one(DataTable)
         table.clear()
+        hint = self.query_one("#empty", Static)
         try:
             stores = self._session.stores()
         except EnvironmentStoreError as error:
             notify_error(self.app, error)
             stores = []
+            hint.display = False
+        else:
+            hint.display = not stores
         self._stores = {
             table.add_row(Text(info.name), Text(describe_encryption(info)), key=info.name): info
             for info in stores
