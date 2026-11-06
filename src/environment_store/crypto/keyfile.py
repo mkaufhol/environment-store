@@ -121,8 +121,9 @@ def read_key_file(path: Path) -> KeyMaterial:
     data = _read_bytes(path, what="key file")
     try:
         text = data.decode("utf-8")
-    except UnicodeDecodeError as err:
-        raise InvalidKeyFileError(_INVALID_KEY_MESSAGE) from err
+    except UnicodeDecodeError:
+        # Not chained: the decode error holds the raw file content, which may be secret.
+        raise InvalidKeyFileError(_INVALID_KEY_MESSAGE) from None
     return parse_key(text)
 
 
@@ -201,9 +202,10 @@ def read_passphrase_file(path: Path) -> Passphrase:
     data = _read_bytes(path, what="passphrase file")
     try:
         text = data.decode("utf-8")
-    except UnicodeDecodeError as err:
+    except UnicodeDecodeError:
         message = f"passphrase file '{path}' is not valid UTF-8"
-        raise ValidationError(message) from err
+        # Not chained: the decode error holds the raw passphrase.
+        raise ValidationError(message) from None
     return passphrase_from_text(text)
 
 

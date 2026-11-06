@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Literal, cast
+from typing import Final, Literal, cast
 
 import pytest
 
@@ -35,7 +35,7 @@ from tests.unit.service.conftest import (
 type MakeService = Callable[[MemoryAdapter], StoreService]
 type Encryption = Literal["same", "plain"] | Secret
 
-_VARIABLES = {"A": "1", "B": "multi\nline"}
+_VARIABLES: Final[dict[str, str]] = {"A": "1", "B": "multi\nline"}
 
 
 def _filled(service: StoreService, name: str, secret: Secret | None) -> None:
@@ -317,6 +317,22 @@ def test_move_store_changed_concurrently_keeps_the_source_and_removes_the_copy(
     with pytest.raises(ConcurrentModificationError):
         service.move_store("src", "dst")
 
+    assert [info.name for info in backend.infos()] == ["src"]
+    assert backend.read("src").revision == 3
+
+
+def test_move_store_to_another_backend_changed_concurrently_removes_only_the_copy(
+    backend: MemoryBackend, make_service: MakeService
+) -> None:
+    # Same name in both backends: the rollback must delete the copy, not the changed source.
+    _filled(make_service(backend.open()), "src", None)
+    service = make_service(RacingAdapter(backend, bump("src")))
+    other = make_service(MemoryBackend().open())
+
+    with pytest.raises(ConcurrentModificationError):
+        service.move_store("src", "src", destination=other)
+
+    assert other.list_stores() == []
     assert [info.name for info in backend.infos()] == ["src"]
     assert backend.read("src").revision == 3
 

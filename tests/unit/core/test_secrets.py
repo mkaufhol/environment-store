@@ -48,6 +48,18 @@ def test_passphrase_must_not_be_empty() -> None:
         Passphrase(text="")
 
 
+def test_passphrase_rejects_lone_surrogates_without_echoing_the_text() -> None:
+    # Undecodable stdin bytes arrive as lone surrogates (surrogateescape); they cannot be
+    # encoded as UTF-8 for Argon2id, and the UnicodeEncodeError would carry the whole text.
+    with pytest.raises(ValidationError, match="not valid UTF-8") as excinfo:
+        Passphrase(text="hunter2\udc80secret")
+
+    assert "hunter2" not in str(excinfo.value)
+    assert "secret" not in repr(excinfo.value.args)
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__
+
+
 def test_passphrase_rejects_non_strings() -> None:
     with pytest.raises(ValidationError, match="must be a string"):
         Passphrase(text=cast("str", b"secret"))

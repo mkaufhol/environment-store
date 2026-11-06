@@ -6,63 +6,39 @@ never see their plaintext, spec §4.4) and writes with the optimistic revision c
 """
 
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Final, Literal, cast
 
 from environment_store.core.adapter import Adapter
 from environment_store.core.clock import Clock, utc_now
 from environment_store.core.errors import (
     AlreadyEncryptedError,
     ConcurrentModificationError,
-    KeyModeMismatchError,
-    KeyRequiredError,
     NotEncryptedError,
     ValidationError,
     VariableExistsError,
     VariableNotFoundError,
 )
-from environment_store.core.models import (
-    Cipher,
-    CipherMeta,
-    KdfParams,
-    KeyMode,
-    Source,
-    StoreInfo,
-    StoreRecord,
-)
-from environment_store.core.secrets import KeyMaterial, Passphrase, Secret
+from environment_store.core.models import KdfParams, Source, StoreInfo, StoreRecord
+from environment_store.core.secrets import Secret
 from environment_store.core.validation import (
     validate_store_name,
     validate_variable_name,
     validate_variables,
 )
-from environment_store.crypto.aead import open_sealed, seal
-from environment_store.crypto.kdf import derive_key, new_kdf_params
-from environment_store.crypto.keyfile import looks_like_key_file, parse_key, passphrase_from_text
+from environment_store.crypto._sealing import (
+    Encryption,
+    Opened,
+    Sealing,
+    copy_sealing,
+    new_sealing,
+    not_encrypted_message,
+    open_record,
+    seal_record,
+    secret_from_text,
+    validate_encryption,
+)
+from environment_store.crypto.kdf import new_kdf_params
 
 __all__ = ["Encryption", "StoreService"]
-
-type Encryption = Literal["same", "plain"] | Secret
-"""Encryption of a copied store: as the source, plaintext, or with a new secret."""
-
-_ENCRYPTION_CHOICES: Final[tuple[str, ...]] = ("same", "plain")
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _Sealing:
-    """How a store is encrypted: its metadata and the key that goes with it."""
-
-    meta: CipherMeta
-    key: KeyMaterial = field(repr=False)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class _Opened:
-    """A store record together with its plaintext variables and its sealing, if encrypted."""
-
-    record: StoreRecord
-    variables: dict[str, str] = field(repr=False)
-    sealing: _Sealing | None
 
 
 class StoreService:
@@ -131,8 +107,8 @@ class StoreService:
             StoreExistsError: The store exists already.
         """
         validate_store_name(name)
-        sealing = None if secret is None else self._new_sealing(secret)
-        record = self._new_record(name, {}, sealing)
+        sealing = None if secret is None else new_sealing(secret, self._kdf_params_factory)
+        record = seal_record(name=name, variables={}, sealing=sealing, created_at=self._clock())
         self._adapter.create_store(record)
         return record.info
 
@@ -161,22 +137,14 @@ class StoreService:
             `passphrase` store.
 
         Raises:
-            ValidationError: The name is invalid or the passphrase is empty.
+            ValidationError: The name is invalid, or the passphrase is empty or not UTF-8.
             StoreNotFoundError: The store does not exist.
             NotEncryptedError: The store is not encrypted.
             InvalidKeyFileError: A `keyfile` store and the text is not a key file.
             KeyModeMismatchError: A `passphrase` store and the text is a key file.
         """
         validate_store_name(name)
-        meta = self._adapter.read_store(name).cipher_meta
-        if meta is None:
-            raise NotEncryptedError(_not_encrypted_message(name))
-        if meta.mode is KeyMode.KEYFILE:
-            return parse_key(text)
-        if looks_like_key_file(text):
-            message = f"store {name!r} uses a passphrase, but a key file was given"
-            raise KeyModeMismatchError(message)
-        return passphrase_from_text(text)
+        return secret_from_text(name, self._adapter.read_store(name).cipher_meta, text)
 
     # --- variables -----------------------------------------------------------------------------
 
@@ -285,8 +253,8 @@ class StoreService:
         if record.encrypted:
             message = f"store {name!r} is already encrypted (use rekey to change its secret)"
             raise AlreadyEncryptedError(message)
-        opened = self._unlock(record, None)
-        self._write(opened, opened.variables, self._new_sealing(secret))
+        opened = open_record(record, None)
+        self._write(opened, opened.variables, new_sealing(secret, self._kdf_params_factory))
 
     def rekey_store(self, name: str, *, old: Secret, new: Secret) -> None:
         """Re-encrypt a store with a new secret; may switch the key mode (D4).
@@ -308,10 +276,10 @@ class StoreService:
         validate_store_name(name)
         record = self._adapter.read_store(name)
         if not record.encrypted:
-            message = f"{_not_encrypted_message(name)} (use encrypt to encrypt it)"
+            message = f"{not_encrypted_message(name)} (use encrypt to encrypt it)"
             raise NotEncryptedError(message)
-        opened = self._unlock(record, old)
-        self._write(opened, opened.variables, self._new_sealing(new))
+        opened = open_record(record, old)
+        self._write(opened, opened.variables, new_sealing(new, self._kdf_params_factory))
 
     # --- copy and move (D15) -------------------------------------------------------------------
 
@@ -405,65 +373,20 @@ class StoreService:
 
     # --- helpers -------------------------------------------------------------------------------
 
-    def _open(self, name: str, secret: Secret | None) -> _Opened:
-        return self._unlock(self._adapter.read_store(name), secret)
+    def _open(self, name: str, secret: Secret | None) -> Opened:
+        return open_record(self._adapter.read_store(name), secret)
 
-    def _unlock(self, record: StoreRecord, secret: Secret | None) -> _Opened:
-        meta, ciphertext = record.cipher_meta, record.ciphertext
-        if meta is None or ciphertext is None:
-            if secret is not None:
-                raise NotEncryptedError(_not_encrypted_message(record.name))
-            # A plaintext record always holds variables (StoreRecord invariant).
-            return _Opened(record=record, variables=dict(record.variables or {}), sealing=None)
-        sealing = _Sealing(meta=meta, key=_key_for(record.name, meta, secret))
-        variables = open_sealed(ciphertext, store=record.name, meta=meta, key=sealing.key)
-        return _Opened(record=record, variables=variables, sealing=sealing)
-
-    def _new_sealing(self, secret: Secret) -> _Sealing:
-        if isinstance(secret, KeyMaterial):
-            return _Sealing(
-                meta=CipherMeta(cipher=Cipher.AES256GCM, mode=KeyMode.KEYFILE), key=secret
-            )
-        params = self._kdf_params_factory()
-        meta = CipherMeta(cipher=Cipher.AES256GCM, mode=KeyMode.PASSPHRASE, kdf=params)
-        return _Sealing(meta=meta, key=derive_key(secret, params))
-
-    def _new_record(
-        self, name: str, variables: Mapping[str, str], sealing: _Sealing | None
-    ) -> StoreRecord:
-        now = self._clock()
-        if sealing is None:
-            return StoreRecord.plain(name=name, variables=variables, created_at=now)
-        return StoreRecord.sealed(
-            name=name,
-            ciphertext=seal(variables, store=name, meta=sealing.meta, key=sealing.key),
-            cipher_meta=sealing.meta,
-            created_at=now,
-        )
-
-    def _write(
-        self, opened: _Opened, variables: Mapping[str, str], sealing: _Sealing | None
-    ) -> None:
+    def _write(self, opened: Opened, variables: Mapping[str, str], sealing: Sealing | None) -> None:
         record = opened.record
-        # A store created on a machine whose clock is ahead must stay valid.
-        updated_at = max(self._clock(), record.created_at)
-        if sealing is None:
-            new = StoreRecord.plain(
-                name=record.name,
-                variables=variables,
-                created_at=record.created_at,
-                updated_at=updated_at,
-                revision=record.revision + 1,
-            )
-        else:
-            new = StoreRecord.sealed(
-                name=record.name,
-                ciphertext=seal(variables, store=record.name, meta=sealing.meta, key=sealing.key),
-                cipher_meta=sealing.meta,
-                created_at=record.created_at,
-                updated_at=updated_at,
-                revision=record.revision + 1,
-            )
+        new = seal_record(
+            name=record.name,
+            variables=variables,
+            sealing=sealing,
+            created_at=record.created_at,
+            # A store created on a machine whose clock is ahead must stay valid.
+            updated_at=max(self._clock(), record.created_at),
+            revision=record.revision + 1,
+        )
         self._adapter.write_store(new, expected_revision=record.revision)
 
     def _copy(
@@ -476,47 +399,18 @@ class StoreService:
     ) -> tuple[StoreRecord, StoreInfo]:
         validate_store_name(src)
         validate_store_name(dst)
-        if not isinstance(encryption, (KeyMaterial, Passphrase)) and (
-            encryption not in _ENCRYPTION_CHOICES
-        ):
-            message = "encryption must be 'same', 'plain', a key or a passphrase"
-            raise ValidationError(message)
+        validate_encryption(encryption)
         target = self if destination is None else destination
         opened = self._open(src, secret)
-        if encryption == "same":
-            # Same secret, same metadata: no second key derivation. Only the name in the
-            # associated data changes, so the payload is sealed again (D5).
-            sealing = opened.sealing
-        elif encryption == "plain":
-            sealing = None
-        else:
-            sealing = target._new_sealing(encryption)
-        record = target._new_record(dst, opened.variables, sealing)
+        sealing = copy_sealing(encryption, opened.sealing, target._kdf_params_factory)
+        record = seal_record(
+            name=dst, variables=opened.variables, sealing=sealing, created_at=target._clock()
+        )
         target._adapter.create_store(record)
         return opened.record, record.info
 
 
 # --- module helpers ----------------------------------------------------------------------------
-
-
-def _not_encrypted_message(name: str) -> str:
-    return f"store {name!r} is not encrypted; it takes no key or passphrase"
-
-
-def _key_for(name: str, meta: CipherMeta, secret: Secret | None) -> KeyMaterial:
-    if secret is None:
-        message = f"store {name!r} is encrypted ({meta.mode} mode): a key or passphrase is required"
-        raise KeyRequiredError(message)
-    if meta.mode is KeyMode.KEYFILE:
-        if not isinstance(secret, KeyMaterial):
-            message = f"store {name!r} is encrypted with a key file, but a passphrase was given"
-            raise KeyModeMismatchError(message)
-        return secret
-    if not isinstance(secret, Passphrase):
-        message = f"store {name!r} is encrypted with a passphrase, but a key file was given"
-        raise KeyModeMismatchError(message)
-    # Passphrase mode always carries KDF parameters (CipherMeta invariant).
-    return derive_key(secret, cast("KdfParams", meta.kdf))
 
 
 def _variable_names(names: Collection[str]) -> list[str]:

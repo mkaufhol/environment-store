@@ -2,6 +2,7 @@ import base64
 import os
 import stat
 from pathlib import Path
+from typing import Final
 
 import pytest
 from hypothesis import given
@@ -22,8 +23,8 @@ from environment_store.crypto.keyfile import (
     write_key_file,
 )
 
-_KEY = KeyMaterial(key=bytes(range(32)))
-_KEY_TEXT = "envstore-key-v1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\n"
+_KEY: Final[KeyMaterial] = KeyMaterial(key=bytes(range(32)))
+_KEY_TEXT: Final[str] = "envstore-key-v1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\n"
 
 
 def test_key_file_prefix_names_the_format_version() -> None:
@@ -227,8 +228,12 @@ def test_read_key_file_rejects_binary_content(tmp_path: Path) -> None:
     path = tmp_path / "store.key"
     path.write_bytes(b"\xff\xfe\x00")
 
-    with pytest.raises(InvalidKeyFileError, match="not a valid key file"):
+    with pytest.raises(InvalidKeyFileError, match="not a valid key file") as excinfo:
         read_key_file(path)
+
+    # The UnicodeDecodeError holds the raw file content: it must not travel with the error.
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__
 
 
 def test_read_key_file_that_is_missing_raises_backend_error(tmp_path: Path) -> None:
@@ -281,6 +286,9 @@ def test_read_passphrase_file_rejects_non_utf8(tmp_path: Path) -> None:
         read_passphrase_file(path)
 
     assert "secret" not in str(excinfo.value)
+    # The UnicodeDecodeError holds the raw file content: it must not travel with the error.
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__
 
 
 def test_read_passphrase_file_that_is_missing_raises_backend_error(tmp_path: Path) -> None:

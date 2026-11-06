@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import timedelta
 
 import pytest
@@ -405,7 +405,7 @@ def test_delete_missing_variables_lists_all_of_them_and_writes_nothing(
 
 @pytest.mark.parametrize("names", [[], ["not valid"], "A"], ids=["empty", "bad-name", "string"])
 def test_delete_variables_rejects_invalid_names(
-    service: StoreService, backend: MemoryBackend, names: list[str]
+    service: StoreService, backend: MemoryBackend, names: Collection[str]
 ) -> None:
     service.create_store("base")
     service.set_variables("base", {"A": "1"})
@@ -459,13 +459,40 @@ def test_load_with_a_missing_store_raises_store_not_found(service: StoreService)
 # --- dependencies ------------------------------------------------------------------------------
 
 
-def test_service_defaults_to_the_real_clock_and_kdf(backend: MemoryBackend) -> None:
+def test_service_defaults_to_the_real_clock(backend: MemoryBackend) -> None:
     service = StoreService(backend.open())
 
     info = service.create_store("base")
 
     assert info.created_at.utcoffset() == timedelta(0)
     assert service.read_variables("base") == {}
+
+
+def test_service_defaults_to_the_spec_kdf_parameters(backend: MemoryBackend) -> None:
+    # One real Argon2id run (t=3, m=64 MiB, p=4, D34): the default must not be weakened.
+    StoreService(backend.open()).create_store("vault", secret=PASSPHRASE)
+
+    meta = backend.read("vault").cipher_meta
+    assert meta is not None
+    assert meta.kdf is not None
+    assert (meta.kdf.name, meta.kdf.iterations, meta.kdf.memory_kib, meta.kdf.lanes) == (
+        "argon2id",
+        3,
+        65536,
+        4,
+    )
+    assert len(meta.kdf.salt) == 16
+
+
+def test_parse_secret_rejects_a_passphrase_with_a_lone_surrogate(service: StoreService) -> None:
+    # Undecodable stdin bytes become lone surrogates; refused before Argon2id sees them.
+    service.create_store("vault", secret=PASSPHRASE)
+
+    with pytest.raises(ValidationError, match="not valid UTF-8") as excinfo:
+        service.parse_secret("vault", "hunter2\udc80secret\n")
+
+    assert "hunter2" not in str(excinfo.value)
+    assert excinfo.value.__cause__ is None
 
 
 def test_service_exposes_its_adapter(backend: MemoryBackend) -> None:

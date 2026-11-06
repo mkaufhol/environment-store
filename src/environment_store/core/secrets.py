@@ -61,7 +61,8 @@ class Passphrase:
         """Validate the passphrase.
 
         Raises:
-            ValidationError: The passphrase is not a string or is empty.
+            ValidationError: The passphrase is not a string, is empty or is not valid UTF-8
+                (it has a lone surrogate); the message never contains the text.
         """
         if not isinstance(self.text, str):
             message = f"passphrase must be a string, got {type(self.text).__name__}"
@@ -69,6 +70,12 @@ class Passphrase:
         if not self.text:
             message = "passphrase must not be empty"
             raise ValidationError(message)
+        try:
+            self.text.encode("utf-8")
+        except UnicodeEncodeError:
+            message = "passphrase is not valid UTF-8 (it has a lone surrogate)"
+            # Not chained: the encode error holds the whole passphrase.
+            raise ValidationError(message) from None
 
     @override
     def __repr__(self) -> str:
