@@ -1,7 +1,7 @@
 """`envs keygen`: write a new random key file, or print the key (spec §4.5, D4, D33).
 
-`keygen` opens no store, so it needs no connection (PD 17); like every command it still fails
-on a broken configuration (PD 10).
+`keygen` opens no store, so it needs no connection (PD 17); it reads neither the connection nor
+the project file, so a broken `.envstore.toml` cannot stop it (D44).
 """
 
 from pathlib import Path

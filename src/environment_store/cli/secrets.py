@@ -36,6 +36,7 @@ from environment_store.core.errors import (
     ConfigurationError,
     CryptoError,
     EnvironmentStoreError,
+    KeyModeMismatchError,
     NotEncryptedError,
     NotFoundError,
     StoreExistsError,
@@ -107,7 +108,21 @@ def resolve_existing(
 
     Raises:
         NotEncryptedError: A project key for a plaintext store names the project file (PD 5).
+        KeyModeMismatchError: A key file for a passphrase store, with what to do instead.
     """
+    try:
+        return _resolve_existing(state, resolver, store, source)
+    except KeyModeMismatchError as error:
+        message = (
+            f"{error}: pass the passphrase file with -k (or -k - for stdin), or switch the "
+            f"store to the key file with 'envs rekey -s {store} --new-key <path>'"
+        )
+        raise KeyModeMismatchError(message) from error
+
+
+def _resolve_existing(
+    state: CliState, resolver: SecretResolver, store: str, source: KeySource | None
+) -> Secret | None:
     if source is not None:
         return resolver.existing(store, source)
     settings = state.settings()
@@ -124,9 +139,10 @@ def resolve_existing(
         raise NotEncryptedError(message) from error
 
 
-def new_secret(
+def new_secret(  # noqa: PLR0913 - the new-secret options and what they are for
     ctx: typer.Context,
     *,
+    store: str,
     key: str | None,
     generate: Path | None,
     passphrase: bool,
@@ -134,8 +150,12 @@ def new_secret(
 ) -> NewSecret | None:
     """Return the secret of a new encryption, or `None` if no new-secret option was given.
 
+    A secret read from stdin is kept nowhere by envs, so a warning names the store that
+    cannot be read again without it (D45).
+
     Args:
         ctx: The command's context.
+        store: The store the secret encrypts, for the warning.
         key: The existing key file option (`--new-key`, or `-k` for `create-store`).
         generate: The `--generate-key` path.
         passphrase: Whether `--passphrase` was given.
@@ -153,7 +173,14 @@ def new_secret(
     if choice is None:
         return None
     purpose = f"{key_option} -" if isinstance(choice, NewKeyFile) else "--passphrase"
-    return resolve_new_secret(choice, get_state(ctx).secret_input(purpose))
+    chosen = resolve_new_secret(choice, get_state(ctx).secret_input(purpose))
+    if chosen.from_stdin:
+        what = "key" if isinstance(choice, NewKeyFile) else "passphrase"
+        err(
+            f"Warning: envs does not save this {what}; keep it, or store '{store}' cannot be "
+            "read again"
+        )
+    return chosen
 
 
 def new_secret_choice(

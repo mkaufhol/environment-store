@@ -1,4 +1,7 @@
-"""`envs ls-store`: every store with its encryption, never its contents (spec §6.2, D1, PD 23)."""
+"""`envs ls-store`: every store with its encryption, never its contents (spec §6.2, D1, PD 23).
+
+An empty backend names its location on stderr, so a mistyped connection is visible (D42).
+"""
 
 from datetime import UTC, datetime
 from typing import Final
@@ -6,8 +9,9 @@ from typing import Final
 import typer
 
 from environment_store.cli.options import JsonOpt
-from environment_store.cli.output import JsonValue, emit_json, out, table
+from environment_store.cli.output import JsonValue, emit_json, err, out, table
 from environment_store.cli.state import get_state
+from environment_store.core.connection import connection_location
 from environment_store.core.models import StoreInfo
 
 __all__ = ["encryption_label", "ls_store"]
@@ -18,7 +22,11 @@ _UTC_SUFFIX: Final = "+00:00"
 
 def ls_store(ctx: typer.Context, *, as_json: JsonOpt = False) -> None:
     """List all stores and whether they are encrypted; needs no key."""
-    infos = get_state(ctx).open_store(ctx).list_stores()
+    state = get_state(ctx)
+    infos = state.open_store(ctx).list_stores()
+    if not infos:
+        # D42: a mistyped connection must not look like an empty backend.
+        err(f"no stores in {connection_location(state.settings().require_connection())}")
     if as_json:
         emit_json([_json_entry(info) for info in infos])
         return

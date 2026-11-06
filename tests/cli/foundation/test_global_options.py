@@ -257,3 +257,56 @@ def test_settings_are_resolved_once_per_command(cli_json: CliHarness) -> None:
 
     assert_exit(result, 0)
     assert result.stderr.count("Warning:") == 1
+
+
+# --- a global option after the command name gets a hint -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("args", "hint"),
+    [
+        (
+            ["ls-store", "-c", "json://x"],
+            "-c is a global option: put it before the command, e.g. envs -c URL ls-store",
+        ),
+        (
+            ["ls-store", "--connection=json://x"],
+            "--connection is a global option: put it "
+            "before the command, e.g. envs --connection URL ls-store",
+        ),
+        (["ls-store", "-cjson://x"], "e.g. envs -c URL ls-store"),
+        (
+            ["ls", "a", "--noinput"],
+            "--noinput is a global option: put it before the command, e.g. envs --noinput ls",
+        ),
+        (["set", "-s", "a", "--no-project", "A=1"], "e.g. envs --no-project set"),
+        (
+            ["keygen", "-", "--version"],
+            "--version is a global option: put it before the command, e.g. envs --version",
+        ),
+    ],
+)
+def test_global_option_after_the_command_is_a_usage_error_with_a_hint(
+    cli_json: CliHarness, args: list[str], hint: str
+) -> None:
+    result = cli_json.invoke(*args)
+
+    assert_exit(result, 1)
+    assert "No such option" in result.stderr
+    assert hint in result.stderr
+    assert result.stdout == ""
+
+
+def test_an_unknown_option_after_the_command_gets_no_global_hint(cli_json: CliHarness) -> None:
+    result = cli_json.invoke("ls-store", "--bogus")
+
+    assert_exit(result, 1)
+    assert "No such option" in result.stderr
+    assert "global option" not in result.stderr
+
+
+def test_a_command_option_missing_its_value_gets_no_global_hint(cli_json: CliHarness) -> None:
+    result = cli_json.invoke("set", "-s")
+
+    assert_exit(result, 1)
+    assert "global option" not in result.stderr

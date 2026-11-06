@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -48,11 +49,36 @@ def test_ls_store_never_shows_a_variable_count_or_names(cli_json: CliHarness) ->
     assert "1" not in result.stdout
 
 
-def test_ls_store_on_an_empty_backend_prints_nothing(cli: CliHarness) -> None:
+def _location(cli: CliHarness) -> Path:
+    return cli.root / ("envs.db" if cli.connection.startswith("sqlite") else "stores")
+
+
+def test_ls_store_on_an_empty_backend_prints_nothing_and_names_the_location(
+    cli: CliHarness,
+) -> None:
+    # D42: a mistyped connection must not look like an empty backend.
     result = cli.invoke("ls-store")
 
     assert_exit(result, 0)
     assert result.stdout == ""
+    assert result.stderr == f"no stores in {_location(cli)}\n"
+
+
+def test_ls_store_json_on_an_empty_backend_prints_an_empty_list(cli: CliHarness) -> None:
+    result = cli.invoke("ls-store", "--json")
+
+    assert_exit(result, 0)
+    assert json.loads(result.stdout) == []
+    assert result.stderr == f"no stores in {_location(cli)}\n"
+
+
+def test_ls_store_with_a_relative_connection_names_the_absolute_directory(
+    cli_json: CliHarness,
+) -> None:
+    result = cli_json.invoke("-c", "json://typo", "ls-store", connection=False)
+
+    assert_exit(result, 0)
+    assert result.stderr == f"no stores in {Path.cwd() / 'typo'}\n"
 
 
 def test_ls_store_json_lists_metadata_with_utc_timestamps(cli: CliHarness) -> None:

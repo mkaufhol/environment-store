@@ -21,6 +21,7 @@ from environment_store.core.connection import (
     AdapterEntry,
     AdapterFactory,
     connection_has_credentials,
+    connection_location,
     open_adapter,
     scheme_of,
 )
@@ -143,6 +144,7 @@ __all__ = [
     "check_create",
     "check_write",
     "connection_has_credentials",
+    "connection_location",
     "merge",
     "merge_with_sources",
     "nested",

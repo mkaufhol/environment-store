@@ -41,7 +41,9 @@ def create_store(  # noqa: PLR0913 - one parameter per documented option (spec Â
         message = "-k, --generate-key and --passphrase encrypt the new store: add -e/--encrypt"
         raise ValidationError(message)
     store = get_state(ctx).open_store(ctx)
-    chosen = new_secret(ctx, key=key, generate=generate, passphrase=passphrase, key_option="-k")
+    chosen = new_secret(
+        ctx, store=name, key=key, generate=generate, passphrase=passphrase, key_option="-k"
+    )
     if encrypt and chosen is None:
         message = "an encrypted store needs one of -k <path>, --generate-key <path>, --passphrase"
         raise ValidationError(message)

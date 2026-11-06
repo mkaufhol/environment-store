@@ -8,7 +8,9 @@ parallel, never need to edit this file.
 import importlib
 import re
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 from typing import Final, Protocol
 from urllib.parse import unquote
@@ -22,6 +24,7 @@ __all__ = [
     "AdapterEntry",
     "AdapterFactory",
     "connection_has_credentials",
+    "connection_location",
     "open_adapter",
     "scheme_of",
 ]
@@ -35,6 +38,10 @@ _IDENTIFIER: Final[str] = r"[A-Za-z_][A-Za-z0-9_]*"
 _TARGET: Final[re.Pattern[str]] = re.compile(rf"{_IDENTIFIER}(?:\.{_IDENTIFIER})*:{_IDENTIFIER}")
 # Like libpq: the user information ends at the first '@' that comes before any '/'.
 _USERINFO: Final[re.Pattern[str]] = re.compile(r"([^@/]*)@")
+_DIRECTORY_SCHEMES: Final = frozenset({"json", "toml"})
+_POSTGRES_SCHEMES: Final = frozenset({"postgresql", "postgres"})
+# The PostgreSQL adapter's default schema (D13); repeated here, as the core imports no adapter.
+_DEFAULT_SCHEMA: Final = "environment_store"
 
 
 class AdapterFactory(Protocol):
@@ -193,3 +200,63 @@ def _load_factory(entry: AdapterEntry) -> AdapterFactory:
         raise
     factory: AdapterFactory = getattr(module, attribute)
     return factory
+
+
+def connection_location(url: str) -> str:
+    """Describe where a connection string keeps its stores, for messages (D42).
+
+    Pure: nothing is opened or created. Paths are resolved like the file and SQLite adapters
+    resolve them: relative to the working directory, with a leading `~` expanded (D43).
+    PostgreSQL locations name schema, database, host and port, never a user name or password.
+
+    Args:
+        url: A connection string the adapter accepted.
+
+    Returns:
+        The absolute store directory (`json://`, `toml://`), the absolute database file
+        (`sqlite:///`), schema, database and host (`postgresql://`), or the scheme for any
+        other backend.
+
+    Raises:
+        ValidationError: The string does not start with `scheme://`.
+    """
+    scheme = scheme_of(url)
+    rest = url.partition("://")[2]
+    if scheme in _DIRECTORY_SCHEMES:
+        return str(_local_path(rest))
+    if scheme == "sqlite":
+        # sqlite:///relative.db and sqlite:////absolute.db: the third slash separates.
+        return str(_local_path(rest.removeprefix("/")))
+    if scheme in _POSTGRES_SCHEMES:
+        return _postgres_location(rest)
+    return f"the {scheme}:// backend"
+
+
+def _local_path(raw: str) -> Path:
+    path = Path(raw)
+    # `~user` of an unknown user: the path stays as written, like any relative path.
+    with suppress(RuntimeError):
+        path = path.expanduser()
+    return path.absolute()
+
+
+def _postgres_location(rest: str) -> str:
+    # Like libpq: the user information ends at the first '@' before any '/'; it is dropped.
+    userinfo = _USERINFO.match(rest)
+    if userinfo is not None:
+        rest = rest[userinfo.end() :]
+    hierarchy, _, query = rest.partition("?")
+    host, _, database = hierarchy.partition("/")
+    # Query parameters override the URI parts, as in libpq.
+    given = {
+        unquote(key): unquote(value)
+        for key, _, value in (item.partition("=") for item in query.split("&"))
+    }
+    host = given.get("host", unquote(host))
+    port = given.get("port")
+    database = given.get("dbname", unquote(database))
+    schema = given.get("schema", _DEFAULT_SCHEMA)
+    where = host if port is None else f"{host}:{port}"
+    database_text = f"database {database!r}" if database else "the default database"
+    host_text = f"host {where!r}" if where else "the default host"
+    return f"schema {schema!r} of {database_text} on {host_text}"

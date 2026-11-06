@@ -5,15 +5,19 @@
   `EnvironmentStoreError` to `Error: <message>` on stderr and its category's exit code.
 - `EnvsCommand` resolves the settings before each command's callback (PD 10). `invoke` runs
   only after the command's own arguments were parsed, so `envs <cmd> --help` never resolves
-  settings. Every command is registered with `cls=EnvsCommand` (or `PassthroughCommand`).
+  settings. Every command is registered with `cls=EnvsCommand` (or a subclass). Its usage
+  errors name a global option given after the command name, and say that writing commands
+  never take their store (`-s`) from the project file.
+- `OfflineCommand` resolves no settings: `keygen` reads neither the connection nor the project
+  file, so a broken `.envstore.toml` cannot stop it (D44).
 - `PassthroughCommand` splits the arguments at the first `--` before parsing; the tail is the
   command `run` executes, untouched (C4).
 """
 
-from typing import TYPE_CHECKING, Final, cast, override
+from typing import TYPE_CHECKING, ClassVar, Final, cast, override
 
 import typer
-from typer.core import TyperCommand, TyperGroup
+from typer.core import TyperCommand, TyperGroup, TyperOption
 
 from environment_store.cli.errors import ExitCode, exit_code_for
 from environment_store.cli.output import err, out
@@ -24,10 +28,21 @@ if TYPE_CHECKING:
     # Type-only: typer's overridable methods are typed with the vendored click Context.
     from typer._click import Context as ClickContext
 
-__all__ = ["EnvsCommand", "EnvsGroup", "PassthroughCommand", "passthrough_args"]
+__all__ = [
+    "EnvsCommand",
+    "EnvsGroup",
+    "OfflineCommand",
+    "PassthroughCommand",
+    "passthrough_args",
+]
 
 _PASSTHROUGH: Final = "environment_store.passthrough"
 _SEPARATOR: Final = "--"
+_PROGRAM: Final = "envs"
+_STORE_PARAMETER: Final = "store"
+_STORE_HINT: Final = (
+    "writing commands never take the store from the project file's 'stores'; name it with -s STORE"
+)
 
 
 class EnvsGroup(TyperGroup):
@@ -77,12 +92,73 @@ class EnvsGroup(TyperGroup):
 class EnvsCommand(TyperCommand):
     """A command that validates the configuration before its callback runs (PD 10)."""
 
+    resolves_settings: ClassVar[bool] = True
+    """Whether the settings are resolved before the callback; `False` for `OfflineCommand`."""
+
+    @override
+    def parse_args(self, ctx: "ClickContext", args: list[str]) -> list[str]:
+        """Parse the arguments; usage errors get a hint where one helps."""
+        try:
+            return super().parse_args(ctx, args)
+        except typer.TyperException as error:
+            hint = self._global_option_hint(ctx, error) or self._store_hint(ctx, error)
+            if hint is not None:
+                error.message = f"{error.message}; {hint}" if error.message else hint
+            raise
+
     @override
     def invoke(self, ctx: "ClickContext") -> object:
         """Resolve the settings (printing their warnings), then run the callback."""
-        # Every context typer creates is a typer.Context at runtime.
-        get_state(cast("typer.Context", ctx)).settings()
+        if self.resolves_settings:
+            # Every context typer creates is a typer.Context at runtime.
+            get_state(cast("typer.Context", ctx)).settings()
         return super().invoke(ctx)
+
+    def _global_option_hint(self, ctx: "ClickContext", error: typer.TyperException) -> str | None:
+        # Only an unknown option has an option name that is none of this command's own.
+        name = getattr(error, "option_name", None)
+        if not isinstance(name, str) or ctx.parent is None or _option(self, name) is not None:
+            return None
+        option = _option(ctx.parent.command, name)
+        if option is None:
+            return None
+        if option.is_eager:
+            example = f"{_PROGRAM} {name}"
+        elif option.is_flag:
+            example = f"{_PROGRAM} {name} {ctx.info_name}"
+        else:
+            example = f"{_PROGRAM} {name} {option.metavar or 'VALUE'} {ctx.info_name}"
+        return f"{name} is a global option: put it before the command, e.g. {example}"
+
+    def _store_hint(self, ctx: "ClickContext", error: typer.TyperException) -> str | None:
+        # A missing -s while the project file lists stores: the user expected them to apply.
+        parameter = getattr(error, "param", None)
+        if not isinstance(parameter, TyperOption) or parameter.name != _STORE_PARAMETER:
+            return None
+        try:
+            # Every context typer creates is a typer.Context at runtime.
+            stores = get_state(cast("typer.Context", ctx)).settings().stores
+        except EnvironmentStoreError:
+            # The usage error is the one to report; the command never ran.
+            return None
+        return _STORE_HINT if stores else None
+
+
+class OfflineCommand(EnvsCommand):
+    """A command that reads neither the connection nor the project file (`keygen`, D44)."""
+
+    resolves_settings: ClassVar[bool] = False
+
+
+def _option(command: object, name: str) -> TyperOption | None:
+    parameters = getattr(command, "params", ())
+    for parameter in parameters:
+        if isinstance(parameter, TyperOption) and name in (
+            *parameter.opts,
+            *parameter.secondary_opts,
+        ):
+            return parameter
+    return None
 
 
 class PassthroughCommand(EnvsCommand):

@@ -253,7 +253,7 @@ def test_missing_secret_file_is_a_key_source_error(
 ) -> None:
     path = tmp_path / "missing.key"
 
-    with pytest.raises(KeySourceError, match="cannot read") as caught:
+    with pytest.raises(KeySourceError, match="cannot read key or passphrase file") as caught:
         _resolver(inspector).existing("keyed", KeyFile(path))
 
     assert str(path) in str(caught.value)
@@ -316,6 +316,7 @@ def test_new_key_file_from_a_file(tmp_path: Path) -> None:
 
     assert new.secret == KEY
     assert new.generated is None
+    assert new.from_stdin is False
 
 
 def test_new_key_file_from_stdin() -> None:
@@ -325,6 +326,8 @@ def test_new_key_file_from_stdin() -> None:
 
     assert new.secret == KEY
     assert stdin.calls == 1
+    # D45: the caller warns that envs does not save it.
+    assert new.from_stdin is True
 
 
 def test_new_key_file_must_be_a_key_file(tmp_path: Path) -> None:
@@ -396,6 +399,7 @@ def test_new_passphrase_without_a_terminal_reads_stdin(data: bytes) -> None:
 
     assert new.secret == Passphrase(text="pass phrase")
     assert new.generated is None
+    assert new.from_stdin is True
     assert stdin.calls == 1
     assert prompter.asked == []
 
@@ -407,6 +411,7 @@ def test_new_passphrase_on_a_terminal_is_prompted_twice_by_the_prompter() -> Non
     new = resolve_new_secret(NewPassphrase(), _input(stdin, tty=True, prompter=prompter))
 
     assert new.secret == Passphrase(text="pass phrase")
+    assert new.from_stdin is False
     assert prompter.asked == ["New passphrase: "]
     assert stdin.calls == 0
 

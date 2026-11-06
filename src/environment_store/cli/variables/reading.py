@@ -26,7 +26,12 @@ __all__ = ["get_variable", "list_variables"]
 
 ValuesOpt = Annotated[bool, typer.Option("-v", "--values", help="Also show the values.")]
 SourceOpt = Annotated[
-    bool, typer.Option("--source", help="Show the store each winning value comes from.")
+    bool,
+    typer.Option(
+        "--source",
+        help="Show the store each winning value comes from; also works without -v (prints "
+        "NAME and store).",
+    ),
 ]
 KeyArg = Annotated[str, typer.Argument(metavar="KEY", help="The variable name.")]
 

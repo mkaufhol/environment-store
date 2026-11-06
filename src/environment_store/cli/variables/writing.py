@@ -80,7 +80,7 @@ def set_variables(
             # Checked before asking for the value; the write checks again.
             raise VariableExistsError([parsed], store=store)
         if from_stdin:
-            value = strip_one_newline(state.read_stdin())
+            value = strip_one_newline(_read_value(state.read_stdin(), store=store, name=parsed))
         else:
             value = state.prompter().new_secret(f"Value of {parsed}: ")
         values = {parsed: value}
@@ -116,6 +116,18 @@ def strip_one_newline(text: str) -> str:
     for ending in (_CRLF, _LF):
         if text.endswith(ending):
             return text.removesuffix(ending)
+    return text
+
+
+def _read_value(text: str, *, store: str, name: str) -> str:
+    # D41: zero bytes (< /dev/null, a forgotten pipe in CI) must never blank a variable.
+    if not text:
+        message = (
+            f"no value was read from stdin (it was empty); to set an empty value, send a "
+            f"newline (echo | envs set -s {store} {name}) or, for a plain store, use "
+            f"envs set -s {store} {name}="
+        )
+        raise ValidationError(message)
     return text
 
 

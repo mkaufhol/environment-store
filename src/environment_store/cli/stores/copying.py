@@ -55,7 +55,12 @@ def cp_store(  # noqa: PLR0913 - one parameter per documented option (spec §6.5
     generate: GenerateKeyOpt = None,
     passphrase: PassphraseOpt = False,
 ) -> None:
-    """Copy a store under a new name, optionally into another backend."""
+    """Copy a store under a new name, optionally into another backend.
+
+    The copy is encrypted like the source unless one of --plain, --new-key, --generate-key or
+    --passphrase is given; --plain, --new-key, --generate-key and --passphrase are mutually
+    exclusive.
+    """
     _transfer(
         ctx,
         src,
@@ -85,7 +90,12 @@ def mv_store(  # noqa: PLR0913 - one parameter per documented option (spec §6.5
     generate: GenerateKeyOpt = None,
     passphrase: PassphraseOpt = False,
 ) -> None:
-    """Rename a store, or move it into another backend."""
+    """Rename a store, or move it into another backend.
+
+    The moved store is encrypted like the source unless one of --plain, --new-key,
+    --generate-key or --passphrase is given; --plain, --new-key, --generate-key and
+    --passphrase are mutually exclusive.
+    """
     _transfer(
         ctx,
         src,
@@ -137,6 +147,7 @@ def _transfer(ctx: typer.Context, src: str, dst: str, options: _Options, *, move
     secret = existing_secret(ctx, src, options.key)
     chosen = new_secret(
         ctx,
+        store=dst,
         key=options.new_key,
         generate=options.generate,
         passphrase=options.passphrase,

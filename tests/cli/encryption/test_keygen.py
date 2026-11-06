@@ -4,6 +4,8 @@ import re
 import stat
 from typing import Final
 
+import pytest
+
 from tests.support.cli import CliHarness, assert_exit
 
 _KEY_LINE: Final = re.compile(r"envstore-key-v1:[A-Za-z0-9_-]{43}\n")
@@ -73,13 +75,31 @@ def test_keygen_opens_no_store(cli_json: CliHarness) -> None:
     assert not (cli_json.root / "stores").exists()
 
 
-def test_keygen_fails_with_a_broken_project_file(cli_json: CliHarness) -> None:
-    cli_json.project_file("stores = [\n")
+@pytest.mark.parametrize(
+    "project",
+    [
+        "stores = [\n",
+        "unknown_key = 1\n",
+        "connection = 'postgresql://user:hunter2@db.example/envs'\n",
+    ],
+    ids=["bad-toml", "unknown-key", "password-in-connection"],
+)
+def test_keygen_ignores_the_project_file(cli_json: CliHarness, project: str) -> None:
+    # D44: a broken .envstore.toml cannot stop keygen, and it prints no warning either.
+    cli_json.project_file(project)
 
     result = cli_json.invoke("keygen", "-", connection=False)
 
-    assert_exit(result, 1)
-    assert result.stdout == ""
+    assert_exit(result, 0)
+    assert _KEY_LINE.fullmatch(result.stdout)
+    assert result.stderr == ""
+
+
+def test_keygen_ignores_the_connection(cli_json: CliHarness) -> None:
+    result = cli_json.invoke("-c", "", "keygen", "-", connection=False)
+
+    assert_exit(result, 0)
+    assert _KEY_LINE.fullmatch(result.stdout)
 
 
 def test_keygen_without_a_path_is_a_usage_error(cli_json: CliHarness) -> None:

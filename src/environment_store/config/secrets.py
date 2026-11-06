@@ -137,7 +137,7 @@ def read_secret_file(path: Path) -> str:
         # The OS refuses such a path with a ValueError, not an OSError.
         message = f"key file path {str(path)!r} contains a NUL character"
         raise KeySourceError(message)
-    what = f"key file '{path}'"
+    what = f"key or passphrase file '{path}'"
     try:
         data = path.read_bytes()
     except OSError as err:
@@ -266,10 +266,12 @@ class NewSecret:
     Attributes:
         secret: The key or passphrase.
         generated: The key file created for it, or `None`.
+        from_stdin: Whether it was read from stdin, where nothing keeps it (D45).
     """
 
     secret: Secret = field(repr=False)
     generated: Path | None
+    from_stdin: bool = False
 
     def discard(self) -> None:
         """Remove a generated key file; the caller decides when this is safe (PD 33).
@@ -305,20 +307,20 @@ def resolve_new_secret(choice: NewSecretChoice, secret_input: SecretInput) -> Ne
     """
     if isinstance(choice, NewKeyFile):
         if isinstance(choice.source, KeyFile):
-            text = read_secret_file(choice.source.path)
-        else:
-            text = _read_stdin(secret_input)
-        return NewSecret(secret=parse_key(text), generated=None)
+            return NewSecret(secret=parse_key(read_secret_file(choice.source.path)), generated=None)
+        text = _read_stdin(secret_input)
+        return NewSecret(secret=parse_key(text), generated=None, from_stdin=True)
     if isinstance(choice, GenerateKeyFile):
         key = generate_key()
         write_key_file(choice.path, key)
         return NewSecret(secret=key, generated=choice.path)
-    return NewSecret(secret=_new_passphrase(secret_input), generated=None)
-
-
-def _new_passphrase(secret_input: SecretInput) -> Secret:
     if not secret_input.stdin_is_tty:
-        return passphrase_from_text(_read_stdin(secret_input))
+        text = _read_stdin(secret_input)
+        return NewSecret(secret=passphrase_from_text(text), generated=None, from_stdin=True)
+    return NewSecret(secret=_prompt_new_passphrase(secret_input), generated=None)
+
+
+def _prompt_new_passphrase(secret_input: SecretInput) -> Secret:
     if secret_input.prompter is None:
         message = (
             "a new passphrase is needed, but prompting is off: pipe it on stdin or drop --noinput"

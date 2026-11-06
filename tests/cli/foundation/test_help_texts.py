@@ -55,3 +55,20 @@ def test_noinput_help_names_both_outcomes() -> None:
     assert "exit code 4" in text
     assert "-y" in text
     assert "exit code 1" in text
+
+
+def test_source_help_of_ls_says_it_works_without_values() -> None:
+    text = _help("ls", "--source")
+
+    assert "without -v" in text
+    assert "NAME" in text
+
+
+@pytest.mark.parametrize("command", ["cp-store", "mv-store"])
+def test_copy_help_says_the_encryption_options_are_mutually_exclusive(command: str) -> None:
+    root = typer.main.get_command(app)
+    assert isinstance(root, TyperGroup)
+
+    text = " ".join((root.commands[command].help or "").split())
+
+    assert "--plain, --new-key, --generate-key and --passphrase are mutually exclusive" in text

@@ -139,7 +139,6 @@ def test_set_reads_the_value_from_stdin(cli: CliHarness) -> None:
         (b"abc\r", "abc\r"),
         (b"a\r\nb", "a\r\nb"),
         (b"abc", "abc"),
-        (b"", ""),
         (b"\n", ""),
     ],
 )
@@ -152,6 +151,34 @@ def test_set_from_stdin_strips_exactly_one_trailing_newline(
 
     assert_exit(result, 0)
     assert cli_json.store().get("a", "X") == stored
+
+
+@pytest.mark.parametrize("stdin", [b"", None])
+def test_set_from_empty_stdin_is_refused_and_names_how_to_set_an_empty_value(
+    cli_json: CliHarness, stdin: bytes | None
+) -> None:
+    # D41: zero bytes (< /dev/null, a forgotten pipe) never blanks a variable.
+    store = cli_json.store()
+    store.create_store("a")
+    store.set("a", "X", "keep")
+
+    result = cli_json.invoke("set", "-s", "a", "-o", "X", input=stdin)
+
+    assert_exit(result, 1)
+    assert "no value was read from stdin" in result.stderr
+    assert "echo | envs set -s a X" in result.stderr
+    assert "X=" in result.stderr
+    assert cli_json.store().get("a", "X") == "keep"
+
+
+def test_set_from_empty_stdin_into_an_encrypted_store_is_refused(cli_json: CliHarness) -> None:
+    key = _encrypted(cli_json)
+
+    result = cli_json.invoke("set", "-s", "s", "-k", str(key), "TOKEN", input=b"")
+
+    assert_exit(result, 1)
+    assert "no value was read from stdin" in result.stderr
+    assert cli_json.store().variables("s", key=key) == {}
 
 
 def test_set_from_stdin_refuses_non_utf8(cli_json: CliHarness) -> None:
@@ -198,7 +225,22 @@ def test_set_never_takes_the_store_from_the_project_file(cli_json: CliHarness) -
     result = cli_json.invoke("set", "A=1")
 
     assert_exit(result, 1)
+    assert "writing commands never take the store from the project file" in result.stderr
     assert cli_json.store().variables("a") == {}
+
+
+@pytest.mark.parametrize("project", [None, "", "stores = 'not a list'"])
+def test_set_without_a_store_and_without_project_stores_gives_no_project_hint(
+    cli_json: CliHarness, project: str | None
+) -> None:
+    if project is not None:
+        cli_json.project_file(project)
+
+    result = cli_json.invoke("set", "A=1")
+
+    assert_exit(result, 1)
+    assert "Missing option" in result.stderr
+    assert "project file" not in result.stderr
 
 
 def test_set_from_stdin_and_a_key_from_stdin_is_refused(cli_json: CliHarness) -> None:
