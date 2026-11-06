@@ -85,8 +85,8 @@ More details:
 - The tool never stores, caches or remembers a key. There are no environment variables for keys, and you cannot
   type a key directly on the command line, because it would end up in your shell history and in `ps` output.
 - Error messages never contain values, keys or passphrases, with one exception you cause yourself: text in
-  `[keys]` that is not a key-file line is treated as a path and printed in the "cannot read key file" error. So
-  never put a passphrase in `[keys]` (see [below](#in-the-project-file-keys)).
+  `[keys]` that is not a key-file line is treated as a path and printed in the "cannot read key or passphrase
+  file" error. So never put a passphrase in `[keys]` (see [below](#in-the-project-file-keys)).
 
 What encryption does **not** protect:
 
@@ -133,7 +133,8 @@ envstore-key-v1:xl9fQV1CJf3cWZYE7jDaFb0_fOsfyi6DOjUCJtP07wY
   Error: key file 'prod.key' already exists; refusing to overwrite it
   ```
 
-- `keygen` needs no connection.
+- `keygen` needs no connection and does not read the project file, so it works even when `.envstore.toml` is
+  broken.
 
 **Key file format.** One line: `envstore-key-v1:` followed by the 32-byte key in unpadded base64url (43
 characters), and a newline. Whitespace around it is ignored when reading. The prefix lets `envs` tell a key file
@@ -147,7 +148,18 @@ $ envs keygen -
 envstore-key-v1:EuIabZkvpEgEF_ohr4afsBFj77r4Vxjj2qOpr4WSq1M
 ```
 
-Save that line somewhere safe **before** you encrypt a store with it.
+Save that line somewhere safe **before** you encrypt a store with it. `envs` never saves a key or passphrase that
+it reads from stdin; when a new store key comes from stdin, it reminds you on stderr after the command succeeded:
+
+```console
+$ envs keygen - | envs -c json://envs create-store vault -e -k -
+Warning: envs does not save this key; keep it, or store 'vault' cannot be read again
+created store 'vault'
+```
+
+The same warning comes from `encrypt --new-key -`, `rekey --new-key -`, `cp-store`/`mv-store --new-key -`, and from
+`--passphrase` with a piped passphrase (`... does not save this passphrase ...`). A failed command prints no warning,
+because it encrypted nothing.
 
 ## Create an encrypted store
 
@@ -159,6 +171,7 @@ created store 'prod'
 $ envs -c json://envs create-store staging -e -k staging.key           # use an existing key file
 created store 'staging'
 $ printf 'correct horse battery staple\n' | envs -c json://envs create-store customer-a -e --passphrase
+Warning: envs does not save this passphrase; keep it, or store 'customer-a' cannot be read again
 created store 'customer-a'
 ```
 
@@ -285,8 +298,8 @@ DB_PORT=5432         base
   `[keys] entry for store 'prod' holds key material: paths only, never key material`.
   Any other text is taken as a path.
 - **Never put a passphrase in `[keys]`.** It is not detected: it is treated as a file name, and the error shows it
-  on stderr (`Error: cannot read key file '/…/correct horse battery staple': No such file or directory`). Put the
-  passphrase in a file with mode `0600` and list the path of that file.
+  on stderr (`Error: cannot read key or passphrase file '/…/correct horse battery staple': No such file or
+  directory`). Put the passphrase in a file with mode `0600` and list the path of that file.
 - A `-k` on the command line beats the `[keys]` entry for that store.
 - An entry for a store that is not encrypted is an error once a command loads that store, and that includes every
   write to it (`set`, `rm`, `import`):
@@ -400,6 +413,7 @@ $ envs ls dev -k dev.key
 Error: cannot decrypt store 'dev': wrong key or passphrase, or the stored data was modified
 $ printf 'my long passphrase\n' > dev.pass && chmod 600 dev.pass
 $ envs rekey -s dev -k dev-new.key --passphrase < dev.pass
+Warning: envs does not save this passphrase; keep it, or store 'dev' cannot be read again
 rekeyed store 'dev' (passphrase)
 $ envs rekey -s prod -k prod.key
 Error: give the new secret: --new-key, --generate-key or --passphrase
@@ -477,9 +491,9 @@ Note that `ls` needs the key even without `-v`: the variable names are encrypted
 |---|---|---|
 | no key given, no prompt possible | `store 'prod' is encrypted and no key or passphrase was given: …` | 4 |
 | wrong key or passphrase, or tampered data | `cannot decrypt store 'dev': wrong key or passphrase, or the stored data was modified` | 4 |
-| key file for a passphrase store | `store 'dev' uses a passphrase, but a key file was given` | 4 |
+| key file for a passphrase store | `store 'dev' uses a passphrase, but a key file was given: pass the passphrase file with -k (or -k - for stdin), or switch the store to the key file with 'envs rekey -s dev --new-key <path>'` | 4 |
 | passphrase file for a key file store | `not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen` | 4 |
-| key file missing or unreadable | `cannot read key file 'missing.key': No such file or directory` | 4 |
+| key file missing or unreadable | `cannot read key or passphrase file 'missing.key': No such file or directory` | 4 |
 | more than one key option for a new store | `use only one of -k, --generate-key, --passphrase` | 1 |
 | empty key or passphrase on stdin | `the key or passphrase on stdin is empty` | 4 |
 | `-k` for a plain store | `store 'base' is not encrypted; it takes no key or passphrase` | 1 |
@@ -500,7 +514,8 @@ To stay safe:
   stores**. `envs keygen -` prints a key you can paste straight into one.
 - Before you rekey, make sure the new key is saved. The old key stops working the moment `rekey` succeeds.
 - Do not pipe a freshly printed key straight into a store (`envs keygen - | envs create-store x -e -k -`): the key
-  is used and then gone. Save it first, or use `--generate-key PATH`.
+  is used and then gone, which the `envs does not save this key` warning reminds you of. Save it first, or use
+  `--generate-key PATH`.
 - If you still have the key but want to stop depending on it, make a plain copy with `cp-store --plain` or re-encrypt
   with `rekey`.
 

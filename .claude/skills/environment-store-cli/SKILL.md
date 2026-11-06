@@ -18,7 +18,8 @@ Full option tables and the error catalogue are in [reference.md](reference.md).
    for keys, passphrases and confirmations. With it, a missing key fails with exit 4 and a missing
    confirmation fails with exit 1.
 2. **Global options go before the command name**: `envs --noinput -c URL ls-store`. Writing
-   `envs ls-store -c URL` fails with `Error: No such option: -c`.
+   `envs ls-store -c URL` fails with `Error: No such option: -c; -c is a global option: put it
+   before the command, e.g. envs -c URL ls-store`.
 3. **Never invent a connection.** Find it (next section). If none exists, ask the user.
 4. **Do not print secret values unless the user asked for them.** Prefer `ls` (names only) over
    `ls -v`. Use `get` only for the variable you need. To hand values to a program, use `envs run`
@@ -75,14 +76,16 @@ Connection string forms:
 | Backend | Example |
 |---|---|
 | JSON dir | `json://envs` (relative), `json:///abs/dir`, `json://~/envs` |
-| TOML dir | `toml://envs`, `toml:///abs/dir` |
-| SQLite | `sqlite:///envs.db` (relative), `sqlite:////abs/path/envs.db` (no `~` expansion) |
+| TOML dir | `toml://envs`, `toml:///abs/dir`, `toml://~/envs` |
+| SQLite | `sqlite:///envs.db` (relative), `sqlite:////abs/path/envs.db`, `sqlite:///~/envs.db` |
 | PostgreSQL | `postgresql://user@host:5432/db?schema=environment_store` (needs the `postgres` extra) |
 
-No setup step is needed for JSON, TOML or SQLite: the JSON/TOML directory is created on the first
-write and the SQLite file (and its schema) on first use. `envs migrate` is only for PostgreSQL.
-A JSON/TOML directory that does not exist yet just looks empty: `ls-store` prints nothing and exits
-0. If `ls-store` is empty, check the connection for a typo before assuming there are no stores.
+No setup step is needed for JSON, TOML or SQLite: `~` is expanded, and a missing directory (mode
+0700) and the files (mode 0600) are created on the first write; reading creates nothing.
+`envs migrate` is only for PostgreSQL. A location that does not exist yet just looks empty: `ls-store`
+prints nothing on stdout (`[]` with `--json`), exits 0, and prints `no stores in <location>` on
+stderr with the resolved path (or PostgreSQL schema, database and host). If you expected stores,
+compare that location with what the user meant before assuming there are none.
 
 ## Keys, non-interactively
 
@@ -122,7 +125,7 @@ envs --noinput cp-store SRC DST [--to URL] [-k PATH] [--plain | --new-key PATH |
 envs --noinput mv-store SRC DST [same options as cp-store]
 envs --noinput encrypt -s STORE (--new-key PATH | --generate-key PATH | --passphrase)
 envs --noinput rekey -s STORE -k OLD (--new-key PATH | --generate-key PATH | --passphrase)
-envs keygen PATH            # new key file, mode 0600, never overwrites; needs no connection
+envs keygen PATH            # new key file, mode 0600, never overwrites; reads no connection or project file
 envs --noinput migrate      # PostgreSQL only in practice: SQLite/JSON/TOML set themselves up
 ```
 
@@ -138,11 +141,16 @@ Notes that trip agents up:
   after the first `--` belongs to the command.
 - `run` and `export-shell` **keep variables already set in the caller's environment** unless `-o`
   is given. When checking a merge result, a stray `A` in your own environment wins over the stores.
-- **`set -s STORE KEY` with an empty stdin (e.g. `< /dev/null`) stores an empty string and succeeds.** Always
-  pipe or redirect the value explicitly. Exactly one trailing newline is stripped; to keep a
-  trailing newline use `import`.
+- `set -s STORE KEY` with an empty stdin (e.g. `< /dev/null`) fails with exit 1 (`no value was read
+  from stdin (it was empty)`) and writes nothing. To set an empty value on purpose, pipe a newline
+  (`echo | envs --noinput set -s STORE KEY`) or, for a plaintext store, use `KEY=`. Exactly one
+  trailing newline is stripped; to keep a trailing newline use `import`.
 - Positional stores on reading commands **replace** the project file's `stores`.
 - `--passphrase` reads the passphrase from stdin when piped: `envs --noinput create-store customer-a -e --passphrase < customer-a.pass`.
+- A **new** key or passphrase read from stdin (`create-store -e -k -`, `--passphrase` piped,
+  `--new-key -`) is saved nowhere by `envs`; after success stderr says `Warning: envs does not save
+  this key; keep it, or store 'x' cannot be read again`. Never pipe `envs keygen -` straight into a
+  store: write the key file first (`envs keygen keys/x.key`) or use `--generate-key PATH`.
 - `--new-key PATH` uses an **existing** key file (e.g. from `envs keygen PATH`; a missing file is
   exit 4). `--generate-key PATH` **creates** a new key file (mode 0600), refuses to overwrite an
   existing file (exit 1), refuses `-`, and needs an existing parent directory (`mkdir -p keys`).
@@ -260,18 +268,20 @@ two stores producing the same flat name (`customer-a` and `customer_a`), is an e
 | Message (stderr) | Fix |
 |---|---|
 | `no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, ...` | Find the connection (above) or ask; never invent one. |
-| `No such option: -c` | Move `-c`/`--noinput` before the command name. |
+| `No such option: -c; -c is a global option: put it before the command, ...` | Move `-c`/`--noinput`/`--no-project` before the command name. |
+| `Missing option '-s' / '--store'. writing commands never take the store from the project file's 'stores'; ...` (1) | Add `-s STORE`. |
+| `no value was read from stdin (it was empty); ...` (1) | Pipe the value; for an empty value pipe a newline or use `KEY=`. |
 | `no stores given: name stores, or set 'stores' in .envstore.toml` (1) | Name the stores positionally (`ls base dev`), or check `stores` in `.envstore.toml`. |
 | `store 'prod' is encrypted and no key or passphrase was given: pass it with -k prod=<path> ...` (4) | Add `-k prod=PATH` (or `-k PATH` with one store). |
 | `-k <path> without a store name works with exactly one store ...` (1) | Use `-k STORE=PATH` per encrypted store. |
 | `cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified` (4) | Wrong key file; ask the user. |
-| `store 'customer-a' uses a passphrase, but a key file was given` (4) | Point `-k` at the passphrase file. |
+| `store 'customer-a' uses a passphrase, but a key file was given: pass the passphrase file with -k ...` (4) | Point `-k` at the passphrase file. |
 | `store 'base' is not encrypted; it takes no key or passphrase` (1) | Drop the `-k` for that store. |
-| `variables already exist in store 'dev': DEBUG; use overwrite (-o/--overwrite) ...` (3) | Confirm, then add `-o`. Nothing was written. |
+| `variables already exist in store 'dev': DEBUG; use -o/--overwrite to replace them` (3) | Confirm, then add `-o`. Nothing was written. |
 | `variable 'NOPE' not found in stores 'base', 'dev'` (2) | Check spelling and the store list. |
 | `store 'base' not found in /path/to/stores` (2) | Check `ls-store` and the connection; `set`/`import` need `create-store` first. |
 | `key file 'prod.key' already exists; refusing to overwrite it` (1) | Pick another path, or use `--new-key PATH` / `-k PATH` to use the existing file. |
-| `cannot read key file 'x.key': No such file or directory` (4) | Wrong path; `--new-key` and `-k` need an existing file. |
+| `cannot read key or passphrase file 'x.key': No such file or directory` (4) | Wrong path; `--new-key` and `-k` need an existing file. |
 | `store 'dev' is already encrypted: use 'envs rekey -s dev'` (1) | Use `rekey` to change the key. |
 | `store 'prod' is encrypted: values on the command line end up in the shell history ...` (1) | Use `set -s prod -k KEY NAME < file`. |
 | `Delete store 'dev'? Confirm with -y/--yes (no terminal to ask, or --noinput)` (1) | Ask the user; rerun with `-y` only after a yes. |

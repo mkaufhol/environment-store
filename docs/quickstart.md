@@ -36,6 +36,14 @@ repeat it:
 $ export ENV_STORE_CONNECTION=sqlite:///envs.db
 ```
 
+`envs ls-store` lists the stores. There are none yet, so it says on stderr where it looked, which is a quick way to
+check the connection for a typo:
+
+```console
+$ envs ls-store
+no stores in /home/me/work/envs.db
+```
+
 You could also pass it to each command with `-c`, for example `envs -c sqlite:///envs.db ls-store`, or save it in
 a project file (step 9). Other backends are `json://dir`, `toml://dir` and `postgresql://...`; see
 [Configuration](configuration.md).
@@ -47,8 +55,8 @@ $ envs create-store dev
 created store 'dev'
 ```
 
-The SQLite file and its tables are created automatically. Store names use lowercase letters, digits, `_` and `-`,
-and start with a letter: `dev`, `prod`, `customer-a`.
+The SQLite file (mode `0600`) and its tables are created on this first write. Store names use lowercase letters,
+digits, `_` and `-`, and start with a letter: `dev`, `prod`, `customer-a`.
 
 ## 3. Set and get variables
 
@@ -127,6 +135,9 @@ $ echo db.example.com > db-host.txt
 $ envs set -s prod DB_HOST -k prod.key < db-host.txt
 set DB_HOST in store 'prod'
 ```
+
+Empty stdin is refused, so a file that was never written or a forgotten pipe cannot blank a variable. To set an
+empty value on purpose, pipe a single newline: `echo | envs set -s prod -o NAME -k prod.key`.
 
 > **Do not type real secrets into a command line.** `printf 's3cr3t' | envs set ...` works, but it puts the secret in
 > your shell history just like `NAME=value` would. Use the hidden prompt or `< FILE` for real secrets.

@@ -103,9 +103,9 @@ Every command that touches stores needs a **connection string**. It names the ba
 
 | Backend | Connection string | Notes |
 |---|---|---|
-| JSON files | `json://envs` (relative to the current directory), `json:///abs/dir`, `json://~/envs` | One `<store>.json` file per store, plus a hidden lock file. Files are created with mode 0600. The folder is created on first write. |
+| JSON files | `json://envs` (relative to the current directory), `json:///abs/dir`, `json://~/envs` | One `<store>.json` file per store, plus a hidden lock file. Files are created with mode 0600. A missing folder is created on first write, with mode 0700. |
 | TOML files | `toml://envs`, `toml:///abs/dir`, `toml://~/envs` | Same layout with `.toml` files. |
-| SQLite | `sqlite:///envs.db` (relative, three slashes), `sqlite:////home/me/envs.db` (absolute, four slashes) | `~` is **not** expanded here; use an absolute path. The schema is created and upgraded automatically. |
+| SQLite | `sqlite:///envs.db` (relative, three slashes), `sqlite:////home/me/envs.db` (absolute, four slashes), `sqlite:///~/envs.db` (home directory) | One database file, mode 0600. A missing parent folder is created on first write, with mode 0700. The schema is created and upgraded automatically. |
 | PostgreSQL | `postgresql://user@host:5432/db` or `postgres://...`, optional `?schema=name` | Needs the `postgres` extra. The schema defaults to `environment_store`. |
 
 You give the connection in one of three ways. The first one found wins:
@@ -132,11 +132,18 @@ $ envs -c 'json://envs?x=1' ls-store
 Error: a json:// connection string takes no query or fragment ('?', '#'); name only the directory, e.g. json://envs
 ```
 
+A typo in a path is not an error: the backend is simply empty. `ls-store` then names the location it looked at on stderr, so you can spot the typo. Reading creates no file or folder:
+
+```console
+$ envs -c json://emvs ls-store
+no stores in /home/me/project/emvs
+```
+
 **PostgreSQL notes.** These come from the code and spec; they were not run for this guide.
 
 - In the user name and password, percent-encode `@`, `/` and `?` (`%40`, `%2F`, `%3F`).
 - `?schema=` must match `[a-z_][a-z0-9_]{0,62}`. Every other query parameter is passed to libpq unchanged, for example `?sslmode=require`.
-- Keep passwords in `ENV_STORE_CONNECTION`, not in the project file. A password in the project file triggers a warning on every command. The tool never prints passwords.
+- Keep passwords in `ENV_STORE_CONNECTION`, not in the project file. A password in the project file triggers a warning on every command that reads the file. The tool never prints passwords.
 - The schema is created on first use. If your database user lacks the `CREATE` privilege, an administrator runs `envs migrate` once. After an upgrade of Environment Store, PostgreSQL refuses an older schema until someone runs `envs migrate` (SQLite upgrades itself). See [migrate](#database-schema-migrate).
 
 ### Stores and variables
@@ -296,6 +303,16 @@ Only the text before the first `=` that is a valid store name counts as a store,
 | `--generate-key PATH` | write a new key file to `PATH` (mode 0600, never overwrites; the folder must exist) |
 | `--passphrase` | use a passphrase: read from stdin when piped (one trailing newline ignored), otherwise asked twice at a hidden prompt (`New passphrase: `, `Repeat to confirm: `) |
 
+`envs` never saves a key or passphrase it reads from stdin. After the command succeeds it warns on stderr, because the store cannot be read without that secret:
+
+```console
+$ envs keygen - | envs create-store vault -e -k -
+Warning: envs does not save this key; keep it, or store 'vault' cannot be read again
+created store 'vault'
+```
+
+Save the key first (`envs keygen vault.key`, or in your password manager) and pipe it from there.
+
 #### Rules worth knowing
 
 - **stdin is used once per command.** If a value or passphrase comes from stdin, a key cannot come from `-k -` in the same command:
@@ -313,7 +330,7 @@ Only the text before the first `=` that is a valid store name counts as a store,
   $ envs ls -v prod -k staging.key
   Error: cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified
   $ envs ls -v prod -k missing.key
-  Error: cannot read key file 'missing.key': No such file or directory
+  Error: cannot read key or passphrase file 'missing.key': No such file or directory
   $ envs ls -v customer-a -k prod.key
   Error: store 'customer-a' uses a passphrase, but a key file was given
   ```
@@ -413,20 +430,20 @@ Things to know:
   Error: no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, or set 'connection' in .envstore.toml
   ```
 
-- The file is read by **every** command, including `keygen`. A broken project file makes every command fail until you fix it or pass `--no-project`.
+- The file is read by every command except `keygen`, `--help` and `--version`. A broken project file makes every other command fail until you fix it or pass `--no-project`.
 
 ---
 
 ## Global options and environment variables
 
-Global options go **before** the command name: `envs --noinput -c json://envs rm-store old -y`. After the command name they are unknown:
+Global options go **before** the command name: `envs --noinput -c json://envs rm-store old -y`. After the command name they are unknown, and the error says where they belong:
 
 ```console
 $ envs -c json://envs ls --noinput base
 Usage: envs ls [OPTIONS] [STORES]...
 Try 'envs ls --help' for help.
 
-Error: No such option: --noinput
+Error: No such option: --noinput; --noinput is a global option: put it before the command, e.g. envs --noinput ls
 ```
 
 | Option | Meaning |
@@ -446,7 +463,7 @@ When stdin is not a terminal (in a pipe or CI), `envs` already behaves as if `--
 
 There are no environment variables for keys, by design.
 
-An invalid value stops every command:
+An invalid value stops every command except `keygen`, which reads no settings:
 
 ```console
 $ ENV_STORE_ORDERED_OVERWRITE=maybe envs ls
@@ -484,7 +501,12 @@ prod        encrypted (keyfile)
 staging     encrypted (keyfile)
 ```
 
-The encryption column reads `plain`, `encrypted (keyfile)` or `encrypted (passphrase)`. With no stores at all, `ls-store` prints nothing and exits 0.
+The encryption column reads `plain`, `encrypted (keyfile)` or `encrypted (passphrase)`. With no stores at all, `ls-store` prints nothing on stdout (`[]` with `--json`) and exits 0, and stderr names the location it looked at (the absolute folder, the SQLite file, or the PostgreSQL host, database and schema, never the password), so a mistyped connection is easy to spot:
+
+```console
+$ envs -c json://emvs ls-store
+no stores in /home/me/project/emvs
+```
 
 ```console
 $ envs ls-store --json
@@ -533,6 +555,7 @@ created store 'prod'
 $ envs create-store staging -e --generate-key staging.key
 created store 'staging'
 $ envs create-store customer-a -e --passphrase < customer-a.pass
+Warning: envs does not save this passphrase; keep it, or store 'customer-a' cannot be read again
 created store 'customer-a'
 ```
 
@@ -726,7 +749,7 @@ $ envs set -s prod DB_PASSWORD=hunter2 -k prod.key
 Error: store 'prod' is encrypted: values on the command line end up in the shell history; give one name and pipe its value on stdin (envs set -s prod NAME < FILE) or type it at the hidden prompt (envs set -s prod NAME)
 ```
 
-Give one name instead. The value is read from stdin when it is piped. At a terminal you are asked twice at a hidden prompt (`Value of DB_PASSWORD: `, `Repeat to confirm: `).
+Give one name instead. The value is read from stdin when it is piped. At a terminal you are asked twice at a hidden prompt (`Value of DB_PASSWORD: `, `Repeat to confirm: `); if the two entries differ, `envs` says `values do not match` and asks again, up to three attempts.
 
 ```console
 $ envs set -s prod DB_PASSWORD -k prod.key < pw.txt
@@ -736,6 +759,15 @@ set DB_HOST in store 'prod'
 ```
 
 Exactly one trailing newline (LF or CRLF) is removed from stdin. To store a value that ends in a newline, use [`import`](#envs-import--fill-a-store-from-a-file). The one-name form works for plain stores too.
+
+Empty stdin is an error, so a forgotten pipe (or `< /dev/null` in CI) never blanks a variable. To set an empty value on purpose, send just a newline, or use `KEY=` for a plain store:
+
+```console
+$ envs set -s prod -o DB_PASSWORD -k prod.key < /dev/null
+Error: no value was read from stdin (it was empty); to set an empty value, send a newline (echo | envs set -s prod DB_PASSWORD) or, for a plain store, use envs set -s prod DB_PASSWORD=
+$ echo | envs set -s prod -o DB_PASSWORD -k prod.key
+set DB_PASSWORD in store 'prod'
+```
 
 #### `envs rm` — delete variables
 
@@ -1025,7 +1057,7 @@ Error: run needs a command after '--': envs run [STORES]... -- CMD [ARGS]...
 envs keygen PATH|-
 ```
 
-Writes a new random key file (mode 0600). It never overwrites a file. `envs keygen -` prints the key instead, for example to paste into a password manager or a CI secret. No connection is needed.
+Writes a new random key file (mode 0600). It never overwrites a file. `envs keygen -` prints the key instead, for example to paste into a password manager or a CI secret. `keygen` reads neither the connection nor the project file, so it works without a connection and even with a broken `.envstore.toml`.
 
 ```console
 $ envs keygen prod.key
@@ -1084,6 +1116,7 @@ rekeyed store 'prod' (keyfile)
 $ envs ls prod -k prod.key
 Error: cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified
 $ envs rekey -s prod -k prod-2026.key --passphrase < prod.pass
+Warning: envs does not save this passphrase; keep it, or store 'prod' cannot be read again
 rekeyed store 'prod' (passphrase)
 $ envs rekey -s prod -k prod.pass --new-key prod-2026.key
 rekeyed store 'prod' (keyfile)
@@ -1216,6 +1249,16 @@ Usage: envs ls [OPTIONS] [STORES]...
 Try 'envs ls --help' for help.
 
 Error: No such option: --bogus
+```
+
+Some usage errors add a hint after `;`: a global option after the command name (see [Global options](#global-options-and-environment-variables)), or a missing `-s` while the project file sets `stores`:
+
+```console
+$ envs set A=1
+Usage: envs set [OPTIONS] {KEY=VALUE... | KEY}
+Try 'envs set --help' for help.
+
+Error: Missing option '-s' / '--store'. writing commands never take the store from the project file's 'stores'; name it with -s STORE
 ```
 
 If you parse stderr in a script, read the last line.
@@ -1402,6 +1445,8 @@ Encrypted stores stay encrypted with the same key unless you choose `--plain` or
 | `-k <path> without a store name works with exactly one store` | Use `-k STORE=PATH` with several stores. |
 | `store 'x' is encrypted: values on the command line end up in the shell history` | Pipe the value: `envs set -s x NAME < file`. |
 | `cannot be written to a dotenv file` | Export with `-t json` or `-t toml`, or use `envs run`. |
-| `unable to open database file` with `sqlite:///~/...` | `~` is not expanded in SQLite URLs. Use an absolute path: `sqlite:////home/me/envs.db`. |
+| `no stores in <location>` | The backend at that location is empty. If you expected stores, check the connection for a typo. |
+| `no value was read from stdin (it was empty)` | `set` got nothing on stdin. Pipe the value; for an empty value, pipe a newline (`echo \| envs set ...`) or use `KEY=`. |
+| `uses a passphrase, but a key file was given` | Pass the passphrase file with `-k`, or switch the store to a key file with `envs rekey -s STORE --new-key PATH`. |
 | `ignoring project file ...: writable by every user` | `chmod o-w .envstore.toml`. |
 | exit code 5 | Another process changed the store at the same time. Nothing was written; run the command again. |

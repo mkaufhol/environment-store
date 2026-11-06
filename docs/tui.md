@@ -67,7 +67,8 @@ variables, so no secrets end up on screen) and exits with a non-zero code.
 ## The screens at a glance
 
 The TUI has two full screens and three dialogs. Every screen has the title bar at the top and a footer at the bottom
-that lists the keys you can press right now.
+that lists the keys you can press right now, including `⏎` (Enter) where it opens, edits or unlocks. The dialogs
+show their own keys in their footer.
 
 ### Stores
 
@@ -80,11 +81,25 @@ The first screen lists every store in the backend, sorted by name, with its encr
  dev         plain
  prod        encrypted (keyfile)
 
- r Reload  q Quit                                                  ▏^p palette
+ ⏎ Open  r Reload  q Quit
 ```
 
 The Encryption column shows `plain`, `encrypted (keyfile)` or `encrypted (passphrase)`. Listing the stores needs no
 key, so you always see every store, encrypted or not.
+
+If the backend holds no stores, the screen says so instead of showing an empty table. The TUI does not create
+stores; create one on the command line and press `r`:
+
+```
+ ⭘                              Environment Store
+ Store  Encryption
+No stores yet. Create one with envs create-store NAME
+
+ ⏎ Open  r Reload  q Quit
+```
+
+An empty list with stores you expected usually means a typo in the connection; `envs ls-store` shows the location
+it looked at.
 
 ### Variables
 
@@ -98,7 +113,7 @@ the same eight dots, so you cannot guess a value from its length:
  DEBUG     ••••••••
  GREETING  ••••••••
 
- v Show / hide values  a Add  e Edit  d Delete  r Reload  esc Back  ▏^p palette
+ ⏎ Edit  v Show / hide values  a Add  e Edit  d Delete  r Reload  esc Back  q Quit
 ```
 
 Press `v` to show the values. A value that does not fit on one line (a newline, a tab, a carriage return) is shown as
@@ -119,6 +134,8 @@ starts in the value; when you add, you type the name first.
   │                                          │
   └──────────────────────────────────────────┘
    Save (ctrl+s)      Cancel (esc)
+
+ ^s Save  esc Cancel
 ```
 
 ### Unlock
@@ -135,12 +152,14 @@ Appears when you open an encrypted store and no key from the project file fits (
   │ or the passphrase                            │
   └──────────────────────────────────────────────┘
        Unlock         Cancel (esc)
+
+ ⏎ Unlock  esc Cancel
 ```
 
 ### Confirm
 
 A yes/no question, for example `Delete variable 'DB_HOST' from store 'dev'?`. The **No** button has the focus, so a
-stray Enter never confirms.
+stray Enter never confirms. Its footer reads `y Yes  n No  esc Cancel`; `Esc` answers no.
 
 ## Key bindings
 
@@ -164,6 +183,7 @@ stray Enter never confirms.
 | `d` | Delete the selected variable (asks first) |
 | `r` | Read the store again |
 | `Esc` | Back to the stores (the key is forgotten) |
+| `q` | Quit the TUI |
 
 ### Edit / Add dialog
 
@@ -188,7 +208,8 @@ stray Enter never confirms.
 | Key | Action |
 |---|---|
 | `y` | Yes |
-| `n` or `Esc` | No |
+| `n` | No |
+| `Esc` | Cancel (the same as No) |
 
 ### Available everywhere
 
@@ -197,13 +218,10 @@ These come from Textual itself, not from Environment Store:
 | Key | Action |
 |---|---|
 | `Ctrl+Q` | Quit from any screen |
-| `Ctrl+P` | Open Textual's command palette (theme, keys help, screenshot, quit) |
-| `Ctrl+C` | Does **not** quit. It only shows a hint (or copies the selected text in an input field). Quit with `q` on the store list or `Ctrl+Q` anywhere. |
+| `Ctrl+C` | Does **not** quit. It only shows a hint (or copies the selected text in an input field). Quit with `q` on the stores or variables screen, or `Ctrl+Q` anywhere. |
 
-> [!WARNING]
-> The palette's **screenshot** command saves an SVG of the whole screen to your Downloads folder. If you revealed the
-> values with `v`, every value on screen ends up in that plain file. Press `v` to hide the values before you take a
-> screenshot, and don't reveal values while you share your screen.
+Textual's command palette (`Ctrl+P`) is turned off: its screenshot command would save the whole screen, including
+revealed values, to a plain file. Still, don't reveal values with `v` while you share your screen.
 
 You can also click rows and buttons with the mouse.
 
@@ -255,7 +273,11 @@ When you open an encrypted store, the TUI looks for its key in this order:
    ```
 
 2. **The Unlock dialog.** If there is no `[keys]` entry, or the entry does not work (missing file, wrong key), the
-   TUI shows the error and opens the Unlock dialog.
+   TUI shows the error, naming the file it tried, and opens the Unlock dialog:
+
+   ```
+   unlocking with the key file '/home/me/project/keys/prod.key' from the project file failed: cannot read key or passphrase file '/home/me/project/keys/prod.key': No such file or directory
+   ```
 
 In the Unlock dialog fill in **exactly one** of the two fields:
 
@@ -265,13 +287,13 @@ In the Unlock dialog fill in **exactly one** of the two fields:
 - **or the passphrase**: type the passphrase itself. The field is hidden. For a `keyfile` store you can paste the
   key text here instead (the `envstore-key-v1:...` line, for example from a password manager after `envs keygen -`),
   so the key never has to be on disk. If you type a passphrase into this field for a `keyfile` store, you get
-  `not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen`.
+  `unlocking with the typed passphrase failed: not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen`.
 
 Then press `Enter` or click **Unlock**. The store is decrypted before the dialog closes:
 
-- With the wrong key the dialog stays open, shows
-  `cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified`, and clears the passphrase
-  field.
+- With the wrong key the dialog stays open, shows the error with the input it came from, for example
+  `unlocking with the key file 'old.key' failed: cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified`,
+  and clears the passphrase field.
 - With both fields empty, or both filled, it asks you to `enter either a key or passphrase file, or the passphrase`.
 - A key file for a passphrase store, or a passphrase file for a keyfile store, is refused with the same messages as
   in the CLI (see [Encryption](encryption.md)).

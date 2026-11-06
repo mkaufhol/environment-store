@@ -28,6 +28,15 @@ $ echo 'connection = "json://envs"' > .envstore.toml   # 3. in the project file
 
 `-c` is a global option, so it goes **before** the command name: `envs -c json://envs ls-store`, not
 `envs ls-store -c json://envs`.
+The second form fails and says so:
+
+```console
+$ envs ls-store -c json://envs
+Usage: envs ls-store [OPTIONS]
+Try 'envs ls-store --help' for help.
+
+Error: No such option: -c; -c is a global option: put it before the command, e.g. envs -c URL ls-store
+```
 
 Without any of them, a command that needs a store fails with exit code 1:
 
@@ -36,7 +45,21 @@ $ envs ls-store
 Error: no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, or set 'connection' in .envstore.toml
 ```
 
-`envs keygen`, `envs --help` and `envs --version` work without a connection.
+`envs keygen`, `envs --help` and `envs --version` work without a connection. They do not read the project file
+either, so a broken `.envstore.toml` cannot stop them.
+
+A connection with a typo in the path is not an error: it simply points at an empty backend. `ls-store` then says on
+stderr where it looked, with the resolved location (an absolute directory, a database file, or the PostgreSQL schema,
+database and host, never the password):
+
+```console
+$ envs -c json://emvs ls-store
+no stores in /home/me/project/emvs
+$ envs -c postgresql://envs:secret@db.example.com/app ls-store
+no stores in schema 'environment_store' of database 'app' on host 'db.example.com'
+```
+
+stdout stays empty (`[]` with `--json`) and the exit code is 0, so scripts are not affected.
 
 ### Overview
 
@@ -57,7 +80,8 @@ Each store is one file in a directory: `<store>.json` or `<store>.toml`.
 | `json:///srv/envs` | the absolute path `/srv/envs` (three slashes) |
 | `json://~/envs` | `envs` in your home directory (`~` is expanded) |
 
-`toml://` works the same way. The directory is created on the first write. A query string or fragment is refused:
+`toml://` works the same way. A missing directory is created on the first write, with mode `0700` (only you can
+open it); store files get mode `0600`. Reading never creates anything. A query string or fragment is refused:
 
 ```console
 $ envs -c 'json://envs?x=1' ls-store
@@ -76,16 +100,22 @@ All stores live in one database file.
 | `sqlite:///envs.db` | `envs.db` relative to the current directory (three slashes) |
 | `sqlite:///data/envs.db` | `data/envs.db` relative to the current directory |
 | `sqlite:////home/me/envs.db` | the absolute path `/home/me/envs.db` (four slashes) |
+| `sqlite:///~/data/envs.db` | `data/envs.db` in your home directory (`~` is expanded) |
 
 Things to know:
 
-- **`~` is not expanded** in SQLite connection strings. `sqlite:///~/envs.db` means a directory literally named
-  `~` under the current directory. Write the absolute path instead: `sqlite:////home/me/envs.db`.
-- The **parent directory must exist**. The database file is created, its directory is not:
+- The paths follow the same rules as `json://` and `toml://`: `~` is expanded, and a missing parent directory is
+  created on the first write with mode `0700`. The database file (and its `-wal` and `-shm` files) gets mode `0600`.
+  Reading an absent database creates nothing:
 
   ```console
-  $ envs -c sqlite:///data/envs.db ls-store
-  Error: SQLite database /…/data/envs.db: unable to open database file
+  $ envs -c sqlite:///~/data/envs.db ls-store
+  no stores in /home/me/data/envs.db
+  $ envs -c sqlite:///~/data/envs.db create-store base
+  created store 'base'
+  $ ls -ld ~/data ~/data/envs.db
+  drwx------  3 me  staff     96 Nov  6 19:27 /home/me/data
+  -rw-------  1 me  staff  20480 Nov  6 19:27 /home/me/data/envs.db
   ```
 
 - A host, query or fragment is refused:
@@ -299,7 +329,7 @@ export ENV_STORE_CONNECTION='postgresql://ci:…@db.internal/app?schema=team_a'
 envs --noinput run base prod -k prod=/run/secrets/prod.key -- ./deploy.sh
 ```
 
-An invalid value fails every command (exit code 1):
+An invalid value fails every command except `keygen` (exit code 1):
 
 ```console
 $ ENV_STORE_ORDERED_OVERWRITE=maybe envs ls-store
@@ -369,13 +399,13 @@ the store, and update it after `envs rekey` (see [Encryption and keys](encryptio
 > stderr:
 >
 > ```text
-> Error: cannot read key file '/…/correct horse battery staple': No such file or directory
+> Error: cannot read key or passphrase file '/…/correct horse battery staple': No such file or directory
 > ```
 >
 > Put the passphrase in a file (mode `0600`, outside the repository) and list the path of that file.
 
-A broken project file makes **every** command fail, even `envs keygen`. Use `--no-project` to work around it, or
-fix the file.
+A broken project file makes every command fail except `envs keygen`, `envs --help` and `envs --version`, which do not
+read it. Use `--no-project` to work around it, or fix the file.
 
 ### Writing commands do not use `stores`
 
@@ -424,12 +454,13 @@ The other reasons are `owned by another user` and `a symbolic link owned by anot
 ### Do not put passwords in the project file
 
 The project file is usually committed. If its `connection` contains a password (in the URL or as a `password` or
-`sslpassword` parameter), every command warns:
+`sslpassword` parameter), every command that reads the file warns:
 
 ```console
-$ envs keygen -
+$ envs ls-store
 Warning: the connection in project file '/…/.envstore.toml' contains a password; credentials should not be stored in a file that may be committed: set ENV_STORE_CONNECTION instead
-envstore-key-v1:cVUUxI4HkwelStPPh9HDdWVfBqand_bWYSb_N8zpkEI
+name  encryption
+base  plain
 ```
 
 The command still runs. Move the connection string to `ENV_STORE_CONNECTION`, or use a password-less connection

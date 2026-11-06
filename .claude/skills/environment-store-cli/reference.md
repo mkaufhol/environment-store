@@ -5,6 +5,9 @@ Every flag defaults to off; every option with a value defaults to none.
 
 ## Global options (before the command name)
 
+After the command name they fail with exit 1 and a hint: `No such option: --noinput; --noinput is a
+global option: put it before the command, e.g. envs --noinput ls`.
+
 | Option | Meaning |
 |---|---|
 | `-c, --connection URL` | Connection string; overrides `ENV_STORE_CONNECTION` and `connection` in `.envstore.toml`. Must not be empty. Relative paths resolve against the current directory (same for `ENV_STORE_CONNECTION`). |
@@ -66,7 +69,7 @@ Encrypted stores need their key for every reading command, including names-only 
 | `-t, --type` | | | yes | `dotenv` (stdin default), `json`, `toml` |
 
 - `set KEY=VALUE...`: one write; value is everything after the first `=`; may be empty. Plaintext stores only.
-- `set KEY`: value from stdin (piped, or `--noinput`), one trailing LF/CRLF stripped. Cannot be mixed with pairs or other bare keys.
+- `set KEY`: value from stdin (piped, or `--noinput`), one trailing LF/CRLF stripped. Cannot be mixed with pairs or other bare keys. Empty stdin (zero bytes) is exit 1 and writes nothing; an empty value needs `echo | envs set -s S KEY` or `KEY=`.
 - `set` and `import` never create a store: a missing store is exit 2 (`store 'x' not found in ...`).
 - `import`: the store must exist. dotenv input is literal (`${X}` never expanded), python-dotenv grammar (`export` prefix, comments, quotes, escapes in double quotes). JSON/TOML must be a flat object of strings. Empty input prints `nothing to import into store 'x'` and exits 0.
 - `rm KEY...`: all-or-nothing; any missing name -> exit 2, nothing deleted.
@@ -75,35 +78,39 @@ Encrypted stores need their key for every reading command, including names-only 
 
 | Command | Options |
 |---|---|
+| `ls-store` | `--json`; needs no key. An empty backend prints nothing on stdout (`[]` with `--json`), exits 0 and writes `no stores in <location>` to stderr |
 | `create-store NAME` | `-e/--encrypt` plus exactly one of `-k PATH\|-` (existing key file), `--generate-key PATH` (new file), `--passphrase` |
 | `rm-store NAME` | `-y/--yes`; needs no key |
 | `cp-store SRC DST` / `mv-store SRC DST` | `--to URL` (other backend; DST may equal SRC there), `-k PATH\|-` (source key), and at most one of `--plain`, `--new-key PATH\|-`, `--generate-key PATH`, `--passphrase`. Default: same encryption and secret as the source |
 | `encrypt -s STORE` | exactly one of `--new-key PATH` (existing key file), `--generate-key PATH` (new file), `--passphrase`. Rewrites the store in place; already encrypted -> exit 1, use `rekey`. Does not touch `.envstore.toml` |
 | `rekey -s STORE` | `-k OLD`, plus exactly one of `--new-key`, `--generate-key`, `--passphrase` (can switch keyfile <-> passphrase; passphrases get a new salt) |
-| `keygen PATH\|-` | writes a key file (0600, never overwrites) or prints the key with `-` |
+| `keygen PATH\|-` | writes a key file (0600, never overwrites) or prints the key with `-`; reads neither the connection nor the project file |
 | `migrate` | SQL only; prints `created schema v1`, `upgraded schema from vN to vM` or `schema is up to date (v1)` |
 
 `--passphrase` reads stdin when piped (one trailing newline stripped; empty -> exit 4); on a
 terminal it asks twice. `--generate-key` writes mode 0600, never overwrites (exit 1,
 `key file 'x' already exists; refusing to overwrite it`), refuses `-` and needs an existing parent
-directory. `--new-key PATH` must name an existing file (missing -> exit 4).
+directory. `--new-key PATH` must name an existing file (missing -> exit 4). A new key or passphrase
+read from stdin (`-k -` on `create-store`, `--new-key -`, piped `--passphrase`) is not saved by
+`envs`: after success stderr warns `envs does not save this key; keep it, or store 'x' cannot be read
+again` (`passphrase` for a passphrase).
 
 ## Project file `.envstore.toml`
 
 - Found by walking up from the current directory; the first regular file wins.
 - Ignored with a warning when not owned by you or root, or world-writable.
 - `envs` never writes it: add `[keys]` entries yourself after `create-store -e` or `encrypt`.
-- Only keys `connection`, `stores`, `ordered_overwrite`, `[keys]`; anything else is an error (exit 1) that breaks every command, even `keygen`.
+- Only keys `connection`, `stores`, `ordered_overwrite`, `[keys]`; anything else is an error (exit 1) that breaks every command except `keygen`, `--help` and `--version` (they do not read the file).
 - Relative `json://`, `toml://`, `sqlite:///` connections and `[keys]` paths are relative to the project file's directory.
 - `[keys]` holds paths only, never key material. A `[keys]` entry for a plaintext store that a command loads is an error.
-- A password in `connection` prints a warning on every command; put such connections in `ENV_STORE_CONNECTION`.
+- A password in `connection` prints a warning on every command that reads the file; put such connections in `ENV_STORE_CONNECTION`.
 
 ## Backends
 
 | Scheme | Notes |
 |---|---|
-| `json://DIR`, `toml://DIR` | One `<store>.json`/`.toml` per store plus `.<store>.<ext>.lock`, files mode 0600; dir created on first write; `~` expanded; no `?`/`#` |
-| `sqlite:///rel.db`, `sqlite:////abs.db` | File, schema and upgrades handled automatically (no `migrate` needed); `~` is **not** expanded |
+| `json://DIR`, `toml://DIR` | One `<store>.json`/`.toml` per store plus `.<store>.<ext>.lock`, files mode 0600; dir created on first write (mode 0700); `~` expanded; no `?`/`#` |
+| `sqlite:///rel.db`, `sqlite:////abs.db`, `sqlite:///~/x.db` | File (mode 0600, also `-wal`/`-shm`), schema and upgrades handled automatically (no `migrate` needed); `~` expanded; missing parent dir created on first write (mode 0700) |
 | `postgresql://` / `postgres://` | Needs `environment-store[postgres]`. `?schema=NAME` (default `environment_store`). Percent-encode `@ / ?` in credentials. Older schema -> run `envs migrate`. Missing CREATE privilege on first setup -> an admin runs `envs migrate` once |
 
 ## dotenv output rules

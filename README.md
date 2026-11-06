@@ -85,7 +85,8 @@ are already set are kept unless you pass `overwrite=True`.
 - **Project file.** A `.envstore.toml` in your project names the connection, the default stores and the key files,
   so `envs run -- ./manage.py runserver` is all you type.
 - **Scriptable.** Data on stdout, messages on stderr, `--json` output, stable exit codes and `--noinput` for CI.
-- **Terminal UI.** `envs tui` lets you browse stores and add, edit and delete variables, with values masked.
+- **Terminal UI.** `envs tui` lets you browse stores and add, edit and delete variables, with values masked and
+  each screen's keys in its footer.
 
 ## Documentation
 

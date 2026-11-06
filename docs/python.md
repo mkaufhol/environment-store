@@ -55,20 +55,21 @@ If you open a `postgresql://` connection without the `postgres` extra, you get a
   |---|---|
   | JSON files (one file per store) | `json://envs` (relative), `json:///abs/dir`, `json://~/envs` |
   | TOML files (one file per store) | `toml://envs`, `toml:///abs/dir`, `toml://~/envs` |
-  | SQLite | `sqlite:///envs.db` (relative), `sqlite:////abs/path/envs.db` (four slashes) |
+  | SQLite | `sqlite:///envs.db` (relative), `sqlite:////abs/path/envs.db` (four slashes), `sqlite:///~/envs.db` |
   | PostgreSQL | `postgresql://user@host:5432/db`, optional `?schema=name` (default `environment_store`) |
 
   A relative path in `connection=`, `EnvironmentStore(...)` or `ENV_STORE_CONNECTION` is
   relative to the **current directory** of the process. If your application starts from another
-  directory, SQLite quietly creates a new, empty database there and loading fails with
-  `StoreNotFoundError`. For applications, use an absolute path or put the connection in the
+  directory, loading looks for the stores there and fails with `StoreNotFoundError`, which names
+  the path it looked at. For applications, use an absolute path or put the connection in the
   [project file](#configure-it-once-outside-your-code), where relative paths are relative to the
   file.
 
-  `~` is expanded for `json://` and `toml://`, but **not** for SQLite: use an absolute path such
-  as `sqlite:////home/me/envs.db`. SQLite and PostgreSQL databases are set up automatically on
-  first use. Put database passwords in the `ENV_STORE_CONNECTION` environment variable, never in a
-  file you commit.
+  `~` is expanded for `json://`, `toml://` and `sqlite:///`. A missing directory (the store
+  directory, or the database file's directory) is created on the first write with mode `0700`;
+  store files and the database get mode `0600`. Reading never creates a file or directory. The
+  SQLite database is set up on the first write, a PostgreSQL schema on first use. Put database
+  passwords in the `ENV_STORE_CONNECTION` environment variable, never in a file you commit.
 - When you load several stores, they are merged **in order, and the last store wins** for a
   variable that appears in more than one. `first_wins=True` reverses that.
 
@@ -553,16 +554,34 @@ KeyRequiredError: store 'prod' is encrypted and no key or passphrase was given; 
 Every error derives from `EnvironmentStoreError`, and every class is importable from
 `environment_store`. Messages never contain values, keys or passphrases, so they are safe to log.
 
-The messages are shared with the CLI, so some of them end with a CLI hint. In Python, read them
-as the matching keyword argument:
+Messages speak Python: when there is a remedy, it names the library's own parameters and
+functions, never a CLI flag. Every error has two attributes: `detail` says what went wrong, and
+`hint` holds the remedy or `None`. The message is `detail`, followed by `; hint` when there is one.
+The CLI and the TUI show the same `detail` with their own remedy in place of `hint`.
 
-| Hint in the message | In Python |
-|---|---|
-| `-k <path>`, `-k -` | `keys={...}` for `load()`, `key=` for `EnvironmentStore` methods |
-| `-o/--overwrite` | `overwrite=True` |
-| `--force` | `force=True` |
-| `-t json`, `-t toml` | `fmt="json"`, `fmt="toml"` |
-| `envs run` | `env.apply()` |
+| Situation | Error | `hint` |
+|---|---|---|
+| encrypted store, no key | `KeyRequiredError` | `pass key=... (or keys={'prod': ...} to load())` |
+| variables exist | `VariableExistsError` | `pass overwrite=True to replace them` |
+| `to_file()` onto an existing file | `ValidationError` | `pass force=True to replace it` |
+| `to_file()` cannot infer the format | `ValidationError` | `pass fmt='dotenv', fmt='json' or fmt='toml'` |
+| a value dotenv cannot hold | `ValidationError` | `export with fmt='json' or fmt='toml', or set the variables with Environment.apply() instead` |
+| not a valid key file or key text | `InvalidKeyFileError` | `create one with generate_key_file() or generate_key_text()` |
+
+```python
+from environment_store import VariableExistsError
+
+try:
+    es.set("base", "DB_HOST", "db.local")
+except VariableExistsError as exc:
+    print(exc.detail)
+    print(exc.hint)
+```
+
+```text
+variables already exist in store 'base': DB_HOST
+pass overwrite=True to replace them
+```
 
 | Catch | When | CLI exit code |
 |---|---|---|
