@@ -1,5 +1,6 @@
 import base64
 import dataclasses
+import tomllib
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Literal, cast
@@ -240,6 +241,45 @@ def test_cipher_meta_rejects_wrongly_typed_fields(
 def test_cipher_meta_from_json_rejects_invalid_documents(document: object, message: str) -> None:
     with pytest.raises(UnsupportedFormatError, match=message):
         CipherMeta.from_json(document)
+
+
+@pytest.mark.parametrize("meta", [_KEYFILE_META, _PASSPHRASE_META])
+def test_cipher_meta_file_table_uses_the_spec_layout_keys(meta: CipherMeta) -> None:
+    table = meta.to_file_table()
+
+    assert table == {
+        "name": "aes256gcm",
+        **{k: v for k, v in meta.to_json().items() if k != "cipher"},
+    }
+
+
+def test_cipher_meta_reads_the_spec_file_layout_table() -> None:
+    table = tomllib.loads('[cipher]\nname = "aes256gcm"\nmode = "keyfile"\n')["cipher"]
+
+    assert CipherMeta.from_file_table(table) == _KEYFILE_META
+
+
+@pytest.mark.parametrize("meta", [_KEYFILE_META, _PASSPHRASE_META])
+def test_cipher_meta_round_trips_through_the_file_table(meta: CipherMeta) -> None:
+    assert CipherMeta.from_file_table(meta.to_file_table()) == meta
+
+
+@pytest.mark.parametrize(
+    ("document", "message"),
+    [
+        ("aes256gcm", "cipher table must be an object"),
+        ({"mode": "keyfile"}, "missing: name"),
+        ({"name": "aes256gcm", "cipher": "aes256gcm", "mode": "keyfile"}, "unknown: cipher"),
+        ({"name": "aes256gcm", "mode": "keyfile", "x": 1}, "unknown: x"),
+        ({"name": "chacha20", "mode": "keyfile"}, "unsupported cipher 'chacha20'"),
+        ({"name": "aes256gcm", "mode": "passphrase"}, "requires KDF parameters"),
+    ],
+)
+def test_cipher_meta_from_file_table_rejects_invalid_documents(
+    document: object, message: str
+) -> None:
+    with pytest.raises(UnsupportedFormatError, match=message):
+        CipherMeta.from_file_table(document)
 
 
 # --- StoreInfo ---------------------------------------------------------------------------------

@@ -186,6 +186,36 @@ class CipherMeta:
             kdf=KdfParams.from_json(document["kdf"]) if "kdf" in document else None,
         )
 
+    def to_file_table(self) -> dict[str, str | dict[str, str | int]]:
+        """Return the `[cipher]` table of the file layout (spec §3.2): `{"name", "mode", "kdf"?}`.
+
+        Same content as `to_json`, with the cipher under `name`; the AAD keeps using `to_json` (D5).
+
+        Returns:
+            A TOML-compatible mapping; `kdf` only in passphrase mode.
+        """
+        document = self.to_json()
+        return {"name": document.pop("cipher"), **document}
+
+    @classmethod
+    def from_file_table(cls, data: object) -> Self:
+        """Parse the `[cipher]` table written by `to_file_table`.
+
+        Args:
+            data: Parsed TOML or JSON, untrusted.
+
+        Returns:
+            The validated metadata.
+
+        Raises:
+            UnsupportedFormatError: Unknown cipher, mode or KDF, or an invalid table.
+        """
+        document = _json_object(
+            data, what="cipher table", required=("name", "mode"), optional=("kdf",)
+        )
+        renamed = {("cipher" if key == "name" else key): value for key, value in document.items()}
+        return cls.from_json(renamed)
+
 
 # --- helpers -----------------------------------------------------------------------------------
 
