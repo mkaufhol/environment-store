@@ -2,7 +2,8 @@
 
 The input is read and parsed before the store's key is resolved, so a missing file or a
 malformed document never costs a prompt. JSON and TOML input must be flat (D33); dotenv input
-is never interpolated (D37). An empty document changes nothing (PD 27).
+is never interpolated (D37). An empty document changes nothing (PD 27) and needs no key, but
+a given or project key is still validated.
 """
 
 from collections.abc import Callable, Mapping
@@ -60,6 +61,10 @@ def import_variables(  # noqa: PLR0913 - one parameter per option of the command
         text = read_input_file(path)
     variables = _LOADERS[resolved](text)
     if not variables:
+        # Nothing is written (PD 27), but a given or project key is still checked (§6.0.1,
+        # PD 5): only the prompt for a missing key is skipped.
+        if key is not None or store in state.settings().key_paths:
+            existing_secret(ctx, store, key)
         err(f"nothing to import into store '{store}'")
         return
     secret = existing_secret(ctx, store, key)

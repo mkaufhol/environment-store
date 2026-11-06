@@ -345,3 +345,51 @@ def test_import_needs_no_key_for_an_empty_document(cli_json: CliHarness) -> None
     result = cli_json.invoke("import", "-s", "s", input="")
 
     assert_exit(result, 0)
+
+
+def test_import_of_an_empty_document_refuses_a_key_for_a_plaintext_store(
+    cli_json: CliHarness,
+) -> None:
+    cli_json.store().create_store("a")
+
+    result = cli_json.invoke("import", "-s", "a", "-k", str(cli_json.key_file()), input="")
+
+    assert_exit(result, 1)
+    assert "not encrypted" in result.stderr
+    assert "nothing to import" not in result.stderr
+
+
+def test_import_of_an_empty_document_refuses_a_missing_key_file(cli_json: CliHarness) -> None:
+    cli_json.store().create_store("s", encrypt=True, key=cli_json.key_file())
+    missing = cli_json.root / "missing.key"
+
+    result = cli_json.invoke("import", "-s", "s", "-k", str(missing), input="")
+
+    assert_exit(result, 4)
+    assert "nothing to import" not in result.stderr
+
+
+def test_import_of_an_empty_document_refuses_a_project_key_for_a_plaintext_store(
+    cli_json: CliHarness,
+) -> None:
+    cli_json.store().create_store("a")
+    cli_json.project_file(f"[keys]\na = '{cli_json.key_file()}'\n")
+
+    result = cli_json.invoke("import", "-s", "a", input="")
+
+    assert_exit(result, 1)
+    assert "[keys]" in result.stderr
+
+
+def test_import_of_an_empty_document_checks_a_given_key_of_an_encrypted_store(
+    cli_json: CliHarness,
+) -> None:
+    key = cli_json.key_file()
+    cli_json.store().create_store("s", encrypt=True, key=key)
+    revision = cli_json.store().store_info("s").revision
+
+    result = cli_json.invoke("import", "-s", "s", "-k", str(key), input="")
+
+    assert_exit(result, 0)
+    assert cli_json.store().store_info("s").revision == revision
+    assert "nothing to import" in result.stderr
