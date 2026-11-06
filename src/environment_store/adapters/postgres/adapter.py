@@ -5,8 +5,7 @@ single atomic statement, and the first setup runs in one explicit transaction. D
 raised as `BackendError` naming the schema and database, never credentials or stored values.
 """
 
-from collections.abc import Generator, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Final, Self
@@ -150,8 +149,8 @@ class PostgresAdapter:
         Returns:
             One entry per store.
         """
-        with self._session("listing stores") as connection:
-            rows = connection.execute(self._sql(_LIST, columns=_INFO_COLUMNS)).fetchall()
+        statement = self._sql(_LIST, columns=_INFO_COLUMNS)
+        rows = self._run("listing stores", lambda c: c.execute(statement).fetchall())
         return [row_to_info(_info_row(row), dialect=Dialect.POSTGRES) for row in rows]
 
     def create_store(self, record: StoreRecord) -> None:
@@ -165,8 +164,10 @@ class PostgresAdapter:
         """
         check_create(record)
         statement = self._sql(_CREATE, columns=_COLUMNS, values=_PLACEHOLDERS)
-        with self._session(f"creating store {record.name!r}") as connection:
-            created = connection.execute(statement, _parameters(record)).rowcount
+        parameters = _parameters(record)
+        created = self._run(
+            f"creating store {record.name!r}", lambda c: c.execute(statement, parameters).rowcount
+        )
         if created == 0:
             message = f"store {record.name!r} already exists in {self._target.location}"
             raise StoreExistsError(message)
@@ -184,8 +185,10 @@ class PostgresAdapter:
             StoreNotFoundError: The store does not exist.
         """
         validate_store_name(name)
-        with self._session(f"reading store {name!r}") as connection:
-            row = connection.execute(self._sql(_READ, columns=_COLUMNS), (name,)).fetchone()
+        statement = self._sql(_READ, columns=_COLUMNS)
+        row = self._run(
+            f"reading store {name!r}", lambda c: c.execute(statement, (name,)).fetchone()
+        )
         if row is None:
             raise self._not_found(name)
         return row_to_record(_store_row(row), dialect=Dialect.POSTGRES)
@@ -203,11 +206,17 @@ class PostgresAdapter:
         """
         check_write(record, expected_revision=expected_revision)
         name, *values = _parameters(record)
-        with self._session(f"writing store {record.name!r}") as connection:
-            parameters = (*values, name, expected_revision)
-            if connection.execute(self._sql(_WRITE), parameters).rowcount:
-                return
-            found = connection.execute(self._sql(_REVISION), (name,)).fetchone()
+        parameters = (*values, name, expected_revision)
+        write, revision = self._sql(_WRITE), self._sql(_REVISION)
+
+        def attempt(connection: psycopg.Connection[TupleRow]) -> tuple[bool, TupleRow | None]:
+            if connection.execute(write, parameters).rowcount:
+                return True, None
+            return False, connection.execute(revision, (name,)).fetchone()
+
+        written, found = self._run(f"writing store {record.name!r}", attempt)
+        if written:
+            return
         if found is None:
             raise self._not_found(record.name)
         message = (
@@ -226,8 +235,10 @@ class PostgresAdapter:
             StoreNotFoundError: The store does not exist.
         """
         validate_store_name(name)
-        with self._session(f"deleting store {name!r}") as connection:
-            deleted = connection.execute(self._sql(_DELETE), (name,)).rowcount
+        statement = self._sql(_DELETE)
+        deleted = self._run(
+            f"deleting store {name!r}", lambda c: c.execute(statement, (name,)).rowcount
+        )
         if deleted == 0:
             raise self._not_found(name)
 
@@ -270,12 +281,17 @@ class PostgresAdapter:
     # --- internals -----------------------------------------------------------------------
 
     def _connect(self) -> psycopg.Connection[TupleRow]:
+        # The driver's exception is not chained: its text may quote the password, and the
+        # redacted copy below is all a traceback may show (CONTRIBUTING §6).
         try:
             return psycopg.connect(self._target.conninfo, autocommit=True)
         except psycopg.Error as err:
             detail = self._target.redact(str(err).strip())
-            message = f"cannot connect to PostgreSQL ({self._target.location}): {detail}"
-            raise BackendError(message) from err
+        except UnicodeError:
+            # psycopg decodes every connection parameter as UTF-8; its message quotes bytes.
+            detail = "a connection parameter is not UTF-8 after percent-decoding"
+        message = f"cannot connect to PostgreSQL ({self._target.location}): {detail}"
+        raise BackendError(message)
 
     def _set_up(self, *, auto_upgrade: bool) -> MigrationReport:
         """Inspect, decide and create or upgrade in one locked transaction (D11, D13)."""
@@ -300,24 +316,31 @@ class PostgresAdapter:
             )
             raise SetupPrivilegeError(message) from err
         except psycopg.Error as err:
-            operation = "setting up the schema"
-            raise self._driver_error(operation, err) from err
-        self._ready = True
-        created = state is SetupState.EMPTY
-        return MigrationReport(
-            from_version=None if created else found, to_version=client_version, created=created
-        )
+            failure = err
+        else:
+            self._ready = True
+            created = state is SetupState.EMPTY
+            return MigrationReport(
+                from_version=None if created else found,
+                to_version=client_version,
+                created=created,
+            )
+        # Raised outside the except block, so that a dropped driver error is not kept as context.
+        operation = "setting up the schema"
+        raise self._driver_error(operation, failure)
 
-    @contextmanager
-    def _session(self, operation: str) -> Generator[psycopg.Connection[TupleRow]]:
+    def _run[T](self, operation: str, work: Callable[[psycopg.Connection[TupleRow]], T]) -> T:
+        """Run `work` on the connection, after the lazy setup check; wrap driver errors."""
         self._check_open()
         if not self._ready:
             # SetupMode.NONE: the AUTO check runs lazily before the first data operation.
             self._set_up(auto_upgrade=False)
         try:
-            yield self._connection
+            return work(self._connection)
         except psycopg.Error as err:
-            raise self._driver_error(operation, err) from err
+            failure = err
+        # Raised outside the except block, so that a dropped driver error is not kept as context.
+        raise self._driver_error(operation, failure)
 
     def _check_open(self) -> None:
         if self._closed:
@@ -325,13 +348,21 @@ class PostgresAdapter:
             raise BackendError(message)
 
     def _driver_error(self, operation: str, err: psycopg.Error) -> BackendError:
+        """The `BackendError` for a driver error; raise it outside the `except` block.
+
+        A server error is chained as cause. A client-side error is not: its text may quote the
+        connection string and is only shown redacted.
+        """
         # Only the primary message of a server error: DETAIL lines may quote stored values.
         if err.sqlstate is None:
             detail = self._target.redact(str(err).strip())
         else:
             detail = f"{err.diag.message_primary} (SQLSTATE {err.sqlstate})"
         message = f"PostgreSQL error while {operation} in {self._target.location}: {detail}"
-        return BackendError(message)
+        error = BackendError(message)
+        error.__cause__ = err if err.sqlstate is not None else None
+        error.__suppress_context__ = True
+        return error
 
     def _not_found(self, name: str) -> StoreNotFoundError:
         return StoreNotFoundError(f"store {name!r} not found in {self._target.location}")
@@ -355,9 +386,17 @@ def _parameters(record: StoreRecord) -> tuple[object, ...]:
     )
 
 
-def _utc(value: datetime) -> datetime:
+def _utc(value: datetime, *, store: object) -> datetime:
     # TIMESTAMPTZ comes back in the session time zone; records are UTC.
-    return value.astimezone(UTC)
+    try:
+        return value.astimezone(UTC)
+    except OverflowError:
+        # Representable in the session time zone, but not in UTC (before year 1, after 9999).
+        message = (
+            f"store {store!r}: corrupt row in the database: a timestamp is outside the range "
+            "of UTC dates"
+        )
+        raise BackendError(message) from None
 
 
 def _store_row(row: TupleRow) -> StoreRow:
@@ -370,8 +409,8 @@ def _store_row(row: TupleRow) -> StoreRow:
         variables=variables,
         ciphertext=ciphertext,
         revision=revision,
-        created_at=_utc(created),
-        updated_at=_utc(updated),
+        created_at=_utc(created, store=name),
+        updated_at=_utc(updated, store=name),
     )
 
 
@@ -382,6 +421,6 @@ def _info_row(row: TupleRow) -> StoreInfoRow:
         encrypted=encrypted,
         cipher_meta=cipher_meta,
         revision=revision,
-        created_at=_utc(created),
-        updated_at=_utc(updated),
+        created_at=_utc(created, store=name),
+        updated_at=_utc(updated, store=name),
     )

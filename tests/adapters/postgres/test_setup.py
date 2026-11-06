@@ -19,6 +19,8 @@ from environment_store.core.errors import (
 from environment_store.core.models import StoreRecord
 from tests.adapters.postgres.server import PostgresServer
 
+pytestmark = pytest.mark.postgres
+
 _T0: Final = datetime(2026, 11, 6, 10, 0, tzinfo=UTC)
 _V2: Final = Migration(
     version=2, statements=("CREATE INDEX stores_updated_at ON {schema}.stores (updated_at)",)
@@ -172,6 +174,39 @@ _FOREIGN_CONTENT: Final[dict[str, tuple[str, ...]]] = {
     "function": ("CREATE FUNCTION {schema}.f() RETURNS INT LANGUAGE SQL AS 'SELECT 1'",),
     "enum-type": ("CREATE TYPE {schema}.mood AS ENUM ('ok')",),
     "domain": ("CREATE DOMAIN {schema}.positive AS INT CHECK (VALUE > 0)",),
+    "shell-type": ("CREATE TYPE {schema}.shell",),
+    "range-type": ("CREATE TYPE {schema}.span AS RANGE (SUBTYPE = int4)",),
+    "collation": ("CREATE COLLATION {schema}.c1 (provider = libc, locale = 'C')",),
+    "operator": (
+        "CREATE OPERATOR {schema}.=== (LEFTARG = int4, RIGHTARG = int4, "
+        "FUNCTION = pg_catalog.int4eq)",
+    ),
+    "operator-family": ("CREATE OPERATOR FAMILY {schema}.f USING btree",),
+    "operator-class": (
+        "CREATE OPERATOR CLASS {schema}.oc FOR TYPE int4 USING hash AS "
+        "OPERATOR 1 pg_catalog.= (int4, int4), FUNCTION 1 pg_catalog.hashint4(int4)",
+    ),
+    "conversion": (
+        "CREATE CONVERSION {schema}.conv FOR 'LATIN1' TO 'UTF8' FROM pg_catalog.iso8859_1_to_utf8",
+    ),
+    "text-search-configuration": (
+        "CREATE TEXT SEARCH CONFIGURATION {schema}.ts (COPY = pg_catalog.simple)",
+    ),
+    "text-search-dictionary": (
+        "CREATE TEXT SEARCH DICTIONARY {schema}.d (TEMPLATE = pg_catalog.simple)",
+    ),
+    "text-search-template": (
+        "CREATE TEXT SEARCH TEMPLATE {schema}.t (LEXIZE = pg_catalog.dsimple_lexize)",
+    ),
+    "text-search-parser": (
+        "CREATE TEXT SEARCH PARSER {schema}.p (START = pg_catalog.prsd_start, "
+        "GETTOKEN = pg_catalog.prsd_nexttoken, END = pg_catalog.prsd_end, "
+        "LEXTYPES = pg_catalog.prsd_lextype)",
+    ),
+    "statistics": (
+        "CREATE TABLE public.stat_source (a INT, b INT)",
+        "CREATE STATISTICS {schema}.st ON a, b FROM public.stat_source",
+    ),
     "meta-of-another-app": (
         "CREATE TABLE {schema}.meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
         "INSERT INTO {schema}.meta VALUES ('app', 'other'), ('schema_version', '1')",

@@ -7,10 +7,13 @@ import pytest
 from psycopg import sql
 
 from environment_store.adapters.postgres import PostgresAdapter, open_postgres
+from environment_store.adapters.postgres.url import PostgresTarget
 from environment_store.core.adapter import SetupMode
 from environment_store.core.errors import BackendError, SetupPrivilegeError, ValidationError
 from environment_store.core.models import StoreRecord
 from tests.adapters.postgres.server import PostgresServer
+
+pytestmark = pytest.mark.postgres
 
 _T0: Final = datetime(2026, 11, 6, 10, 0, tzinfo=UTC)
 _RECORD: Final = StoreRecord.plain(name="base", variables={"HOST": "localhost"}, created_at=_T0)
@@ -153,6 +156,42 @@ def test_connection_failure_raises_backend_error_without_the_password(
 
     assert _PASSWORD not in str(caught.value)
     assert _PASSWORD not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"postgresql://u:{_PASSWORD}%zz@host.invalid:1/db",
+        f"postgresql://host.invalid:1/db?password={_PASSWORD}%zz",
+    ],
+    ids=["userinfo", "query"],
+)
+def test_driver_errors_quoting_the_password_are_not_chained(url: str) -> None:
+    # libpq rejects the escape before connecting and quotes the whole token.
+    with pytest.raises(BackendError, match="percent") as caught:
+        open_postgres(url)
+
+    assert _PASSWORD not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_a_hand_built_target_the_driver_cannot_decode_raises_backend_error() -> None:
+    target = PostgresTarget(
+        conninfo=f"postgresql://u:{_PASSWORD}%F2@host.invalid:1/db",
+        schema="s",
+        location="l",
+        secrets=(f"{_PASSWORD}%F2",),
+    )
+
+    with pytest.raises(BackendError, match="UTF-8") as caught:
+        PostgresAdapter(target)
+
+    assert _PASSWORD not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_connection_failure_with_the_password_in_the_query_hides_it(
@@ -242,6 +281,9 @@ def test_lost_connection_raises_backend_error(
             adapter.read_store("base")
 
         assert "SQLSTATE" not in str(caught.value)
+        # Client-side driver text is redacted, so the raw exception is not kept.
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
 
 
 def test_unexpected_driver_error_during_setup_raises_backend_error(

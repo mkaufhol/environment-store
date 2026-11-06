@@ -14,6 +14,8 @@ from environment_store.core.errors import BackendError, UnsupportedFormatError
 from environment_store.core.models import StoreRecord
 from tests.adapters.postgres.server import PostgresServer, unique_name
 
+pytestmark = pytest.mark.postgres
+
 _T0: Final = datetime(2026, 11, 6, 10, 0, 0, 123456, tzinfo=UTC)
 _RECORD: Final = StoreRecord.plain(name="base", variables={"HOST": "localhost"}, created_at=_T0)
 
@@ -189,3 +191,26 @@ def test_repr_names_the_location_but_no_credentials(
 
     assert "environment_store" in text
     assert password not in text
+
+
+@pytest.mark.parametrize(
+    ("time_zone", "stored"),
+    [("America%2FNew_York", "9999-12-31 23:30-05"), ("Asia%2FTokyo", "0001-01-01 00:30+09")],
+    ids=["after-year-9999", "before-year-1"],
+)
+def test_timestamps_outside_the_utc_range_raise_backend_error(
+    postgres_server: PostgresServer, database: str, time_zone: str, stored: str
+) -> None:
+    with open_postgres(postgres_server.url(database)) as adapter:
+        adapter.create_store(_RECORD)
+    postgres_server.execute(
+        database,
+        sql.SQL("UPDATE environment_store.stores SET updated_at = {}").format(sql.Literal(stored)),
+    )
+    url = postgres_server.url(database, query=f"options=-c%20TimeZone%3D{time_zone}")
+
+    with open_postgres(url) as adapter:
+        with pytest.raises(BackendError, match=r"'base'.*corrupt"):
+            adapter.read_store("base")
+        with pytest.raises(BackendError, match=r"'base'.*corrupt"):
+            adapter.list_stores()

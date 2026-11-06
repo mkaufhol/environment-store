@@ -3,7 +3,7 @@
 Without the environment variable, `initdb` / `pg_ctl` from `PATH` start a private cluster: trust
 authentication, `--no-locale`, no TCP listener, a unix socket in a fresh short directory under
 `/tmp` (socket paths are limited to about 100 bytes) and a random port, so parallel test runs on
-one machine never meet. Every test gets its own database or schema from it.
+one machine never meet. Every test gets its own database from it.
 """
 
 import os
@@ -23,7 +23,7 @@ import psycopg
 import pytest
 from psycopg import sql
 
-__all__ = ["ENV_URL", "PostgresServer", "start_server"]
+__all__ = ["ENV_URL", "PostgresServer", "start_server", "unique_name"]
 
 ENV_URL: Final = "ENV_STORE_TEST_POSTGRES_URL"
 _HINT: Final = (
@@ -35,6 +35,7 @@ _SUPERUSER: Final = "postgres"
 
 
 def unique_name(prefix: str) -> str:
+    """A fresh database, schema or role name: `prefix` and 12 random hex digits."""
     return f"{prefix}_{secrets.token_hex(6)}"
 
 

@@ -16,10 +16,3 @@ def database(postgres_server: PostgresServer) -> Iterator[str]:
     """A fresh, empty database for one test."""
     with postgres_server.database() as name:
         yield name
-
-
-@pytest.fixture(scope="class")
-def class_database(postgres_server: PostgresServer) -> Iterator[str]:
-    """A database shared by one test class; tests isolate themselves with fresh schemas."""
-    with postgres_server.database() as name:
-        yield name

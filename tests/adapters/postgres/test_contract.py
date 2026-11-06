@@ -4,12 +4,13 @@ from dataclasses import dataclass
 
 import pytest
 from hypothesis import given
-from psycopg import sql
 
 from environment_store.adapters.postgres import PostgresAdapter, open_postgres
 from environment_store.core.adapter import SetupMode
-from tests.adapters.postgres.server import PostgresServer, unique_name
+from tests.adapters.postgres.server import PostgresServer
 from tests.contract.adapter_contract import AdapterContract, BackendFactory
+
+pytestmark = pytest.mark.postgres
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,10 @@ def _own_property_tests[C: type[AdapterContract]](cls: C) -> C:
     Hypothesis fails a `@given` function that is called with instances of several classes
     (`HealthCheck.differing_executors`), and every adapter subclasses the same contract. A copy
     built from the original test body and strategies keeps the tests identical but separate.
+
+    A workaround for a defect of the shared `tests/contract/adapter_contract.py` (reported, not
+    fixed here because A3 does not own it); it relies on Hypothesis internals and should go once
+    the contract gives every subclass its own property tests.
     """
     for name, member in vars(AdapterContract).items():
         handle = getattr(member, "hypothesis", None)
@@ -39,18 +44,12 @@ def _own_property_tests[C: type[AdapterContract]](cls: C) -> C:
 class TestPostgresContract(AdapterContract):
     @pytest.fixture(scope="class")
     @classmethod
-    def make_backend(cls, postgres_server: PostgresServer, class_database: str) -> BackendFactory:
-        # A fresh schema per test and per Hypothesis example: as isolated as a fresh database
-        # (the adapter only touches its own schema) and much faster.
+    def make_backend(cls, postgres_server: PostgresServer) -> BackendFactory:
+        # A fresh database per test and per Hypothesis example (IMPLEMENTATION-PLAN.md §5 A3),
+        # used through the default schema `environment_store`.
         @contextmanager
         def backend() -> Generator[PostgresBackend]:
-            schema = unique_name("s")
-            try:
-                yield PostgresBackend(postgres_server.url(class_database, schema=schema))
-            finally:
-                postgres_server.execute(
-                    class_database,
-                    sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema)),
-                )
+            with postgres_server.database() as database:
+                yield PostgresBackend(postgres_server.url(database))
 
         return backend

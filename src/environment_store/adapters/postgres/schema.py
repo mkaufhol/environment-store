@@ -23,20 +23,50 @@ type Connection = psycopg.Connection[TupleRow]
 _LOCK_NAMESPACE: Final = "environment-store schema "
 
 # Every object that makes a schema "not empty" (D13): tables and partitioned tables by name;
-# every other relation, function or user-defined type with a prefix, so that it can never be
-# mistaken for the `meta` table.
+# every other object with a prefix, so that it can never be mistaken for the `meta` table. That
+# is every catalog with a namespace column; pg_type without the row types of relations and the
+# array types created alongside another type, since those come with an object listed here.
 _INSPECT: Final = sql.SQL("""
+WITH target AS (SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = %(schema)s)
 SELECT CASE WHEN c.relkind IN ('r', 'p') THEN c.relname ELSE 'relation:' || c.relname END
-FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = %(schema)s
+FROM pg_catalog.pg_class c WHERE c.relnamespace = (SELECT oid FROM target)
 UNION ALL
-SELECT 'function:' || p.proname
-FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = %(schema)s
+SELECT 'function:' || proname FROM pg_catalog.pg_proc
+WHERE pronamespace = (SELECT oid FROM target)
 UNION ALL
-SELECT 'type:' || t.typname
-FROM pg_catalog.pg_type t JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-WHERE n.nspname = %(schema)s AND t.typtype IN ('d', 'e', 'r', 'm')
+SELECT 'type:' || t.typname FROM pg_catalog.pg_type t
+WHERE t.typnamespace = (SELECT oid FROM target) AND t.typtype <> 'c'
+  AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_type e WHERE e.typarray = t.oid)
+UNION ALL
+SELECT 'collation:' || collname FROM pg_catalog.pg_collation
+WHERE collnamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'operator:' || oprname FROM pg_catalog.pg_operator
+WHERE oprnamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'operator class:' || opcname FROM pg_catalog.pg_opclass
+WHERE opcnamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'operator family:' || opfname FROM pg_catalog.pg_opfamily
+WHERE opfnamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'conversion:' || conname FROM pg_catalog.pg_conversion
+WHERE connamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'statistics:' || stxname FROM pg_catalog.pg_statistic_ext
+WHERE stxnamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'text search configuration:' || cfgname FROM pg_catalog.pg_ts_config
+WHERE cfgnamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'text search dictionary:' || dictname FROM pg_catalog.pg_ts_dict
+WHERE dictnamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'text search parser:' || prsname FROM pg_catalog.pg_ts_parser
+WHERE prsnamespace = (SELECT oid FROM target)
+UNION ALL
+SELECT 'text search template:' || tmplname FROM pg_catalog.pg_ts_template
+WHERE tmplnamespace = (SELECT oid FROM target)
 """)
 _SCHEMA_EXISTS: Final = sql.SQL(
     "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = %(schema)s)"
