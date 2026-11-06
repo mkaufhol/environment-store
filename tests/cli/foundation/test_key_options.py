@@ -12,7 +12,7 @@ from environment_store.cli.key_options import (
     parse_writing_key,
 )
 from environment_store.config.secrets import KeyFile, KeyStdin
-from environment_store.core.errors import ValidationError
+from environment_store.core.errors import KeySourceError, ValidationError
 from tests.support.strategies import store_names
 
 # --- reading commands ------------------------------------------------------------------------
@@ -85,7 +85,8 @@ def test_more_than_one_stdin_key_is_refused() -> None:
 
 @given(
     stores=st.lists(store_names(), min_size=1, max_size=4, unique=True),
-    path=st.text(min_size=1).filter(lambda text: text != "-"),
+    # A leading '~' is expanded (tested below); every other path is kept as given.
+    path=st.text(min_size=1).filter(lambda text: text != "-" and not text.startswith("~")),
     data=st.data(),
 )
 def test_any_store_name_binds_any_path_even_with_equals_signs(
@@ -121,7 +122,7 @@ def test_empty_writing_key_is_refused() -> None:
         parse_writing_key("")
 
 
-@given(path=st.text(min_size=1).filter(lambda text: text != "-"))
+@given(path=st.text(min_size=1).filter(lambda text: text != "-" and not text.startswith("~")))
 def test_any_writing_key_path_is_kept_as_given(path: str) -> None:
     assert parse_writing_key(path) == KeyFile(Path(path))
 
@@ -134,3 +135,37 @@ def test_empty_key_path_names_the_option_it_came_from() -> None:
 def test_empty_key_path_names_k_by_default() -> None:
     with pytest.raises(ValidationError, match="the path of -k is empty"):
         parse_key_path("")
+
+
+# --- home directory expansion ----------------------------------------------------------------
+
+
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    return tmp_path
+
+
+def test_store_bound_key_path_expands_the_home_directory(home: Path) -> None:
+    # zsh and quoting leave '~' after 'store=' literal; the TUI and [keys] expand it too.
+    assert parse_reading_keys(["b=~/b.key"], ["a", "b"]) == {"b": KeyFile(home / "b.key")}
+
+
+def test_shorthand_key_path_expands_the_home_directory(home: Path) -> None:
+    assert parse_reading_keys(["~/a.key"], ["a"]) == {"a": KeyFile(home / "a.key")}
+
+
+def test_writing_and_new_key_paths_expand_the_home_directory(home: Path) -> None:
+    assert parse_writing_key("~/w.key") == KeyFile(home / "w.key")
+    assert parse_key_path("~/n.key", option="--new-key") == KeyFile(home / "n.key")
+
+
+@pytest.mark.usefixtures("home")
+def test_tilde_inside_a_path_is_not_expanded() -> None:
+    # Path("./~/a.key") normalises to Path("~/a.key"): the source stays unexpanded.
+    assert parse_key_path("./~/a.key") == KeyFile(Path("~/a.key"))
+
+
+def test_unknown_home_directory_is_a_key_source_error() -> None:
+    with pytest.raises(KeySourceError, match="unknown home directory"):
+        parse_key_path("~no-such-user-envs-test/a.key")

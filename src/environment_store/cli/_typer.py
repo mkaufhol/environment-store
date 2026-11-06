@@ -13,7 +13,6 @@
 from typing import TYPE_CHECKING, Final, cast, override
 
 import typer
-from typer._click.exceptions import NoArgsIsHelpError
 from typer.core import TyperCommand, TyperGroup
 
 from environment_store.cli.errors import ExitCode, exit_code_for
@@ -42,19 +41,25 @@ class EnvsGroup(TyperGroup):
         parent: "ClickContext | None" = None,
         **extra: object,
     ) -> "ClickContext":
-        """Parse the global options; a usage error exits with 1.
-
-        A bare `envs` prints the help on stdout (click would print it on stderr) and exits
-        with 1: the one usage error that writes to stdout.
-        """
+        """Parse the global options; a usage error exits with 1."""
         try:
             return super().make_context(info_name, args, parent, **extra)
-        except NoArgsIsHelpError as error:
-            out(error.format_message())
-            raise typer.Exit(ExitCode.USAGE) from None
         except typer.TyperException as error:
             error.exit_code = ExitCode.USAGE
             raise
+
+    @override
+    def parse_args(self, ctx: "ClickContext", args: list[str]) -> list[str]:
+        """Parse the arguments; a bare `envs` prints the help on stdout and exits with 1.
+
+        Click would raise its private `NoArgsIsHelpError` and print the help on stderr; this
+        check runs first, so neither the private class nor stderr is involved (plan §6.3). It
+        is the one usage error that writes to stdout.
+        """
+        if not args and self.no_args_is_help and not ctx.resilient_parsing:
+            out(ctx.get_help())
+            raise typer.Exit(ExitCode.USAGE)
+        return super().parse_args(ctx, args)
 
     @override
     def invoke(self, ctx: "ClickContext") -> object:

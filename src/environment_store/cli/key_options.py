@@ -4,6 +4,9 @@ Reading commands bind keys by store name: `-k store=path` or `-k store=-`; a bar
 the shorthand for a single store. A value is `store=path` when the text before the first `=`
 is a valid store name, otherwise it is a bare path, so `./a=b.key` and `C:\\keys\\a.key` stay
 paths. Writing commands act on one store (`-s`) and take a bare path or `-` only.
+
+A leading `~` is expanded like the TUI's unlock dialog and the project file's `[keys]` do: the
+shell leaves it literal after `store=` (zsh) and inside quotes.
 """
 
 from collections.abc import Sequence
@@ -11,12 +14,13 @@ from pathlib import Path
 from typing import Final
 
 from environment_store.config.secrets import KeyFile, KeySource, KeyStdin
-from environment_store.core.errors import ValidationError
+from environment_store.core.errors import KeySourceError, ValidationError
 from environment_store.core.validation import STORE_NAME_PATTERN
 
 __all__ = ["parse_key_path", "parse_reading_keys", "parse_writing_key"]
 
 _STDIN: Final = "-"
+_HOME: Final = "~"
 
 
 def parse_reading_keys(values: Sequence[str], stores: Sequence[str]) -> dict[str, KeySource]:
@@ -91,8 +95,18 @@ def parse_key_path(path: str, *, option: str = "-k") -> KeySource:
 
     Raises:
         ValidationError: The path is empty.
+        KeySourceError: The path starts with `~user` for an unknown user.
     """
     if not path:
         message = f"the path of {option} is empty; give a key file path or '-' for stdin"
         raise ValidationError(message)
-    return KeyStdin() if path == _STDIN else KeyFile(Path(path))
+    if path == _STDIN:
+        return KeyStdin()
+    if not path.startswith(_HOME):
+        # Checked on the text: Path drops a leading "./", so Path("./~/a") is Path("~/a").
+        return KeyFile(Path(path))
+    try:
+        return KeyFile(Path(path).expanduser())
+    except RuntimeError as error:
+        message = f"key file path '{path}' names an unknown home directory"
+        raise KeySourceError(message) from error
