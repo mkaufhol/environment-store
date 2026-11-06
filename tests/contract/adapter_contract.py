@@ -76,7 +76,8 @@ _PASSPHRASE_META: Final[CipherMeta] = CipherMeta(
     mode=KeyMode.PASSPHRASE,
     kdf=KdfParams(iterations=2, memory_kib=19456, lanes=1, salt=bytes(range(16))),
 )
-# Path traversal, separators, case, length, control characters and non-ASCII (D27).
+# Path traversal, separators, case, length, control characters and non-ASCII (D27),
+# and a leading digit (D40).
 _INVALID_NAMES: Final[tuple[str, ...]] = (
     "",
     "..",
@@ -88,6 +89,8 @@ _INVALID_NAMES: Final[tuple[str, ...]] = (
     "Base",
     "-a",
     "_a",
+    "0",
+    "9lives",
     "a.json",
     "a b",
     "a\n",
