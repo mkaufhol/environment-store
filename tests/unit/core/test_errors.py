@@ -13,6 +13,7 @@ from environment_store.core.errors import (
     InvalidKeyFileError,
     KeyModeMismatchError,
     KeyRequiredError,
+    KeySourceError,
     MissingExtraError,
     NotEncryptedError,
     NotFoundError,
@@ -57,6 +58,7 @@ _CONCRETE: list[tuple[type[EnvironmentStoreError], type[EnvironmentStoreError]]]
     (DecryptionError, CryptoError),
     (InvalidKeyFileError, CryptoError),
     (KeyModeMismatchError, CryptoError),
+    (KeySourceError, CryptoError),
 ]
 
 

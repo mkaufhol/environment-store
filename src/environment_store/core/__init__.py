@@ -17,8 +17,10 @@ from environment_store.core.clock import (
 )
 from environment_store.core.connection import (
     ADAPTER_FACTORIES,
+    CREDENTIAL_PARAMETERS,
     AdapterEntry,
     AdapterFactory,
+    connection_has_credentials,
     open_adapter,
     scheme_of,
 )
@@ -35,6 +37,7 @@ from environment_store.core.errors import (
     InvalidKeyFileError,
     KeyModeMismatchError,
     KeyRequiredError,
+    KeySourceError,
     MissingExtraError,
     NotEncryptedError,
     NotFoundError,
@@ -87,6 +90,7 @@ from environment_store.core.validation import (
 
 __all__ = [
     "ADAPTER_FACTORIES",
+    "CREDENTIAL_PARAMETERS",
     "KEY_LENGTH",
     "MAX_REVISION",
     "PAYLOAD_FORMAT_VERSION",
@@ -113,6 +117,7 @@ __all__ = [
     "KeyMode",
     "KeyModeMismatchError",
     "KeyRequiredError",
+    "KeySourceError",
     "MergeOrder",
     "MigratableAdapter",
     "MigrationReport",
@@ -137,6 +142,7 @@ __all__ = [
     "VariableNotFoundError",
     "check_create",
     "check_write",
+    "connection_has_credentials",
     "merge",
     "merge_with_sources",
     "nested",

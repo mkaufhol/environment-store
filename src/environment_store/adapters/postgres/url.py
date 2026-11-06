@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Final
 from urllib.parse import unquote
 
+from environment_store.core.connection import CREDENTIAL_PARAMETERS
 from environment_store.core.errors import ValidationError
 
 __all__ = ["DEFAULT_SCHEMA", "SCHEMA_PATTERN", "PostgresTarget", "parse_url"]
@@ -29,8 +30,6 @@ _SCHEME: Final[re.Pattern[str]] = re.compile(r"(postgresql|postgres)://", re.IGN
 _USERINFO: Final[re.Pattern[str]] = re.compile(r"([^@/]*)@")
 _COMPONENT_SEPARATORS: Final[re.Pattern[str]] = re.compile(r"[@:/,?&=]")
 _SCHEMA_PARAMETER: Final = "schema"
-# libpq parameters that hold secrets: the password and the passphrase of the client key.
-_CREDENTIAL_PARAMETERS: Final[frozenset[str]] = frozenset({"password", "sslpassword"})
 _DATABASE_PARAMETER: Final = "dbname"
 _REDACTED: Final = "***"
 _ENCODE_HINT: Final = (
@@ -214,7 +213,7 @@ def _secrets(userinfo: str | None, query_items: list[str]) -> tuple[str, ...]:
         raw.append(userinfo.partition(":")[2])
     for item in query_items:
         key, _, value = item.partition("=")
-        if unquote(key) in _CREDENTIAL_PARAMETERS:
+        if unquote(key) in CREDENTIAL_PARAMETERS:
             raw.append(value)
     found = {spelling for secret in raw for spelling in (secret, unquote(secret)) if spelling}
     return tuple(sorted(found))

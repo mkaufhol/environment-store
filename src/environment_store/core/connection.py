@@ -11,22 +11,30 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final, Protocol
+from urllib.parse import unquote
 
 from environment_store.core.adapter import Adapter, SetupMode
 from environment_store.core.errors import MissingExtraError, ValidationError
 
 __all__ = [
     "ADAPTER_FACTORIES",
+    "CREDENTIAL_PARAMETERS",
     "AdapterEntry",
     "AdapterFactory",
+    "connection_has_credentials",
     "open_adapter",
     "scheme_of",
 ]
+
+CREDENTIAL_PARAMETERS: Final[frozenset[str]] = frozenset({"password", "sslpassword"})
+"""Query parameters that hold secrets (libpq: the password and the client key's passphrase)."""
 
 # RFC 3986 scheme characters, followed by "//".
 _SCHEME: Final[re.Pattern[str]] = re.compile(r"([A-Za-z][A-Za-z0-9+.-]*)://")
 _IDENTIFIER: Final[str] = r"[A-Za-z_][A-Za-z0-9_]*"
 _TARGET: Final[re.Pattern[str]] = re.compile(rf"{_IDENTIFIER}(?:\.{_IDENTIFIER})*:{_IDENTIFIER}")
+# Like libpq: the user information ends at the first '@' that comes before any '/'.
+_USERINFO: Final[re.Pattern[str]] = re.compile(r"([^@/]*)@")
 
 
 class AdapterFactory(Protocol):
@@ -114,6 +122,32 @@ def scheme_of(url: str) -> str:
         )
         raise ValidationError(message)
     return match.group(1).lower()
+
+
+def connection_has_credentials(url: str) -> bool:
+    """Tell whether a connection string holds a password (PD 9).
+
+    The one detector shared by the project file warning (D33) and the PostgreSQL adapter: a
+    non-empty password in the URL user information, or a query parameter whose percent-decoded
+    name is in `CREDENTIAL_PARAMETERS`.
+
+    Args:
+        url: The connection string; strings without `scheme://` never count as holding one.
+
+    Returns:
+        Whether the string contains credentials.
+    """
+    match = _SCHEME.match(url)
+    if match is None:
+        return False
+    rest = url[match.end() :]
+    userinfo = _USERINFO.match(rest)
+    if userinfo is not None and userinfo.group(1).partition(":")[2]:
+        return True
+    query = rest.partition("?")[2].partition("#")[0]
+    return any(
+        unquote(item.partition("=")[0]) in CREDENTIAL_PARAMETERS for item in query.split("&")
+    )
 
 
 def open_adapter(

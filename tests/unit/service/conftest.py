@@ -8,29 +8,17 @@ from typing import Final, NoReturn, Self
 import pytest
 
 from environment_store.core.errors import BackendError
-from environment_store.core.models import KdfParams, StoreInfo, StoreRecord
+from environment_store.core.models import StoreInfo, StoreRecord
 from environment_store.core.secrets import KeyMaterial, Passphrase
 from environment_store.service import StoreService
 from tests.support.clock import FakeClock
+from tests.support.kdf import CheapKdf
 from tests.support.memory_adapter import MemoryAdapter, MemoryBackend
 
 KEY: Final = KeyMaterial(key=b"\x01" * 32)
 OTHER_KEY: Final = KeyMaterial(key=b"\x02" * 32)
 PASSPHRASE: Final = Passphrase(text="correct horse battery staple")
 OTHER_PASSPHRASE: Final = Passphrase(text="Tr0ub4dor&3")
-
-
-class CheapKdf:
-    """A `kdf_params_factory` with the cheapest Argon2id parameters and a new salt per call."""
-
-    calls: int
-
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def __call__(self) -> KdfParams:
-        self.calls += 1
-        return KdfParams(iterations=1, memory_kib=8, lanes=1, salt=self.calls.to_bytes(16, "big"))
 
 
 class UntouchableAdapter:

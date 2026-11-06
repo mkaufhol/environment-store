@@ -29,6 +29,7 @@ __all__ = [
     "InvalidKeyFileError",
     "KeyModeMismatchError",
     "KeyRequiredError",
+    "KeySourceError",
     "MissingExtraError",
     "NotEncryptedError",
     "NotFoundError",
@@ -213,6 +214,14 @@ class InvalidKeyFileError(CryptoError):
 
 class KeyModeMismatchError(CryptoError):
     """The secret does not match the store's key mode (key file vs. passphrase)."""
+
+
+class KeySourceError(CryptoError):
+    """A key or passphrase cannot be read: missing or unreadable file, not UTF-8, or empty.
+
+    A missing key file is a key error like a missing key (PD 3), so it shares exit code 4. The
+    message names the source (a path or stdin), never its content.
+    """
 
 
 # --- exit code 5 -------------------------------------------------------------------------------

@@ -1,7 +1,8 @@
-"""Import direction (IMPLEMENTATION-PLAN.md §3).
+"""Import direction (IMPLEMENTATION-PLAN.md §3, §6.1).
 
-core <- crypto <- service; core <- adapters; core <- formats. Adapter subpackages import
-core and adapters.sql only, never each other.
+core <- crypto <- service; core <- adapters; core <- formats; core, crypto <- config;
+core, crypto, service, formats, config <- library. Adapter subpackages import core and
+adapters.sql only, never each other. No frontend layer imports adapters (D31).
 """
 
 import ast
@@ -29,6 +30,8 @@ _ALLOWED: Final[dict[str, frozenset[str]]] = {
     "adapters.sqlite": frozenset({"core", "adapters.sql", "adapters.sqlite"}),
     "adapters.postgres": frozenset({"core", "adapters.sql", "adapters.postgres"}),
     "formats": frozenset({"core", "formats", "_toml"}),
+    "config": frozenset({"core", "crypto", "config"}),
+    "library": frozenset({"core", "crypto", "service", "formats", "config", "library"}),
 }
 
 
@@ -107,6 +110,17 @@ def _source_modules() -> list[tuple[str, Path]]:
         ("environment_store.adapters.postgres.db", "import environment_store.adapters.files", 1),
         ("environment_store.adapters", "from environment_store.adapters.sql import x", 1),
         ("environment_store.formats.dotenv", "from environment_store.adapters.files import x", 1),
+        ("environment_store.config.settings", "from environment_store.crypto import x", 0),
+        ("environment_store.config.settings", "from environment_store.service import x", 1),
+        ("environment_store.config.settings", "from environment_store.library import x", 1),
+        ("environment_store.config.secrets", "from environment_store.formats import x", 1),
+        ("environment_store.library.store", "from environment_store.service import x", 0),
+        ("environment_store.library.store", "from environment_store.config import x", 0),
+        ("environment_store.library.store", "from environment_store.formats import x", 0),
+        ("environment_store.library.store", "import environment_store.adapters.sqlite", 1),
+        ("environment_store.library.store", "from environment_store.adapters import x", 1),
+        ("environment_store.library.store", "from environment_store.cli import x", 1),
+        ("environment_store.library.store", "import environment_store", 1),
     ],
 )
 def test_import_direction_checker_detects_upward_imports(
@@ -138,6 +152,8 @@ def test_layer_packages_are_found_in_the_source_tree() -> None:
         "environment_store.service",
         "environment_store.adapters",
         "environment_store.adapters.sql",
+        "environment_store.config",
+        "environment_store.library",
     } <= found
 
 
