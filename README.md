@@ -1,147 +1,115 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mkaufhol/environment-store/main/docs/assets/environment-store-logo.svg" alt="Environment store logo" width="200">
+  <img src="https://raw.githubusercontent.com/mkaufhol/environment-store/main/docs/assets/environment-store-logo.svg" alt="Environment Store logo" width="200">
 </p>
 
-<h1 align="center">Environment store</h1>
+<h1 align="center">Environment Store</h1>
 
-Store and manage environment variables persistently, in a hierarchy, on different backends: a local file,
-PostgreSQL, AWS Parameter Store or AWS Secrets Manager. Use it from **Python**, the **command line** or an
-interactive **terminal UI**.
+Environment Store keeps your environment variables in **named stores**: flat collections of `NAME=value`
+pairs such as `base`, `dev`, `prod` or `customer-a`. Stores live in a backend you pick with a connection string:
+JSON or TOML files in a directory, a SQLite file, or a PostgreSQL database. Any store can be encrypted as a whole
+with AES-256-GCM, using a key file or a passphrase. You use the stores from the `envs` command line tool, from
+Python with one function call, or from a terminal UI. An
+[agent skill](https://github.com/mkaufhol/environment-store/blob/main/.claude/skills/environment-store-cli/SKILL.md)
+teaches coding agents how to drive the CLI safely.
 
-- **Hierarchical:** organisation > project > environment > service. Child levels override their parents.
-- **Pluggable backends:** the same API, CLI and TUI for every store, and a `transfer` command to move between them.
-- **Three interfaces:** `EnvironmentStoreManager` in Python, the `environment-store` CLI, and a Textual-based TUI.
-- **Agent friendly:** ships a [skill](https://github.com/mkaufhol/environment-store/blob/main/.claude/skills/environment-store-cli/SKILL.md) that teaches LLM agents to use the CLI safely.
+> **Version 2.0 is in development (`2.0.0.dev0`) and not on PyPI yet.** `pip install environment-store` currently
+> installs the old 0.1 line, which has no `envs` command. Until 2.0 is released, install it from a clone of the
+> repository as shown below;
+> [Installation](https://github.com/mkaufhol/environment-store/blob/main/docs/installation.md) has the details.
 
+## The CLI in 30 seconds
+
+Install from a clone (Python 3.13 or newer):
+
+```console
+$ git clone https://github.com/mkaufhol/environment-store.git && cd environment-store
+$ git switch feature/v2
+$ python3.13 -m venv .venv && . .venv/bin/activate
+$ pip install -e '.[cli]'
+$ envs --version
+environment-store 2.0.0.dev0
 ```
-root                      LOG_LEVEL=info
-└── acme                  (organisation)       DB_HOST=db.acme.internal
-    └── webapp            (project)
-        └── prod          (environment)        LOG_LEVEL=warning
-            └── api       (service)            PORT=8080
+
+Then, in any directory:
+
+```console
+$ export ENV_STORE_CONNECTION=json://.envs        # keep the stores as JSON files in ./.envs
+
+$ envs create-store base
+created store 'base'
+$ envs set -s base DB_HOST=localhost DB_PORT=5432 LOG_LEVEL=info
+set DB_HOST, DB_PORT, LOG_LEVEL in store 'base'
+$ envs create-store dev
+created store 'dev'
+$ envs set -s dev DB_HOST=dev.example.com DEBUG=true
+set DB_HOST, DEBUG in store 'dev'
+
+$ envs ls -v --source base dev                    # later stores win
+DB_HOST=dev.example.com  dev
+DB_PORT=5432             base
+DEBUG=true               dev
+LOG_LEVEL=info           base
+
+$ envs run base dev -- sh -c 'echo "$DB_HOST:$DB_PORT debug=$DEBUG"'
+dev.example.com:5432 debug=true
+
+$ envs export base dev -f .env
+exported to '.env'
 ```
 
-The resolved variables of `acme / webapp / prod / api` are all of the above combined, deeper values winning:
-`DB_HOST=db.acme.internal`, `LOG_LEVEL=warning`, `PORT=8080`.
-
-## Quickstart
-
-```bash
-uv add "environment-store[tui]"        # or: pip install "environment-store[tui]"
-
-export ENVIRONMENT_STORE_BACKEND=json ENVIRONMENT_STORE_JSON_FILE=./store.json
-
-environment-store set LOG_LEVEL info
-environment-store set PORT 8080 -o acme -p webapp -e prod -s api
-environment-store list -o acme -p webapp -e prod -s api --resolved
-environment-store tui
-```
+## Python in 5 lines
 
 ```python
-from environment_store import EnvironmentStoreManager
-from environment_store.adapters.json import JsonFileAdapter
+import os
+import environment_store
 
-manager = EnvironmentStoreManager(adapter=JsonFileAdapter("./store.json"))
-manager.set_variable("DB_HOST", "localhost", organisation="acme", project="webapp")
-manager.get_resolved_variables(organisation="acme", project="webapp")
+environment_store.load("base", "dev", connection="json://.envs")
+print(os.environ["DB_HOST"])  # dev.example.com
 ```
 
-The full walkthrough is in the **[Quickstart](https://github.com/mkaufhol/environment-store/blob/main/docs/quickstart.md)**.
+`load()` works like `load_dotenv()`: it merges the stores and puts the variables into `os.environ`. Variables that
+are already set are kept unless you pass `overwrite=True`.
+
+## Features
+
+- **Named, layered stores.** Combine `base` + `dev` + `customer-a` in one call; the last store wins, or the first
+  with `--first-wins`. `--source` shows which store each value comes from.
+- **Four backends, one interface.** `json://dir`, `toml://dir`, `sqlite:///file.db`, `postgresql://host/db`. Move
+  or copy a store between backends with `envs mv-store` / `envs cp-store --to`.
+- **Optional encryption per store.** AES-256-GCM with a random key file or an Argon2id passphrase. Names and
+  values are encrypted together. Keys are never stored, cached or accepted as literal command line text.
+- **Load anywhere.** `envs run` starts a command with the variables, `eval "$(envs export-shell ...)"` loads them
+  into a POSIX shell, `envs export` writes dotenv, JSON or TOML, and `environment_store.load()` fills `os.environ`.
+- **Safe dotenv files.** Exported `.env` files read back exactly with both python-dotenv and Docker Compose; values
+  that cannot be written safely are refused with a clear hint instead of being written wrong.
+- **Project file.** A `.envstore.toml` in your project names the connection, the default stores and the key files,
+  so `envs run -- ./manage.py runserver` is all you type.
+- **Scriptable.** Data on stdout, messages on stderr, `--json` output, stable exit codes and `--noinput` for CI.
+- **Terminal UI.** `envs tui` lets you browse stores and add, edit and delete variables, with values masked and
+  each screen's keys in its footer.
 
 ## Documentation
 
-| Guide | |
+| Guide | What it covers |
 |---|---|
-| [Quickstart](https://github.com/mkaufhol/environment-store/blob/main/docs/quickstart.md) | five minutes from install to your first variables |
-| [Installation](https://github.com/mkaufhol/environment-store/blob/main/docs/installation.md) | extras, uv, pip, git, `uvx` |
-| [Python usage](https://github.com/mkaufhol/environment-store/blob/main/docs/python-usage.md) | the `EnvironmentStoreManager` API |
-| [Command line interface](https://github.com/mkaufhol/environment-store/blob/main/docs/cli.md) | all commands, `transfer`, exit codes, recipes |
-| [Terminal UI](https://github.com/mkaufhol/environment-store/blob/main/docs/tui.md) | layout and key bindings |
-| [Storage backends](https://github.com/mkaufhol/environment-store/blob/main/docs/backends/README.md) | JSON, PostgreSQL, Parameter Store, Secrets Manager |
-| [Development](https://github.com/mkaufhol/environment-store/blob/main/docs/development.md) | setup, architecture, tests, contributing |
-| [Adding a storage adapter](https://github.com/mkaufhol/environment-store/blob/main/docs/adding-an-adapter.md) | developer guide for new backends |
+| [Quickstart](https://github.com/mkaufhol/environment-store/blob/main/docs/quickstart.md) | From install to plain and encrypted stores, `.env` export, `envs run` and Python, in ten minutes |
+| [Installation](https://github.com/mkaufhol/environment-store/blob/main/docs/installation.md) | Installing from source today, pip/uv/uvx once 2.0 is on PyPI, the optional extras, entry points |
+| [CLI reference](https://github.com/mkaufhol/environment-store/blob/main/docs/cli.md) | Every command and option, with examples |
+| [Python library](https://github.com/mkaufhol/environment-store/blob/main/docs/python.md) | `load()`, `EnvironmentStore`, `Environment`, keys and errors |
+| [Configuration](https://github.com/mkaufhol/environment-store/blob/main/docs/configuration.md) | Connection strings, `.envstore.toml`, environment variables, merge order |
+| [Encryption and keys](https://github.com/mkaufhol/environment-store/blob/main/docs/encryption.md) | Key files, passphrases, `rekey`, `encrypt`, decrypting with `cp-store --plain` |
+| [Terminal UI](https://github.com/mkaufhol/environment-store/blob/main/docs/tui.md) | `envs tui` screens and key bindings |
+| [Agent skill](https://github.com/mkaufhol/environment-store/blob/main/.claude/skills/environment-store-cli/SKILL.md) | Instructions for coding agents that use the `envs` CLI |
 
-### Installation
+The links in this README are absolute so that they also work on PyPI. The
+[documentation index](https://github.com/mkaufhol/environment-store/blob/main/docs/README.md) lists the guides by task.
 
-The core package depends only on `pydantic` and includes the JSON backend and the CLI. Everything else is an extra:
+## Contributing
 
-| Extra | Adds |
-|---|---|
-| `aws` | AWS Parameter Store and Secrets Manager backends (boto3) |
-| `postgres` | PostgreSQL backend and `migrate` (psycopg, sqlalchemy, yoyo-migrations) |
-| `tui` | the terminal UI ([Textual](https://textual.textualize.io/)) |
-| `full` | all of the above |
-
-```bash
-uv add "environment-store[full]"
-```
-
-More, including installing from git and running without installing, in the [installation guide](https://github.com/mkaufhol/environment-store/blob/main/docs/installation.md).
-
-### Python
-
-Everything goes through `EnvironmentStoreManager`; only the adapter changes per backend. Pass the hierarchy as
-keyword arguments (`organisation=`, `project=`, `environment=`, `service=`); levels cannot be skipped.
-
-```python
-manager.set_variables({"LOG_LEVEL": "INFO"}, organisation="acme")
-manager.get_variable("DB_HOST", organisation="acme", project="webapp")  # exact level
-manager.get_resolved_variables(organisation="acme", project="webapp")  # with parent levels
-manager.get_child_levels(organisation="acme")  # ["webapp"]
-manager.delete_level(organisation="acme", project="webapp", confirm="webapp")
-```
-
-Reading, writing, resolving, discovering, deleting and copying are covered in the
-[Python guide](https://github.com/mkaufhol/environment-store/blob/main/docs/python-usage.md).
-
-### Command line
-
-```bash
-environment-store set DB_HOST localhost -o acme -p webapp
-environment-store get DB_HOST -o acme -p webapp
-environment-store list -o acme --resolved --format json
-environment-store import .env -o acme -p webapp -e dev
-environment-store delete-level -o acme -p webapp --dry-run
-environment-store transfer --dest-backend postgres --dest-database-url "$URL" --dry-run
-environment-store migrate            # PostgreSQL schema
-```
-
-Commands: `get`, `set`, `list`, `delete`, `import`, `children`, `delete-level`, `transfer`, `migrate`, `tui`.
-Choose the backend with `--backend` or `ENVIRONMENT_STORE_BACKEND`. Data goes to stdout, messages to stderr, and
-exit codes are stable. See the [CLI guide](https://github.com/mkaufhol/environment-store/blob/main/docs/cli.md) for every option.
-
-### Terminal UI
-
-```bash
-environment-store tui
-```
-
-A tree of your levels next to a table of their variables. Navigate with the arrow keys or `hjkl`; `a` add, `e` edit,
-`d` delete, `n` new level, `x` delete a level (you must type its name), `r` resolved view, `v` show values,
-`q` quit. See the [TUI guide](https://github.com/mkaufhol/environment-store/blob/main/docs/tui.md).
-
-### Storage backends
-
-| Backend | `--backend` | Stores |
-|---|---|---|
-| JSON file | `json` | one local file |
-| PostgreSQL (15+) | `postgres` | one row per variable; run `environment-store migrate` first |
-| AWS Parameter Store | `ssm` | one parameter per variable |
-| AWS Secrets Manager | `secretsmanager` | one secret per prefix |
-
-Options, IAM permissions, layouts and trade-offs are in [Storage backends](https://github.com/mkaufhol/environment-store/blob/main/docs/backends/README.md).
-
-### Development
-
-```bash
-uv sync && pre-commit install
-uv run pytest && uv run ruff check && uv run ty check
-```
-
-The CLI, the TUI and any future frontend are thin layers over `EnvironmentStoreManager`; all logic lives in
-`environment_store/core/`. Architecture, testing, adding features and adapters, and database migrations are in the
-[development guide](https://github.com/mkaufhol/environment-store/blob/main/docs/development.md). To add a new storage backend follow
-[Adding a storage adapter](https://github.com/mkaufhol/environment-store/blob/main/docs/adding-an-adapter.md).
+- What 2.0 does: [SPEC-V2.md](https://github.com/mkaufhol/environment-store/blob/main/SPEC-V2.md)
+- How it is built: [IMPLEMENTATION-PLAN.md](https://github.com/mkaufhol/environment-store/blob/main/IMPLEMENTATION-PLAN.md)
+- How to contribute (binding rules: TDD, typing, 100 % coverage):
+  [CONTRIBUTING.md](https://github.com/mkaufhol/environment-store/blob/main/CONTRIBUTING.md)
 
 ## License
 

@@ -1,119 +1,372 @@
 # Terminal UI
 
-An interactive terminal UI to browse and edit a store, built with [Textual](https://textual.textualize.io/).
-It does the same as the [CLI](cli.md) and [Python API](python-usage.md), just interactively.
+`envs tui` opens a full-screen terminal interface for your stores. You can browse the stores, unlock an encrypted
+one, look at its variables with the values hidden, and add, edit or delete variables. Everything else (creating,
+copying and deleting stores, import and export, keys) stays in the [command line](cli.md).
 
-## Install and start
+- [Install the tui extra](#install-the-tui-extra)
+- [Start the TUI](#start-the-tui)
+- [The screens at a glance](#the-screens-at-a-glance)
+- [Key bindings](#key-bindings)
+- [How do I…](#how-do-i)
+- [Encrypted stores](#encrypted-stores)
+- [Errors and changes made elsewhere](#errors-and-changes-made-elsewhere)
+- [Limitations](#limitations)
+- [Starting the TUI from Python](#starting-the-tui-from-python)
 
-The TUI needs the `tui` extra (or `full`), see [Installation](installation.md):
+## Install the tui extra
 
-```bash
-uv add "environment-store[tui]"
+The TUI is built on [Textual](https://textual.textualize.io/) and ships as an optional extra. The `envs` command
+itself comes from the `cli` extra, so install both:
+
+```sh
+pip install 'environment-store[cli,tui]'
+# or everything, including PostgreSQL support:
+pip install 'environment-store[all]'
 ```
 
-Start it with the same backend options as the CLI. They go **before** `tui`:
-
-```bash
-environment-store --backend json --json-file ./store.json tui
-
-# or via environment variables
-export ENVIRONMENT_STORE_BACKEND=postgres
-export ENVIRONMENT_STORE_DATABASE_URL=postgresql+psycopg://user:pass@localhost/environment_store
-environment-store tui
-```
-
-Run it once without installing anything:
-
-```bash
-uvx --from "environment-store[tui]" environment-store --backend json --json-file ./store.json tui
-```
-
-The backend options are listed in the [CLI guide](cli.md#choosing-a-backend).
-
-## The screen
+Without Textual, `envs tui` stops with exit code 1 and tells you what to install:
 
 ```
-┌────────────────────┐┌─────────────────────────────────────────────────────┐
-│ ▼ root             ││ acme / webapp / prod  (own variables)               │
-│   ▼ acme           ││ Name         Value                                  │
-│     ▼ webapp       ││ LOG_LEVEL    ***                                    │
-│       ▶ prod       ││ DB_HOST      ***                                    │
-└────────────────────┘└─────────────────────────────────────────────────────┘
+Error: this feature needs the optional 'tui' dependencies: pip install 'environment-store[tui]'
 ```
 
-- **Left: the tree** of levels: organisation > project > environment > service. Children load when you expand a
-  node. The first node, `root`, is the root level.
-- **Right: the variables** of the selected level. The line above the table shows the level and whether you see its own variables or
-  the [resolved](#resolved-view) ones.
-- **Values are hidden** (`***`) until you press `v`, so a screen share does not leak secrets.
+See [Installation](installation.md) for `uv` and `pipx`.
 
-Selecting a node in the tree immediately shows that level's variables.
+## Start the TUI
 
-## Keys
+```sh
+envs -c json://envs tui
+```
+
+`envs tui` has no options of its own. It uses the same global settings as every other command, and they go
+**before** `tui`:
+
+| Setting | Where it comes from |
+|---|---|
+| Connection | `-c/--connection`, else `ENV_STORE_CONNECTION`, else `connection` in `.envstore.toml` |
+| Keys for encrypted stores | the `[keys]` table in `.envstore.toml`, else the Unlock dialog |
+| Project file | `.envstore.toml` in the current directory or a parent; `--no-project` ignores it |
+
+So in a project with an `.envstore.toml` that sets `connection`, a plain `envs tui` is enough. The project file's
+`stores` list and `ordered_overwrite` play no role in the TUI: it always shows every store in the backend, one at a
+time. See [Configuration](configuration.md) for the project file.
+
+`envs tui` refuses to start when it cannot be interactive (exit code 1):
+
+```console
+$ envs -c json://envs tui < /dev/null
+Error: envs tui needs a terminal: stdin and stdout must not be redirected
+$ envs -c json://envs --noinput tui
+Error: envs tui is interactive and cannot run with --noinput
+```
+
+When you quit normally the exit code is 0. If the TUI crashes, it prints a traceback (without the values of local
+variables, so no secrets end up on screen) and exits with a non-zero code.
+
+## The screens at a glance
+
+The TUI has two full screens and three dialogs. Every screen has the title bar at the top and a footer at the bottom
+that lists the keys you can press right now, including `⏎` (Enter) where it opens, edits or unlocks. The dialogs
+show their own keys in their footer.
+
+### Stores
+
+The first screen lists every store in the backend, sorted by name, with its encryption:
+
+```
+ ⭘                              Environment Store
+ Store       Encryption
+ customer-a  encrypted (passphrase)
+ dev         plain
+ prod        encrypted (keyfile)
+
+ ⏎ Open  r Reload  q Quit
+```
+
+The Encryption column shows `plain`, `encrypted (keyfile)` or `encrypted (passphrase)`. Listing the stores needs no
+key, so you always see every store, encrypted or not.
+
+If the backend holds no stores, the screen says so instead of showing an empty table. The TUI does not create
+stores; create one on the command line and press `r`:
+
+```
+ ⭘                              Environment Store
+ Store  Encryption
+No stores yet. Create one with envs create-store NAME
+
+ ⏎ Open  r Reload  q Quit
+```
+
+An empty list with stores you expected usually means a typo in the connection; `envs ls-store` shows the location
+it looked at.
+
+### Variables
+
+Opening a store shows its variables, sorted by name. The title bar names the store, and every value is hidden behind
+the same eight dots, so you cannot guess a value from its length:
+
+```
+ ⭘                       Environment Store — store dev
+ Variable  Value
+ DB_HOST   ••••••••
+ DEBUG     ••••••••
+ GREETING  ••••••••
+
+ ⏎ Edit  v Show / hide values  a Add  e Edit  d Delete  r Reload  esc Back  q Quit
+```
+
+Press `v` to show the values. A value that does not fit on one line (a newline, a tab, a carriage return) is shown as
+a JSON string, for example `"line1\nline2"`. Values start hidden every time you open a store.
+
+### Edit and Add
+
+A dialog with a one-line name field and a multi-line value editor. When you edit, the name is fixed and the cursor
+starts in the value; when you add, you type the name first.
+
+```
+  Edit 'DEBUG' in store 'dev'
+  ┌──────────────────────────────────────────┐
+  │ DEBUG                                    │
+  └──────────────────────────────────────────┘
+  ┌──────────────────────────────────────────┐
+  │ true                                     │
+  │                                          │
+  └──────────────────────────────────────────┘
+   Save (ctrl+s)      Cancel (esc)
+
+ ^s Save  esc Cancel
+```
+
+### Unlock
+
+Appears when you open an encrypted store and no key from the project file fits (see
+[Encrypted stores](#encrypted-stores)):
+
+```
+  Unlock store 'prod', encrypted (keyfile)
+  ┌──────────────────────────────────────────────┐
+  │ Key or passphrase file, e.g. ~/.keys/a.key   │
+  └──────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────┐
+  │ or the passphrase                            │
+  └──────────────────────────────────────────────┘
+       Unlock         Cancel (esc)
+
+ ⏎ Unlock  esc Cancel
+```
+
+### Confirm
+
+A yes/no question, for example `Delete variable 'DB_HOST' from store 'dev'?`. The **No** button has the focus, so a
+stray Enter never confirms. Its footer reads `y Yes  n No  esc Cancel`; `Esc` answers no.
+
+## Key bindings
+
+### Stores screen
 
 | Key | Action |
 |---|---|
-| `↑` `↓` or `k` `j` | move up / down |
-| `→` or `l` | tree: expand the node, then step into its first child; on a node without children switch to the variables table |
-| `←` or `h` | tree: collapse the node, or go to its parent if it is already collapsed; table: back to the tree |
-| `a` | add a variable at the selected level |
-| `e` | edit the highlighted variable |
-| `d` | delete the highlighted variable (asks for confirmation) |
-| `n` | create a new child level under the selected node |
-| `x` | delete the selected level and everything below it (type its name to confirm) |
-| `r` | toggle the resolved view |
-| `v` | show / hide values |
-| `F5` | reload the tree and the table from the store |
-| `Esc` | cancel a dialog |
-| `q` | quit |
+| `↑` / `↓`, `Page Up` / `Page Down`, `Home` / `End` | Move through the list |
+| `Enter` | Open the selected store |
+| `r` | Reload the list of stores |
+| `q` | Quit |
 
-The footer always shows the available keys.
+### Variables screen
 
-## Working with variables
-
-**Add (`a`)**: asks for a name and a value and saves them at the selected level.
-
-**Edit (`e`)**: edits the value of the highlighted variable. The name is fixed.
-
-**Delete (`d`)**: asks for confirmation, then removes that variable only.
-
-## Resolved view
-
-Press `r` to see what a level actually receives: its own variables merged with all parent levels, deeper values
-winning. For `acme / webapp / prod / api` that is root, organisation, project, environment and service variables
-combined.
-
-The resolved view is read-only. Press `r` again to go back to the level's own variables before editing or
-deleting.
-
-## Creating levels
-
-A level exists as long as it holds a variable, so creating one means creating its first variable.
-
-Select the parent node and press `n`. The dialog is titled with the kind of level you are creating (an organisation
-under `root`, a project under an organisation, ...). Enter the new level's name, a first variable name and its value.
-The tree reloads and moves to the new level. On a service, `n` shows a warning, because services have no children.
-
-## Deleting a level
-
-Select the level and press `x`. A warning states how many levels and variables below it will be removed, and that this
-cannot be undone. **The Delete button stays disabled until you type the level's exact name.** `Esc` or `Cancel`
-aborts. Afterwards the cursor moves to the parent.
-
-The root level cannot be deleted.
-
-## What the TUI does not do
-
-Bulk administration is CLI only: [`import`](cli.md#import-set-many-variables-from-a-file),
-[`transfer`](cli.md#transferring-a-store-between-backends) and [`migrate`](cli.md#migrate-apply-database-migrations-postgresql).
-The TUI shows an error notification if the backend fails (for example, missing database tables), instead of crashing.
-
-## Troubleshooting
-
-| Symptom | Fix |
+| Key | Action |
 |---|---|
-| `The TUI needs the tui extra` | install `environment-store[tui]` |
-| `No backend selected` | pass `--backend` before `tui`, or set `ENVIRONMENT_STORE_BACKEND` |
-| error notification about a missing table on a new PostgreSQL database | run `environment-store migrate` first |
-| tree looks stale after changes from another process | press `F5` |
-| garbled colours or characters | use a terminal with true-colour and UTF-8 support |
+| `↑` / `↓`, `Page Up` / `Page Down`, `Home` / `End` | Move through the list |
+| `v` | Show or hide the values |
+| `a` | Add a variable |
+| `e` or `Enter` | Edit the selected variable |
+| `d` | Delete the selected variable (asks first) |
+| `r` | Read the store again |
+| `Esc` | Back to the stores (the key is forgotten) |
+| `q` | Quit the TUI |
+
+### Edit / Add dialog
+
+| Key | Action |
+|---|---|
+| `Ctrl+S` | Save |
+| `Esc` | Cancel, nothing is written |
+| `Enter` in the name field | Move to the value editor |
+| `Enter` in the value editor | A new line in the value |
+| `Tab` / `Shift+Tab` | Move between fields and buttons |
+
+### Unlock dialog
+
+| Key | Action |
+|---|---|
+| `Enter` in either field | Unlock |
+| `Tab` / `Shift+Tab` | Move between the fields and buttons |
+| `Esc` | Cancel and go back to the stores |
+
+### Confirm dialog
+
+| Key | Action |
+|---|---|
+| `y` | Yes |
+| `n` | No |
+| `Esc` | Cancel (the same as No) |
+
+### Available everywhere
+
+These come from Textual itself, not from Environment Store:
+
+| Key | Action |
+|---|---|
+| `Ctrl+Q` | Quit from any screen |
+| `Ctrl+C` | Does **not** quit. It only shows a hint (or copies the selected text in an input field). Quit with `q` on the stores or variables screen, or `Ctrl+Q` anywhere. |
+
+Textual's command palette (`Ctrl+P`) is turned off: its screenshot command would save the whole screen, including
+revealed values, to a plain file. Still, don't reveal values with `v` while you share your screen.
+
+You can also click rows and buttons with the mouse.
+
+## How do I…
+
+### …look at a value?
+
+Select the store and press `Enter`, then press `v`. Press `v` again to hide the values.
+
+### …add a variable?
+
+On the variables screen press `a`, type the name, press `Enter` to move to the value, type the value and press
+`Ctrl+S`. The name must be a valid variable name: letters, digits and `_`, not starting with a digit. A bad name or
+a name that already exists keeps the dialog open with what you typed and shows the problem, for example:
+
+```
+variable 'DEBUG' exists already in store 'dev': edit it
+```
+
+### …change a value?
+
+Select the variable and press `e` or `Enter`, change the value, press `Ctrl+S`. If you save without changing
+anything, the dialog closes and nothing is written. The value may be empty and may span several lines; whatever is
+in the editor is stored exactly, with no trailing newline added or removed.
+
+### …delete a variable?
+
+Select it, press `d`, then `y`. `n` or `Esc` keeps it.
+
+### …create, rename or delete a store?
+
+Not in the TUI. Use [`envs create-store`, `envs mv-store` and `envs rm-store`](cli.md), then press `r` on the stores
+screen to see the change.
+
+## Encrypted stores
+
+When you open an encrypted store, the TUI looks for its key in this order:
+
+1. **The `[keys]` table of `.envstore.toml`.** If the project file names a key or passphrase file for the store, the
+   store opens without asking:
+
+   ```toml
+   # .envstore.toml
+   connection = "json://envs"
+
+   [keys]
+   prod = "keys/prod.key"          # relative to the project file's directory
+   customer-a = "~/.keys/customer-a.pass"
+   ```
+
+2. **The Unlock dialog.** If there is no `[keys]` entry, or the entry does not work (missing file, wrong key), the
+   TUI shows the error, naming the file it tried, and opens the Unlock dialog:
+
+   ```
+   unlocking with the key file '/home/me/project/keys/prod.key' from the project file failed: cannot read key or passphrase file '/home/me/project/keys/prod.key': No such file or directory
+   ```
+
+In the Unlock dialog fill in **exactly one** of the two fields:
+
+- **Key or passphrase file**: the path to a key file (from `envs keygen`) for a `keyfile` store, or to a file that
+  holds the passphrase for a `passphrase` store. `~` is expanded. One trailing newline in a passphrase file is
+  ignored.
+- **or the passphrase**: type the passphrase itself. The field is hidden. For a `keyfile` store you can paste the
+  key text here instead (the `envstore-key-v1:...` line, for example from a password manager after `envs keygen -`),
+  so the key never has to be on disk. If you type a passphrase into this field for a `keyfile` store, you get
+  `unlocking with the typed passphrase failed: not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen`.
+
+Then press `Enter` or click **Unlock**. The store is decrypted before the dialog closes:
+
+- With the wrong key the dialog stays open, shows the error with the input it came from, for example
+  `unlocking with the key file 'old.key' failed: cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified`,
+  and clears the passphrase field.
+- With both fields empty, or both filled, it asks you to `enter either a key or passphrase file, or the passphrase`.
+- A key file for a passphrase store, or a passphrase file for a keyfile store, is refused with the same messages as
+  in the CLI (see [Encryption](encryption.md)).
+
+Unlocking a passphrase store takes a moment: the passphrase goes through Argon2id with 64 MiB of memory on
+purpose.
+
+**The key is kept only while the store is open.** When you press `Esc` to go back to the stores, the key is
+forgotten; opening the store again uses `[keys]` or asks again. The TUI never saves or caches keys.
+
+Values you add or edit in an encrypted store are encrypted with the key you unlocked it with. Typing a secret into
+the TUI keeps it out of your shell history, just like `envs set -s prod NAME` with the hidden prompt.
+
+## Errors and changes made elsewhere
+
+Problems appear as a red notification titled **Error** in the corner of the screen. It shows the message the CLI
+would print, without remedies that only make sense on the command line (such as `-o`), and never a value or a key. For example, a `[keys]` entry for a plaintext store:
+
+```
+[keys] in '/home/me/project/.envstore.toml' names a key for store 'dev', which is not encrypted: remove the entry
+```
+
+The TUI remembers which revision of a store it is showing. If someone else (another terminal, a CI job, a teammate on
+the same database) changes the store while you have it open, your next save or delete writes **nothing** and you get
+a question:
+
+```
+store 'prod' was changed elsewhere since it was read; nothing was written: reload it and try again. Reload store 'prod' now?
+```
+
+Press `y` to read the store again, then repeat your change. Nothing is ever overwritten silently.
+
+## Limitations
+
+- **Variables only.** Store lifecycle (`create-store`, `rm-store`, `cp-store`, `mv-store`), `import`, `export`,
+  `encrypt`, `rekey` and `keygen` are CLI-only.
+- **One store at a time.** The TUI does not merge stores the way `envs ls base dev` does, and it ignores `stores`
+  and `ordered_overwrite` in the project file.
+- **One variable per write.** Each save or delete is its own write. To change many variables in one write, use
+  `envs import`, or, for a plaintext store only, `envs set` with several `KEY=VALUE` pairs. Encrypted stores refuse
+  `KEY=VALUE` pairs: `envs set` takes one `KEY` with its value piped in or typed at the hidden prompt.
+- **Some multi-line values cannot be edited.** A value with mixed line endings (for example `\r\n` and `\n` in one
+  value) or other line separators would not survive the editor unchanged, so the TUI refuses to edit it:
+
+  ```
+  variable 'MIXED' has line breaks the editor cannot keep unchanged (mixed line endings or other line separators): change it with 'envs set'
+  ```
+
+  You can still view and delete such a variable. Change it with `envs set` or `envs import`.
+- **Interactive only.** No `--noinput`, no redirected stdin or stdout. For scripts and CI use the [CLI](cli.md) or
+  the [Python library](python.md).
+- **No key in an environment variable.** Like the rest of the tool, the TUI reads keys only from `[keys]` or what you
+  type.
+
+## Starting the TUI from Python
+
+The `environment_store.tui` package exposes `run_tui` and the Textual app class `EnvironmentStoreApp`. Importing the
+package without the `tui` extra raises `MissingExtraError`.
+
+```python
+from pathlib import Path
+
+from environment_store import EnvironmentStore
+from environment_store.tui import run_tui
+
+with EnvironmentStore("json://envs") as store:
+    run_tui(store, key_paths={"prod": Path("prod.key")})
+```
+
+| Parameter | Meaning |
+|---|---|
+| `store` | An open `EnvironmentStore`. You close it after the TUI ends. |
+| `key_paths` | Required, keyword-only. Store name → key or passphrase file, used like `[keys]` before asking. Pass `{}` to always ask in the Unlock dialog. |
+| `project_file` | Optional path of the project file, only used to name it in error messages. |
+
+`run_tui` blocks until the user quits. After a crash it raises `SystemExit` with the app's non-zero return code.

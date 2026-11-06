@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "encrypted": false,
+  "revision": 3,
+  "created_at": "2026-11-06T10:00:00Z",
+  "updated_at": "2026-11-06T12:30:00.250000Z",
+  "variables": {
+    "DB_HOST": "localhost",
+    "DB_PORT": "5432",
+    "MULTI": "a\nb \"q\" ä"
+  }
+}
