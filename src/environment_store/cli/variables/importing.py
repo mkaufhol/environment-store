@@ -1,0 +1,81 @@
+"""`envs import`: fill an existing store from a dotenv, JSON or TOML file (spec §6.10, D22).
+
+The input is read and parsed before the store's key is resolved, so a missing file or a
+malformed document never costs a prompt. JSON and TOML input must be flat (D33); dotenv input
+is never interpolated (D37). An empty document changes nothing (PD 27).
+"""
+
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from types import MappingProxyType
+from typing import Final
+
+import typer
+
+from environment_store.cli.options import FileOpt, OverwriteOpt, StoreOpt, TypeOpt, WriteKeyOpt
+from environment_store.cli.output import err
+from environment_store.cli.secrets import existing_secret
+from environment_store.cli.state import get_state
+from environment_store.core.errors import ValidationError
+from environment_store.formats import dotenv, json_format, toml_format
+from environment_store.formats.infer import Format, infer_format
+from environment_store.library.files import read_input_file
+
+__all__ = ["import_variables"]
+
+_STDIN: Final = "-"
+_INPUT_PURPOSE: Final = "the import input"
+_LOADERS: Final[Mapping[Format, Callable[[str], dict[str, str]]]] = MappingProxyType(
+    {Format.DOTENV: dotenv.loads, Format.JSON: json_format.loads, Format.TOML: toml_format.loads}
+)
+
+
+def import_variables(  # noqa: PLR0913 - one parameter per option of the command
+    ctx: typer.Context,
+    *,
+    store: StoreOpt,
+    file: FileOpt = None,
+    fmt: TypeOpt = None,
+    overwrite: OverwriteOpt = False,
+    key: WriteKeyOpt = None,
+) -> None:
+    """Fill an existing store from a dotenv, JSON or TOML file, or stdin (dotenv by default).
+
+    JSON and TOML input must be a flat object of string values; dotenv input is imported
+    literally, ${X} is never expanded. Existing variables are an error unless -o is given.
+    """
+    path = None if file is None or file == _STDIN else Path(file)
+    resolved = _resolve_format(path, fmt)
+    state = get_state(ctx)
+    environment = state.open_store(ctx)
+    # Exit 2 for a missing store before any input is read.
+    environment.store_info(store)
+    if path is None:
+        state.claim_stdin(_INPUT_PURPOSE)
+        if key == _STDIN:
+            # Refused here (stdin is read once), also when the document turns out empty.
+            state.claim_stdin("-k -")
+        text = state.read_stdin()
+    else:
+        text = read_input_file(path)
+    variables = _LOADERS[resolved](text)
+    if not variables:
+        err(f"nothing to import into store '{store}'")
+        return
+    secret = existing_secret(ctx, store, key)
+    environment.set_many(store, variables, key=secret, overwrite=overwrite)
+    count = len(variables)
+    err(f"imported {count} variable{'' if count == 1 else 's'} into store '{store}'")
+
+
+def _resolve_format(path: Path | None, fmt: Format | None) -> Format:
+    """`-t` wins; else inferred from the file name; stdin is dotenv (D22)."""
+    if fmt is not None:
+        return fmt
+    if path is None:
+        return Format.DOTENV
+    inferred = infer_format(path)
+    if inferred is None:
+        message = f"cannot infer the format of '{path}' from its name: pass -t dotenv, json or toml"
+        raise ValidationError(message)
+    return inferred
