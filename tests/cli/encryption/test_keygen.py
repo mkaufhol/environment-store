@@ -88,6 +88,14 @@ def test_keygen_without_a_path_is_a_usage_error(cli_json: CliHarness) -> None:
     assert_exit(result, 1)
 
 
+def test_keygen_with_an_empty_path_names_the_problem(cli_json: CliHarness) -> None:
+    result = cli_json.invoke("keygen", "")
+
+    assert_exit(result, 1)
+    assert "needs a file path" in result.stderr
+    assert "'.'" not in result.stderr
+
+
 def test_keygen_into_a_missing_directory_fails_with_the_path(cli_json: CliHarness) -> None:
     target = cli_json.root / "missing" / "k.key"
 

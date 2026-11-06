@@ -3,7 +3,7 @@
 On POSIX the process is replaced (`execvpe`, D33), so the command's exit code is the exit code
 of `run` and signals reach the command directly. Before that, the store is closed (no SQLite
 handle or file lock leaks into the command) and stdout / stderr are flushed. A command that
-cannot be started exits with the shell's codes, 127 or 126 (PD 28).
+cannot be started exits with the shell's codes, 127 or 126 (PD 28), on every platform.
 """
 
 import subprocess  # nosec B404  # Windows has no exec(); used by run's fallback only
@@ -46,8 +46,9 @@ def run(  # noqa: PLR0913 - the options of spec §6.13
     already set are kept unless -o is given.
     """
     command = passthrough_args(ctx)
-    if not command:
-        # Checked before loading: a forgotten `--` must not cost a key prompt (PD 28).
+    if not command or not command[0]:
+        # Checked before loading: a forgotten `--` or an empty program name (e.g. an unset
+        # "$CMD") must not cost a key prompt (PD 28); exec would reject "" with a ValueError.
         message = "run needs a command after '--': envs run [STORES]... -- CMD [ARGS]..."
         raise ValidationError(message)
     state = get_state(ctx)
@@ -57,17 +58,21 @@ def run(  # noqa: PLR0913 - the options of spec §6.13
     state.open_store(ctx).close()
     sys.stdout.flush()
     sys.stderr.flush()
-    if sys.platform == "win32":
-        # S603 / B603: an argv list from the user's own command line, never a shell.
-        completed = subprocess.run(command, env=env, check=False)  # noqa: S603  # nosec B603
-        raise typer.Exit(completed.returncode)
     try:
+        if sys.platform == "win32":
+            # S603 / B603: an argv list from the user's own command line, never a shell.
+            completed = subprocess.run(command, env=env, check=False)  # noqa: S603  # nosec B603
+            raise typer.Exit(completed.returncode)
         state.runtime.exec_process(command[0], command, env)
     except FileNotFoundError as error:
         _fail(command[0], error, _NOT_FOUND)
     except OSError as error:
         # PermissionError and the rest (e.g. ENOEXEC): found, but not executable.
         _fail(command[0], error, _NOT_EXECUTABLE)
+    except ValueError as error:
+        # The OS API refuses the argv itself (e.g. an embedded NUL byte): a usage error.
+        message = f"cannot run '{command[0]}': {error}"
+        raise ValidationError(message) from None
 
 
 def _fail(file: str, error: OSError, code: int) -> NoReturn:

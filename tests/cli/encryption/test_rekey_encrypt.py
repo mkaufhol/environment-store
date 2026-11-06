@@ -234,6 +234,33 @@ def test_generate_key_dash_is_refused_and_creates_no_file(
     assert not (cli_json.root / "-").exists()
 
 
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        (["--generate-key", "-"], "envs keygen -"),
+        (["--generate-key", ""], "--generate-key needs a file path"),
+        (["--generate-key", "existing.key"], "already exists"),
+        (["--new-key", ""], "--new-key is empty"),
+    ],
+)
+def test_rekey_refuses_an_unusable_new_secret_option_before_asking_for_the_old_secret(
+    cli_json: CliHarness, options: list[str], message: str
+) -> None:
+    cli_json.store().create_store("e", encrypt=True, key=Passphrase(text="pw"))
+    existing = cli_json.root / "existing.key"
+    existing.write_text("keep", encoding="utf-8")
+    options = [str(existing) if option == "existing.key" else option for option in options]
+    prompter = RecordingPrompter()
+
+    result = cli_json.invoke("rekey", "-s", "e", *options, stdin_tty=True, prompter=prompter)
+
+    assert_exit(result, 1)
+    assert message in result.stderr
+    assert prompter.prompts == []
+    assert existing.read_text(encoding="utf-8") == "keep"
+    assert not (cli_json.root / "-").exists()
+
+
 def test_rekey_with_two_stdin_consumers_exits_1(cli_json: CliHarness) -> None:
     old = _keyfile_store(cli_json)
 

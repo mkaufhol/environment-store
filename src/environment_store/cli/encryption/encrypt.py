@@ -1,7 +1,7 @@
 """`envs rekey` and `envs encrypt`: give a store a new secret (spec §4.5, D4, D34).
 
-Both need exactly one of `--new-key`, `--generate-key` and `--passphrase`; that is checked
-before any key is read or asked for. The library call runs inside `keep_or_discard`
+Both need exactly one usable choice of `--new-key`, `--generate-key` and `--passphrase`; that
+is checked before any key is read or asked for. The library call runs inside `keep_or_discard`
 (PD 33): a generated key file is removed only if the store provably does not use it.
 """
 
@@ -10,6 +10,7 @@ from typing import Final, cast
 
 import typer
 
+from environment_store.cli.key_options import parse_key_path
 from environment_store.cli.options import (
     GenerateKeyOpt,
     NewKeyOpt,
@@ -32,6 +33,8 @@ from environment_store.core.validation import validate_store_name
 __all__ = ["encrypt", "rekey"]
 
 _NEW_KEY_OPTION: Final = "--new-key"
+_STDOUT_PATH: Final = Path("-")
+_NO_FILE_PATH: Final = Path()
 
 
 def rekey(  # noqa: PLR0913 - the options of spec §4.5
@@ -93,6 +96,22 @@ def _require_one(*, new_key: str | None, generate: Path | None, passphrase: bool
         raise ValidationError(message)
     if sum((new_key is not None, generate is not None, passphrase)) > 1:
         message = f"use only one of {_NEW_KEY_OPTION}, --generate-key, --passphrase"
+        raise ValidationError(message)
+    # new_secret refuses these too, but only after rekey has asked for the old secret. The same
+    # wording as there; the existence check is repeated (atomically) when the file is written.
+    if new_key is not None:
+        parse_key_path(new_key, option=_NEW_KEY_OPTION)
+    if generate == _STDOUT_PATH:
+        message = (
+            "--generate-key needs a file path; to print a new key use 'envs keygen -' and "
+            f"pass it with '{_NEW_KEY_OPTION} -'"
+        )
+        raise ValidationError(message)
+    if generate == _NO_FILE_PATH:
+        message = "--generate-key needs a file path"
+        raise ValidationError(message)
+    if generate is not None and (generate.exists() or generate.is_symlink()):
+        message = f"key file '{generate}' already exists; refusing to overwrite it"
         raise ValidationError(message)
 
 

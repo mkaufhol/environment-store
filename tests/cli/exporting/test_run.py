@@ -146,16 +146,35 @@ def test_encrypted_store_without_a_key_exits_4_and_runs_nothing(cli_json: CliHar
     assert cli_json.exec_calls == []
 
 
-@pytest.mark.parametrize("args", [["base"], ["base", "--"]])
+@pytest.mark.parametrize(
+    "args", [["base"], ["base", "--"], ["base", "--", ""], ["base", "--", "", "x"]]
+)
 def test_a_missing_command_exits_1_before_any_prompt(cli_json: CliHarness, args: list[str]) -> None:
     library = cli_json.store()
     library.create_store("base", encrypt=True, key=Passphrase(text="pw"))
+    prompter = RecordingPrompter()
 
-    result = cli_json.invoke("run", *args, stdin_tty=True, prompter=RecordingPrompter())
+    result = cli_json.invoke("run", *args, stdin_tty=True, prompter=prompter)
 
     assert_exit(result, 1)
     assert "--" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert prompter.prompts == []
     assert cli_json.exec_calls == []
+
+
+def test_a_command_the_os_rejects_as_invalid_exits_1_without_a_traceback(
+    cli_json: CliHarness,
+) -> None:
+    _arrange(cli_json)
+    cli_json.exec_error = ValueError("embedded null byte")
+
+    result = cli_json.invoke("run", "base", "--", "nope", "x")
+
+    assert_exit(result, 1)
+    assert "nope" in result.stderr
+    assert "embedded null byte" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_unknown_option_before_the_separator_is_a_usage_error(cli_json: CliHarness) -> None:

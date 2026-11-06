@@ -10,6 +10,7 @@ from typing import Annotated, Final
 import typer
 
 from environment_store.cli.output import err, out
+from environment_store.core.errors import ValidationError
 from environment_store.library.keys import generate_key_file, generate_key_text
 
 __all__ = ["keygen"]
@@ -34,5 +35,9 @@ def keygen(path: KeyPathArg) -> None:
     if path == _STDOUT:
         out(generate_key_text(), newline=False)
         return
+    if not path:
+        # Path("") is Path("."): the refusal would name a directory the user never typed.
+        message = "keygen needs a file path, or '-' to print the key"
+        raise ValidationError(message)
     generate_key_file(Path(path))
     err(f"wrote key file '{path}'")
