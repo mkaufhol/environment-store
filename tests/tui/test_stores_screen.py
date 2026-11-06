@@ -174,10 +174,29 @@ def test_wrong_project_key_notifies_and_asks_for_a_key(
         await _open_first(pilot)
         assert isinstance(app.screen, UnlockScreen)
         [message] = notifications(app)
-        assert "a" in message
+        assert message.startswith(
+            f"unlocking with the key file '{wrong}' from the project file failed: "
+            "cannot decrypt store 'a'"
+        )
         assert "hidden-value" not in message
 
     run_app(encrypted, scenario, key_paths={"a": wrong})
+
+
+def test_missing_project_key_file_names_it_and_asks_for_a_key(
+    encrypted: EnvironmentStore, tmp_path: Path
+) -> None:
+    missing = tmp_path / "missing.key"
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        assert isinstance(app.screen, UnlockScreen)
+        [message] = notifications(app)
+        assert message.startswith(
+            f"unlocking with the key file '{missing}' from the project file failed: "
+        )
+
+    run_app(encrypted, scenario, key_paths={"a": missing})
 
 
 def test_plaintext_store_with_a_project_key_notifies_and_stays_on_the_list(

@@ -17,7 +17,7 @@ from textual.widgets.data_table import RowKey
 
 from environment_store.core.errors import EnvironmentStoreError
 from environment_store.core.models import StoreInfo
-from environment_store.tui.messages import notify_error
+from environment_store.tui.messages import notify_error, notify_problem
 from environment_store.tui.screens.unlock import UnlockScreen, describe_encryption
 from environment_store.tui.screens.variables import VariablesScreen
 from environment_store.tui.session import OpenedStore, StoreSession
@@ -98,11 +98,9 @@ class StoresScreen(Screen[None]):
         """
         try:
             opened = self._open_without_asking(info)
-        except EnvironmentStoreError as error:
+        except EnvironmentStoreError as error:  # only a plaintext store fails here
             notify_error(self.app, error)
-            if not info.encrypted:
-                return
-            opened = None
+            return
         if opened is None:
             self.app.push_screen(UnlockScreen(self._session, info), self._show)
         else:
@@ -114,7 +112,15 @@ class StoresScreen(Screen[None]):
         path = self._session.project_key(info.name)
         if path is None:
             return None
-        return self._session.open(info.name, self._session.secret_from_file(info.name, path))
+        try:
+            return self._session.open(info.name, self._session.secret_from_file(info.name, path))
+        except EnvironmentStoreError as error:
+            # The user did not choose this key, so the message names it and where it came from.
+            notify_problem(
+                self.app,
+                f"unlocking with the key file '{path}' from the project file failed: {error}",
+            )
+            return None
 
     def _show(self, opened: OpenedStore | None) -> None:
         if opened is not None:
