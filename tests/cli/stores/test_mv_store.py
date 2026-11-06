@@ -138,3 +138,43 @@ def test_mv_store_keeps_the_generated_key_when_deleting_the_source_fails(
     assert str(key) in result.stderr
     assert cli_json.store().variables("dst", key=key) == _VARIABLES
     assert _names(cli_json) == ["dst", "src"]
+
+
+def test_mv_store_new_key_from_stdin(cli_json: CliHarness) -> None:
+    _plain_source(cli_json)
+    key = cli_json.key_file("new.key")
+
+    result = cli_json.invoke(
+        "mv-store", "src", "dst", "--new-key", "-", input=key.read_text(encoding="utf-8")
+    )
+
+    assert_exit(result, 0)
+    assert _names(cli_json) == ["dst"]
+    assert cli_json.store().variables("dst", key=key) == _VARIABLES
+
+
+def test_mv_store_generate_key_to_stdout_is_refused_with_a_new_key_hint(
+    cli_json: CliHarness,
+) -> None:
+    _plain_source(cli_json)
+
+    result = cli_json.invoke("mv-store", "src", "dst", "--generate-key", "-")
+
+    assert_exit(result, 1)
+    # PD 24: the hint names mv-store's own key file option, not -k (the source key).
+    assert "'--new-key -'" in result.stderr
+    assert "'-k -'" not in result.stderr
+    assert not (cli_json.root / "-").exists()
+    assert _names(cli_json) == ["src"]
+
+
+def test_mv_store_target_encryption_options_name_new_key(cli_json: CliHarness) -> None:
+    _plain_source(cli_json)
+    cli_json.key_file("new.key")
+
+    result = cli_json.invoke("mv-store", "src", "dst", "--plain", "--new-key", "new.key")
+
+    assert_exit(result, 1)
+    assert "only one" in result.stderr
+    assert "--new-key" in result.stderr
+    assert _names(cli_json) == ["src"]

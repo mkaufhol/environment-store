@@ -252,6 +252,8 @@ def test_cp_store_target_encryption_options_are_exclusive(
 
     assert_exit(result, 1)
     assert "only one" in result.stderr
+    # cp-store calls the new key file option --new-key; -k is the source key (PD 24).
+    assert "--new-key" in result.stderr
     assert _names(cli_json) == ["src"]
     assert not (cli_json.root / "generated.key").exists()
 
@@ -265,6 +267,45 @@ def test_cp_store_reads_stdin_only_once(cli_json: CliHarness) -> None:
 
     assert_exit(result, 1)
     assert "stdin" in result.stderr
+    assert _names(cli_json) == ["src"]
+
+
+def test_cp_store_new_key_from_stdin(cli_json: CliHarness) -> None:
+    _plain_source(cli_json)
+    key = cli_json.key_file("new.key")
+
+    result = cli_json.invoke(
+        "cp-store", "src", "dst", "--new-key", "-", input=key.read_text(encoding="utf-8")
+    )
+
+    assert_exit(result, 0)
+    assert cli_json.store().variables("dst", key=key) == _VARIABLES
+
+
+def test_cp_store_source_key_and_new_key_cannot_both_read_stdin(cli_json: CliHarness) -> None:
+    key = _encrypted_source(cli_json)
+
+    result = cli_json.invoke(
+        "cp-store", "src", "dst", "-k", "-", "--new-key", "-", input=key.read_text(encoding="utf-8")
+    )
+
+    assert_exit(result, 1)
+    assert "stdin" in result.stderr
+    assert _names(cli_json) == ["src"]
+
+
+def test_cp_store_generate_key_to_stdout_is_refused_with_a_new_key_hint(
+    cli_json: CliHarness,
+) -> None:
+    _plain_source(cli_json)
+
+    result = cli_json.invoke("cp-store", "src", "dst", "--generate-key", "-")
+
+    assert_exit(result, 1)
+    # PD 24: the hint names cp-store's own key file option, not -k (the source key).
+    assert "'--new-key -'" in result.stderr
+    assert "'-k -'" not in result.stderr
+    assert not (cli_json.root / "-").exists()
     assert _names(cli_json) == ["src"]
 
 
