@@ -1,10 +1,12 @@
+import re
 from collections.abc import Mapping
 
 from hypothesis import given
 from hypothesis import strategies as st
 
-from environment_store.core.merge import MergeOrder, merge, merge_with_sources
-from tests.support.strategies import store_names, variable_maps
+from environment_store.core.merge import MergeOrder, merge, merge_with_sources, nested_flat_key
+from environment_store.core.validation import STORE_NAME_PATTERN
+from tests.support.strategies import store_names, variable_maps, variable_names
 
 type Stores = list[tuple[str, Mapping[str, str]]]
 
@@ -36,3 +38,14 @@ def test_the_winning_store_contains_the_winning_value(stores: Stores, order: Mer
 
     for name, (value, store) in merge_with_sources(stores, order=order).items():
         assert variables_of[store][name] == value
+
+
+# POSIX shell variable name, written out independently of the library's own patterns (D40).
+_POSIX_SHELL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+@given(st.from_regex(STORE_NAME_PATTERN, fullmatch=True), variable_names())
+def test_every_valid_store_name_yields_a_shell_compatible_nested_key(
+    store: str, variable: str
+) -> None:
+    assert _POSIX_SHELL_NAME.fullmatch(nested_flat_key(store, variable))
