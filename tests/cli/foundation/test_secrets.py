@@ -64,7 +64,6 @@ def _test_app() -> typer.Typer:
     ) -> None:
         chosen = new_secret(
             ctx,
-            store="t",
             key=key,
             generate=generate,
             passphrase=passphrase,
@@ -85,9 +84,7 @@ def _test_app() -> typer.Typer:
         create_target: Annotated[bool, typer.Option("--create-target")] = False,
     ) -> None:
         store = get_state(ctx).open_store(ctx)
-        chosen = new_secret(
-            ctx, store="t", key=None, generate=generate, passphrase=False, key_option="-k"
-        )
+        chosen = new_secret(ctx, key=None, generate=generate, passphrase=False, key_option="-k")
         with keep_or_discard(chosen, target="t", store=store, creates_target=creates):
             if create_target:
                 store.create_store("t")
@@ -495,9 +492,7 @@ def test_failure_to_remove_the_key_is_reported_and_the_original_error_wins(
     @app.command("locked", cls=EnvsCommand)
     def locked(ctx: typer.Context) -> None:
         store = get_state(ctx).open_store(ctx)
-        chosen = new_secret(
-            ctx, store="t", key=None, generate=path, passphrase=False, key_option="-k"
-        )
+        chosen = new_secret(ctx, key=None, generate=path, passphrase=False, key_option="-k")
         keys.chmod(0o500)
         with keep_or_discard(chosen, target="t", store=store, creates_target=False):
             raise _ERRORS["validation"]

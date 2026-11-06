@@ -1,6 +1,7 @@
 """A new store key or passphrase read from stdin is never saved by envs: warn about it (D45)."""
 
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -101,4 +102,34 @@ def test_key_of_an_existing_store_from_stdin_gives_no_warning(cli_json: CliHarne
     result = cli_json.invoke("cp-store", "src", "dst", "-k", "-", input=key.read_bytes())
 
     assert_exit(result, 0)
+    assert "does not save" not in result.stderr
+
+
+# The commands that create the store the new secret encrypts.
+_CREATING: Final = ("create-store", "cp-store", "mv-store")
+
+
+@pytest.mark.parametrize("command", _CREATING)
+def test_no_warning_when_the_target_store_already_exists(
+    cli_json: CliHarness, command: str
+) -> None:
+    args, store, option = _args(cli_json, command)
+    cli_json.store().create_store(store)
+    key = cli_json.key_file("new.key").read_bytes()
+
+    result = cli_json.invoke(*args, option, "-", input=key)
+
+    assert_exit(result, 3)
+    assert "does not save" not in result.stderr
+    assert not cli_json.store().store_info(store).encrypted
+
+
+def test_no_warning_when_rekey_fails(cli_json: CliHarness) -> None:
+    args, _, option = _args(cli_json, "rekey")
+    wrong = str(cli_json.passphrase_file("wrong\n", name="wrong.txt"))
+    args = [wrong if arg.endswith("old.txt") else arg for arg in args]
+
+    result = cli_json.invoke(*args, option, "-", input=cli_json.key_file("new.key").read_bytes())
+
+    assert result.exit_code != 0
     assert "does not save" not in result.stderr

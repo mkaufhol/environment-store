@@ -5,8 +5,9 @@
 - `new_secret`: exactly one of the new-key option, `--generate-key` and `--passphrase`
   (PD 24); `--generate-key -` is refused for every command. `new_secret_choice` checks the
   options alone, so a command can refuse them before it asks for an existing key.
-- `keep_or_discard`: wraps the writing library call and removes a generated key file after a
-  failure only when the store provably does not use it (PD 33).
+- `keep_or_discard`: wraps the writing library call; after success it warns about a new secret
+  read from stdin (D45), after a failure it removes a generated key file only when the store
+  provably does not use it (PD 33).
 """
 
 from collections.abc import Generator
@@ -43,7 +44,7 @@ from environment_store.core.errors import (
     ValidationError,
     VariableExistsError,
 )
-from environment_store.core.secrets import Secret
+from environment_store.core.secrets import KeyMaterial, Secret
 from environment_store.library.store import EnvironmentStore
 
 __all__ = [
@@ -139,10 +140,9 @@ def _resolve_existing(
         raise NotEncryptedError(message) from error
 
 
-def new_secret(  # noqa: PLR0913 - the new-secret options and what they are for
+def new_secret(
     ctx: typer.Context,
     *,
-    store: str,
     key: str | None,
     generate: Path | None,
     passphrase: bool,
@@ -150,12 +150,8 @@ def new_secret(  # noqa: PLR0913 - the new-secret options and what they are for
 ) -> NewSecret | None:
     """Return the secret of a new encryption, or `None` if no new-secret option was given.
 
-    A secret read from stdin is kept nowhere by envs, so a warning names the store that
-    cannot be read again without it (D45).
-
     Args:
         ctx: The command's context.
-        store: The store the secret encrypts, for the warning.
         key: The existing key file option (`--new-key`, or `-k` for `create-store`).
         generate: The `--generate-key` path.
         passphrase: Whether `--passphrase` was given.
@@ -173,14 +169,7 @@ def new_secret(  # noqa: PLR0913 - the new-secret options and what they are for
     if choice is None:
         return None
     purpose = f"{key_option} -" if isinstance(choice, NewKeyFile) else "--passphrase"
-    chosen = resolve_new_secret(choice, get_state(ctx).secret_input(purpose))
-    if chosen.from_stdin:
-        what = "key" if isinstance(choice, NewKeyFile) else "passphrase"
-        err(
-            f"Warning: envs does not save this {what}; keep it, or store '{store}' cannot be "
-            "read again"
-        )
-    return chosen
+    return resolve_new_secret(choice, get_state(ctx).secret_input(purpose))
 
 
 def new_secret_choice(
@@ -226,6 +215,9 @@ def keep_or_discard(
 ) -> Generator[None]:
     """Remove a generated key file after a failure only if the store cannot use it (PD 33).
 
+    After success, a secret read from stdin is kept nowhere by envs, so a warning names the
+    store that cannot be read again without it (D45).
+
     Args:
         new: The new secret, or `None` (then nothing happens).
         target: The store that is encrypted with it.
@@ -242,6 +234,13 @@ def keep_or_discard(
         if new is not None and new.generated is not None:
             _after_failure(new, new.generated, error, target, store, creates_target=creates_target)
         raise
+    if new is not None and new.from_stdin:
+        # Only once the store is written: a failed command encrypts nothing with it (D45).
+        what = "key" if isinstance(new.secret, KeyMaterial) else "passphrase"
+        err(
+            f"Warning: envs does not save this {what}; keep it, or store '{target}' cannot be "
+            "read again"
+        )
 
 
 def _after_failure(  # noqa: PLR0913 - the failure and everything needed to judge it

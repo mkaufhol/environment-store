@@ -147,7 +147,6 @@ def _transfer(ctx: typer.Context, src: str, dst: str, options: _Options, *, move
     secret = existing_secret(ctx, src, options.key)
     chosen = new_secret(
         ctx,
-        store=dst,
         key=options.new_key,
         generate=options.generate,
         passphrase=options.passphrase,

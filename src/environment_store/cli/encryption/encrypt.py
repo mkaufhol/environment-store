@@ -60,7 +60,7 @@ def rekey(  # noqa: PLR0913 - the options of spec §4.5
         # Checked before a key file is generated or a new passphrase is asked for.
         message = f"store {store!r} is not encrypted: use 'envs encrypt -s {store}'"
         raise NotEncryptedError(message)
-    new = _new(ctx, store, new_key=new_key, generate=generate, passphrase=passphrase)
+    new = _new(ctx, new_key=new_key, generate=generate, passphrase=passphrase)
     with keep_or_discard(new, target=store, store=environment, creates_target=False):
         environment.rekey_store(store, old=old, new=new.secret)
     err(f"rekeyed store '{store}' ({_mode(new)})")
@@ -85,7 +85,7 @@ def encrypt(
         # Checked before a key file is generated or a passphrase is asked for.
         message = f"store {store!r} is already encrypted: use 'envs rekey -s {store}'"
         raise AlreadyEncryptedError(message)
-    new = _new(ctx, store, new_key=new_key, generate=generate, passphrase=passphrase)
+    new = _new(ctx, new_key=new_key, generate=generate, passphrase=passphrase)
     with keep_or_discard(new, target=store, store=environment, creates_target=False):
         environment.encrypt_store(store, key=new.secret)
     err(f"encrypted store '{store}' ({_mode(new)})")
@@ -106,11 +106,10 @@ def _require_one(*, new_key: str | None, generate: Path | None, passphrase: bool
 
 
 def _new(
-    ctx: typer.Context, store: str, *, new_key: str | None, generate: Path | None, passphrase: bool
+    ctx: typer.Context, *, new_key: str | None, generate: Path | None, passphrase: bool
 ) -> NewSecret:
     new = new_secret(
         ctx,
-        store=store,
         key=new_key,
         generate=generate,
         passphrase=passphrase,

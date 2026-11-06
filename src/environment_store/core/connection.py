@@ -38,6 +38,8 @@ _IDENTIFIER: Final[str] = r"[A-Za-z_][A-Za-z0-9_]*"
 _TARGET: Final[re.Pattern[str]] = re.compile(rf"{_IDENTIFIER}(?:\.{_IDENTIFIER})*:{_IDENTIFIER}")
 # Like libpq: the user information ends at the first '@' that comes before any '/'.
 _USERINFO: Final[re.Pattern[str]] = re.compile(r"([^@/]*)@")
+# The port of one URI host entry: `h:5432`, `[::1]:5432`; never part of `[::1]`.
+_HOST_PORT: Final[re.Pattern[str]] = re.compile(r":[^:\]]*$")
 _DIRECTORY_SCHEMES: Final = frozenset({"json", "toml"})
 _POSTGRES_SCHEMES: Final = frozenset({"postgresql", "postgres"})
 # The PostgreSQL adapter's default schema (D13); repeated here, as the core imports no adapter.
@@ -240,6 +242,18 @@ def _local_path(raw: str) -> Path:
     return path.absolute()
 
 
+def _with_port(host: str, port: str) -> str:
+    # As in libpq: one port for every host, or one per host; a count libpq refuses is shown
+    # as given.
+    hosts = host.split(",")
+    ports = port.split(",")
+    if len(ports) == 1:
+        ports *= len(hosts)
+    if len(ports) != len(hosts):
+        return f"{','.join(hosts)}:{port}"
+    return ",".join(f"{entry}:{number}" for entry, number in zip(hosts, ports, strict=True))
+
+
 def _postgres_location(rest: str) -> str:
     # Like libpq: the user information ends at the first '@' before any '/'; it is dropped.
     userinfo = _USERINFO.match(rest)
@@ -252,11 +266,17 @@ def _postgres_location(rest: str) -> str:
         unquote(key): unquote(value)
         for key, _, value in (item.partition("=") for item in query.split("&"))
     }
-    host = given.get("host", unquote(host))
     port = given.get("port")
+    if "host" in given:
+        host = given["host"]
+    elif port is not None:
+        # `port=` replaces the ports of the URI hosts, as in libpq.
+        host = ",".join(_HOST_PORT.sub("", entry) for entry in unquote(host).split(","))
+    else:
+        host = unquote(host)
     database = given.get("dbname", unquote(database))
     schema = given.get("schema", _DEFAULT_SCHEMA)
-    where = host if port is None else f"{host}:{port}"
+    where = host if port is None else _with_port(host, port)
     database_text = f"database {database!r}" if database else "the default database"
     host_text = f"host {where!r}" if where else "the default host"
     return f"schema {schema!r} of {database_text} on {host_text}"

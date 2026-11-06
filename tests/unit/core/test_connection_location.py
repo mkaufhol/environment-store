@@ -73,6 +73,26 @@ def test_sqlite_path_of_an_unknown_user_stays_unexpanded(
             "schema 'environment_store' of database 'envs' on host '/var/run/postgresql:5433'",
         ),
         (
+            "postgresql://h:5432/db?port=6",
+            "schema 'environment_store' of database 'db' on host 'h:6'",
+        ),
+        (
+            "postgresql://[::1]:5432,[::2]/db?port=6",
+            "schema 'environment_store' of database 'db' on host '[::1]:6,[::2]:6'",
+        ),
+        (
+            "postgresql://h1:5432,h2/db?port=6,7",
+            "schema 'environment_store' of database 'db' on host 'h1:6,h2:7'",
+        ),
+        (
+            "postgresql://h1,h2,h3/db?port=6,7",
+            "schema 'environment_store' of database 'db' on host 'h1,h2,h3:6,7'",
+        ),
+        (
+            "postgresql://h:5432/db?host=::1&port=6",
+            "schema 'environment_store' of database 'db' on host '::1:6'",
+        ),
+        (
             "postgresql://",
             "schema 'environment_store' of the default database on the default host",
         ),
