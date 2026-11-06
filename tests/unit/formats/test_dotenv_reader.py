@@ -1,7 +1,7 @@
 """The dotenv reader: python-dotenv's syntax without interpolation, strict about errors."""
 
 import io
-import re
+import json
 from typing import Final
 
 import pytest
@@ -11,9 +11,9 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from environment_store.core.errors import ValidationError
+from environment_store.core.validation import VARIABLE_NAME_PATTERN
+from environment_store.formats import json_format, toml_format
 from environment_store.formats.dotenv import loads
-
-_KEY: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_]+")
 
 _CORPUS: Final[tuple[str, ...]] = (
     "",
@@ -113,8 +113,33 @@ def test_loads_refuses_malformed_lines_without_echoing_their_text(text: str, lin
     assert "secret" not in str(excinfo.value).lower()
 
 
-def test_loads_accepts_nested_keys_of_stores_starting_with_a_digit() -> None:
-    assert loads("9LIVES__X=v") == {"9LIVES__X": "v"}
+@pytest.mark.parametrize("text", ["9LIVES__X=v", "A=1\n1A=2", "export 0=x"])
+def test_loads_refuses_names_starting_with_a_digit_naming_the_line(text: str) -> None:
+    # Import fills one flat store, whose names follow D33; nested export keys are not importable.
+    line = text.count("\n") + 1
+    with pytest.raises(ValidationError, match=rf"line {line}\b.*invalid variable name"):
+        loads(text)
+
+
+@pytest.mark.parametrize("name", ["9LIVES__X", "1A", "0"])
+def test_every_format_loader_refuses_the_same_invalid_names(name: str) -> None:
+    for text, loader in (
+        (f"{name}=1\n", loads),
+        (json.dumps({name: "1"}), json_format.loads),
+        (f'{json.dumps(name)} = "1"\n', toml_format.loads),
+    ):
+        with pytest.raises(ValidationError, match="invalid variable name"):
+            loader(text)
+
+
+@pytest.mark.parametrize("name", ["A", "_", "_9", "a_B_9"])
+def test_every_format_loader_accepts_the_same_valid_names(name: str) -> None:
+    for text, loader in (
+        (f"{name}=1\n", loads),
+        (json.dumps({name: "1"}), json_format.loads),
+        (f'{json.dumps(name)} = "1"\n', toml_format.loads),
+    ):
+        assert loader(text) == {name: "1"}
 
 
 def test_loads_refuses_nul_without_echoing_the_value() -> None:
@@ -133,7 +158,10 @@ def _python_dotenv_accepts(text: str) -> bool:
     bindings = list(parse_stream(io.StringIO(text)))
     return all(
         not binding.error
-        and (binding.key is None or (_KEY.fullmatch(binding.key) and binding.value is not None))
+        and (
+            binding.key is None
+            or (VARIABLE_NAME_PATTERN.fullmatch(binding.key) and binding.value is not None)
+        )
         for binding in bindings
     )
 

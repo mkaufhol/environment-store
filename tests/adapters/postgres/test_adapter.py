@@ -9,6 +9,7 @@ from psycopg import sql
 
 from environment_store.adapters import postgres
 from environment_store.adapters.postgres import PostgresAdapter, open_postgres
+from environment_store.core.adapter import SetupMode
 from environment_store.core.connection import open_adapter
 from environment_store.core.errors import BackendError, UnsupportedFormatError
 from environment_store.core.models import StoreRecord
@@ -193,13 +194,50 @@ def test_repr_names_the_location_but_no_credentials(
     assert password not in text
 
 
+_EARLIEST: Final = datetime(1, 1, 1, tzinfo=UTC)
+_LATEST: Final = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
+
+
 @pytest.mark.parametrize(
-    ("time_zone", "stored"),
-    [("America%2FNew_York", "9999-12-31 23:30-05"), ("Asia%2FTokyo", "0001-01-01 00:30+09")],
-    ids=["after-year-9999", "before-year-1"],
+    "time_zone", ["Europe%2FBerlin", "America%2FNew_York", "Asia%2FTokyo", "UTC"]
+)
+def test_timestamps_at_both_ends_of_the_utc_range_round_trip_in_any_session_time_zone(
+    postgres_server: PostgresServer, database: str, time_zone: str
+) -> None:
+    # The session is pinned to UTC: in local time these instants would fall in year 0 or 10000.
+    url = postgres_server.url(database, query=f"options=-c%20TimeZone%3D{time_zone}")
+    first = StoreRecord.plain(name="first", variables={}, created_at=_EARLIEST)
+    last = StoreRecord.plain(name="last", variables={}, created_at=_LATEST)
+    with open_postgres(url) as adapter:
+        adapter.create_store(first)
+        adapter.create_store(last)
+
+        assert adapter.read_store("first") == first
+        assert adapter.read_store("last") == last
+        assert adapter.list_stores() == [first.info, last.info]
+
+
+def test_time_zone_set_by_the_database_does_not_leak_into_timestamps(
+    postgres_server: PostgresServer, database: str
+) -> None:
+    postgres_server.execute(
+        database,
+        sql.SQL("ALTER DATABASE {} SET TimeZone = 'Pacific/Kiritimati'").format(
+            sql.Identifier(database)
+        ),
+    )
+    record = StoreRecord.plain(name="last", variables={}, created_at=_LATEST)
+    with open_postgres(postgres_server.url(database), setup=SetupMode.NONE) as adapter:
+        adapter.create_store(record)
+
+        assert adapter.read_store("last") == record
+
+
+@pytest.mark.parametrize(
+    "stored", ["10000-01-01 04:30+00", "0001-01-01 00:30+09"], ids=["after-9999", "before-1"]
 )
 def test_timestamps_outside_the_utc_range_raise_backend_error(
-    postgres_server: PostgresServer, database: str, time_zone: str, stored: str
+    postgres_server: PostgresServer, database: str, stored: str
 ) -> None:
     with open_postgres(postgres_server.url(database)) as adapter:
         adapter.create_store(_RECORD)
@@ -207,10 +245,9 @@ def test_timestamps_outside_the_utc_range_raise_backend_error(
         database,
         sql.SQL("UPDATE environment_store.stores SET updated_at = {}").format(sql.Literal(stored)),
     )
-    url = postgres_server.url(database, query=f"options=-c%20TimeZone%3D{time_zone}")
 
-    with open_postgres(url) as adapter:
-        with pytest.raises(BackendError, match=r"'base'.*corrupt"):
+    with open_postgres(postgres_server.url(database)) as adapter:
+        with pytest.raises(BackendError, match=r"reading store 'base'.*year"):
             adapter.read_store("base")
-        with pytest.raises(BackendError, match=r"'base'.*corrupt"):
+        with pytest.raises(BackendError, match=r"listing stores.*year"):
             adapter.list_stores()

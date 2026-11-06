@@ -4,7 +4,7 @@ r"""dotenv import and export (spec §6.10, §6.11, D37).
 the value back exactly:
 
 1. unquoted for non-empty values made only of `[A-Za-z0-9_./:@%+,-]`;
-2. single quotes (literal in both tools, so `$` needs no escape) for values without `'`, `\`,
+2. single quotes (literal in both tools, so `$` needs no escape) for values without `'`,
    newline or carriage return;
 3. double quotes with `\\`, `\"`, `\n`, `\r`, `\t` escapes for all other values, as long as
    they contain no `$`;
@@ -12,9 +12,10 @@ the value back exactly:
    double quotes and no escape works in both tools.
 
 Measured against python-dotenv 1.2 (golden tests), two refinements of D37 keep it exact:
-python-dotenv decodes `\\` and `\'` inside single quotes, so values with a backslash use double
-quotes (rule 2); and it interpolates `${…}` in *every* quoting style, single quotes included, so
-values containing `${` are refused as well.
+python-dotenv decodes `\\` (and `\'`) inside single quotes and a trailing `\` escapes the closing
+quote, so values containing `\\` or ending in `\` use double quotes (rule 3; any other backslash
+stays literal in single quotes); and it interpolates `${…}` in *every* quoting style, single
+quotes included, so values containing `${` are refused as well.
 
 **Reading** follows python-dotenv's syntax (optional `export`, comments, blank lines, single,
 double and unquoted values, `\r\n` line ends) but never interpolates: `${X}` is imported
@@ -28,15 +29,16 @@ from types import MappingProxyType
 from typing import Final, NoReturn
 
 from environment_store.core.errors import ValidationError
-from environment_store.core.validation import validate_value
+from environment_store.core.validation import VARIABLE_NAME_PATTERN, validate_value
 
 __all__ = ["KEY_PATTERN", "dumps", "loads"]
 
 KEY_PATTERN: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_]+")
-"""dotenv keys: variable names, plus nested keys of stores starting with a digit (`9LIVES__X`)."""
+"""Keys `dumps` writes: variable names, plus nested keys of stores starting with a digit
+(`9LIVES__X`). `loads` accepts variable names only (D33), like the JSON and TOML loaders."""
 
 _UNQUOTED: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_./:@%+,-]+")
-_NEEDS_DOUBLE_QUOTES: Final[frozenset[str]] = frozenset("'\\\n\r")
+_NEEDS_DOUBLE_QUOTES: Final[frozenset[str]] = frozenset("'\n\r")
 _WRITE_ESCAPES: Final[Mapping[str, str]] = MappingProxyType(
     {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
 )
@@ -107,15 +109,22 @@ def _quote(name: str, value: str) -> str:
         _refuse(name, "contains '${', which python-dotenv interpolates even in single quotes")
     if _UNQUOTED.fullmatch(value):
         return value
-    if _NEEDS_DOUBLE_QUOTES.isdisjoint(value):
+    if _single_quotable(value):
         return f"'{value}'"
     if "$" in value:
         _refuse(
             name,
-            "needs double quotes (it contains a newline, carriage return, ' or \\) and contains "
-            "'$', which Docker Compose interpolates in double quotes",
+            "needs double quotes (it contains a newline, carriage return, ', '\\\\' or ends in "
+            "'\\') and contains '$', which Docker Compose interpolates in double quotes",
         )
     return '"' + "".join(_WRITE_ESCAPES.get(char, char) for char in value) + '"'
+
+
+def _single_quotable(value: str) -> bool:
+    # python-dotenv decodes `\\` in single quotes, and a trailing `\` escapes the closing quote.
+    return (
+        _NEEDS_DOUBLE_QUOTES.isdisjoint(value) and "\\\\" not in value and not value.endswith("\\")
+    )
 
 
 def _refuse(name: str, reason: str) -> NoReturn:
@@ -137,8 +146,9 @@ def loads(text: str) -> dict[str, str]:
 
     Raises:
         ValidationError: A statement is malformed (no `=`, unterminated quotes, text after a
-            quoted value), a key does not match `KEY_PATTERN`, or a value contains NUL or a lone
-            surrogate. The message names the line but never echoes a value.
+            quoted value), a name does not match `VARIABLE_NAME_PATTERN` (D33), or a value
+            contains NUL or a lone surrogate. The message names the line but never echoes a
+            value.
     """
     return _Parser(text).parse()
 
@@ -189,11 +199,12 @@ class _Parser:
             return None
         pattern = _SINGLE_QUOTED_KEY if first == "'" else _UNQUOTED_KEY
         name = self._expect(pattern, "expected a variable name").group(1)
-        if not KEY_PATTERN.fullmatch(name):
+        if not VARIABLE_NAME_PATTERN.fullmatch(name):
             # The text is not echoed: on a malformed line it is often value material, such as
             # the continuation of an unquoted multi-line value or `KEY:secret`.
             self._fail(
-                f"invalid variable name: use letters, digits and '_' ({KEY_PATTERN.pattern})"
+                "invalid variable name: use letters, digits and '_', not starting with a digit "
+                f"({VARIABLE_NAME_PATTERN.pattern})"
             )
         return name
 

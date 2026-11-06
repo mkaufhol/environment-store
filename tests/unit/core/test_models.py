@@ -460,6 +460,13 @@ def test_record_variables_are_an_immutable_copy() -> None:
         cast("dict[str, str]", record.variables)["C"] = "3"
 
 
+def test_record_variables_are_in_code_point_order_whatever_the_input_order() -> None:
+    # Every backend then returns the same order (JSONB, for one, reorders keys).
+    record = _plain(variables={"ZZ": "1", "a": "2", "B_LONGER": "3", "AAA": "4", "_": "5"})
+
+    assert list(record.variables or {}) == ["AAA", "B_LONGER", "ZZ", "_", "a"]
+
+
 def test_record_is_frozen() -> None:
     record = _plain()
 

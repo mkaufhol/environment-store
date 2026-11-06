@@ -69,6 +69,9 @@ _WRITE: Final = sql.SQL(
 )
 _REVISION: Final = sql.SQL("SELECT revision FROM {schema}.stores WHERE name = %s")
 _DELETE: Final = sql.SQL("DELETE FROM {schema}.stores WHERE name = %s")
+# TIMESTAMPTZ is sent in the session time zone: in local time, an instant near year 1 or 9999 UTC
+# can fall in year 0 or 10000, which the driver cannot load. A plain SET persists after COMMIT.
+_PIN_UTC: Final = sql.SQL("SET TIME ZONE 'UTC'")
 
 
 def open_postgres(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "PostgresAdapter":
@@ -294,11 +297,16 @@ class PostgresAdapter:
         raise BackendError(message)
 
     def _set_up(self, *, auto_upgrade: bool) -> MigrationReport:
-        """Inspect, decide and create or upgrade in one locked transaction (D11, D13)."""
+        """Inspect, decide and create or upgrade in one locked transaction (D11, D13).
+
+        The transaction first pins the session time zone to UTC; every data operation runs
+        after a successful setup.
+        """
         schema = self._target.schema
         client_version = self._migrations[-1].version
         try:
             with self._connection.transaction():
+                self._connection.execute(_PIN_UTC)
                 lock_schema(self._connection, schema)
                 inspection, exists = inspect_schema(self._connection, schema)
                 state = classify(inspection, client_version=client_version)
@@ -386,17 +394,10 @@ def _parameters(record: StoreRecord) -> tuple[object, ...]:
     )
 
 
-def _utc(value: datetime, *, store: object) -> datetime:
-    # TIMESTAMPTZ comes back in the session time zone; records are UTC.
-    try:
-        return value.astimezone(UTC)
-    except OverflowError:
-        # Representable in the session time zone, but not in UTC (before year 1, after 9999).
-        message = (
-            f"store {store!r}: corrupt row in the database: a timestamp is outside the range "
-            "of UTC dates"
-        )
-        raise BackendError(message) from None
+def _utc(value: datetime) -> datetime:
+    # The session is pinned to UTC (_PIN_UTC); this only normalises the driver's tzinfo. A stored
+    # instant outside years 1 to 9999 UTC already fails while loading, as a BackendError.
+    return value.astimezone(UTC)
 
 
 def _store_row(row: TupleRow) -> StoreRow:
@@ -409,8 +410,8 @@ def _store_row(row: TupleRow) -> StoreRow:
         variables=variables,
         ciphertext=ciphertext,
         revision=revision,
-        created_at=_utc(created, store=name),
-        updated_at=_utc(updated, store=name),
+        created_at=_utc(created),
+        updated_at=_utc(updated),
     )
 
 
@@ -421,6 +422,6 @@ def _info_row(row: TupleRow) -> StoreInfoRow:
         encrypted=encrypted,
         cipher_meta=cipher_meta,
         revision=revision,
-        created_at=_utc(created, store=name),
-        updated_at=_utc(updated, store=name),
+        created_at=_utc(created),
+        updated_at=_utc(updated),
     )

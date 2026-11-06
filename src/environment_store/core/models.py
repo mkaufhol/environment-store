@@ -88,7 +88,8 @@ class StoreRecord:
         revision: Revision counter, starting at 1 (D7).
         created_at: Creation time, UTC.
         updated_at: Time of the last write, UTC, not before `created_at`.
-        variables: Plaintext variables (immutable), or `None` for an encrypted store.
+        variables: Plaintext variables (immutable, sorted by name in code point order), or `None`
+            for an encrypted store.
         ciphertext: `nonce || ciphertext` of an encrypted store, or `None`.
         cipher_meta: Cipher metadata of an encrypted store, or `None`.
     """
@@ -206,7 +207,9 @@ class StoreRecord:
         if not isinstance(variables, Mapping):
             message = f"store {self.name!r}: variables must be a mapping"
             raise ValidationError(message)
-        object.__setattr__(self, "variables", MappingProxyType(validate_variables(variables)))
+        # Code point order, so that every backend returns the same order (JSONB reorders keys).
+        ordered = dict(sorted(validate_variables(variables).items()))
+        object.__setattr__(self, "variables", MappingProxyType(ordered))
 
     def _check_sealed(self) -> None:
         if self.ciphertext is None or self.cipher_meta is None:

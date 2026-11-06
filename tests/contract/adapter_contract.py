@@ -314,6 +314,26 @@ class AdapterContract:
             assert value.utcoffset() == timedelta(0)
             assert value.microsecond == expected.astimezone(UTC).microsecond
 
+    def test_timestamps_at_both_ends_of_the_utc_range_round_trip(self, adapter: Adapter) -> None:
+        earliest = datetime(1, 1, 1, tzinfo=UTC)
+        latest = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
+        adapter.create_store(_plain("first", created_at=earliest))
+        adapter.create_store(_plain("last", created_at=latest))
+
+        assert adapter.read_store("first").created_at == earliest
+        assert adapter.read_store("last").updated_at == latest
+        assert [(info.created_at, info.updated_at) for info in adapter.list_stores()] == [
+            (earliest, earliest),
+            (latest, latest),
+        ]
+
+    def test_variables_are_read_back_in_code_point_order(self, adapter: Adapter) -> None:
+        # JSONB, for one, stores object keys shorter first; every backend must agree.
+        names = ["ZZ", "a", "B_LONGER", "AAA", "_", "A1"]
+        adapter.create_store(_plain(variables=dict.fromkeys(names, "v")))
+
+        assert list(adapter.read_store("base").variables or {}) == sorted(names)
+
     def test_create_existing_store_raises_and_keeps_the_original(self, adapter: Adapter) -> None:
         original = _plain(variables={"A": "original"})
         adapter.create_store(original)

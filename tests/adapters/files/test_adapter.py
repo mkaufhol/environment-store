@@ -430,13 +430,16 @@ def test_traversal_names_never_reach_files_outside_the_directory(
 
     with FileAdapter(directory, serializer=serializer) as adapter:
         adapter.create_store(_plain())
+        # Built valid, then forged: the model would reject the name before the adapter sees it.
         forged = _plain()
         object.__setattr__(forged, "name", name)
+        forged_next = _next(_plain())
+        object.__setattr__(forged_next, "name", name)
         for operation in (
             lambda: adapter.read_store(name),
             lambda: adapter.delete_store(name),
             lambda: adapter.create_store(forged),
-            lambda: adapter.write_store(_next(forged), expected_revision=1),
+            lambda: adapter.write_store(forged_next, expected_revision=1),
         ):
             with pytest.raises(ValidationError):
                 operation()

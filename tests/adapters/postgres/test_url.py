@@ -138,8 +138,22 @@ def test_errors_never_repeat_the_password(url: str) -> None:
         (f"postgresql://host/db?password={_PASSWORD}", (_PASSWORD,)),
         ("postgresql://host/db?password=a%2Bb", ("a+b", "a%2Bb")),
         ("postgresql://user:@host/db?password=", ()),
+        (f"postgresql://host/db?sslpassword={_PASSWORD}", (_PASSWORD,)),
+        ("postgresql://host/db?sslpassword=k%25ey", ("k%ey", "k%25ey")),
+        ("postgresql://u:a@host/db?password=b&sslpassword=c", ("a", "b", "c")),
     ],
-    ids=["none", "user-only", "userinfo", "userinfo-escaped", "query", "query-escaped", "empty"],
+    ids=[
+        "none",
+        "user-only",
+        "userinfo",
+        "userinfo-escaped",
+        "query",
+        "query-escaped",
+        "empty",
+        "sslpassword",
+        "sslpassword-escaped",
+        "all-three",
+    ],
 )
 def test_target_knows_the_passwords_to_redact(url: str, secrets: tuple[str, ...]) -> None:
     assert set(parse_url(url).secrets) == set(secrets)

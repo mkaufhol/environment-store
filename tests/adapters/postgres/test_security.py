@@ -205,6 +205,18 @@ def test_connection_failure_with_the_password_in_the_query_hides_it(
     assert _PASSWORD not in str(caught.value)
 
 
+def test_connection_errors_never_echo_the_client_key_passphrase() -> None:
+    # libpq rejects the malformed escape while parsing, before any connection attempt, and
+    # quotes the sslpassword value; TEST-NET host, so nothing could be reached anyway.
+    url = "postgresql://u@203.0.113.1:1/db?connect_timeout=1&sslpassword=TopSecret%zz"
+
+    with pytest.raises(BackendError) as caught:
+        open_postgres(url, setup=SetupMode.NONE)
+
+    assert "TopSecret" not in str(caught.value)
+    assert "***" in str(caught.value)
+
+
 def test_redaction_covers_driver_messages_that_echo_the_password(
     postgres_server: PostgresServer,
 ) -> None:

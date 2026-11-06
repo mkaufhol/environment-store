@@ -29,7 +29,8 @@ _SCHEME: Final[re.Pattern[str]] = re.compile(r"(postgresql|postgres)://", re.IGN
 _USERINFO: Final[re.Pattern[str]] = re.compile(r"([^@/]*)@")
 _COMPONENT_SEPARATORS: Final[re.Pattern[str]] = re.compile(r"[@:/,?&=]")
 _SCHEMA_PARAMETER: Final = "schema"
-_CREDENTIAL_PARAMETER: Final = "password"
+# libpq parameters that hold secrets: the password and the passphrase of the client key.
+_CREDENTIAL_PARAMETERS: Final[frozenset[str]] = frozenset({"password", "sslpassword"})
 _DATABASE_PARAMETER: Final = "dbname"
 _REDACTED: Final = "***"
 _ENCODE_HINT: Final = (
@@ -47,7 +48,8 @@ class PostgresTarget:
             password, so it stays out of the `repr`.
         schema: The validated name of the dedicated schema.
         location: Schema and database for messages; never credentials.
-        secrets: Every spelling of the password(s) in the connection string, for redaction.
+        secrets: Every spelling of the password(s) and client key passphrase(s) in the
+            connection string, for redaction.
     """
 
     conninfo: str = field(repr=False)
@@ -212,7 +214,7 @@ def _secrets(userinfo: str | None, query_items: list[str]) -> tuple[str, ...]:
         raw.append(userinfo.partition(":")[2])
     for item in query_items:
         key, _, value = item.partition("=")
-        if unquote(key) == _CREDENTIAL_PARAMETER:
+        if unquote(key) in _CREDENTIAL_PARAMETERS:
             raw.append(value)
     found = {spelling for secret in raw for spelling in (secret, unquote(secret)) if spelling}
     return tuple(sorted(found))

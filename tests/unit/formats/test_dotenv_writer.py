@@ -40,10 +40,15 @@ _GOLDEN: Final[tuple[tuple[str, str], ...]] = (
     ("line1\nline2", 'A="line1\\nline2"'),
     ("line1\r\nline2\n", 'A="line1\\r\\nline2\\n"'),
     ("cr\ronly", 'A="cr\\ronly"'),
-    ("back\\slash", 'A="back\\\\slash"'),
+    # A single backslash is literal in single quotes; only `\\` and a trailing one are not.
+    ("back\\slash", "A='back\\slash'"),
+    ("\\n literal", "A='\\n literal'"),
+    ("C:\\Users\\$USER", "A='C:\\Users\\$USER'"),
+    ("a\\b c $x", "A='a\\b c $x'"),
+    ("\\", 'A="\\\\"'),
     ("trailing\\", 'A="trailing\\\\"'),
+    ("double\\\\back", 'A="double\\\\\\\\back"'),
     ("\\'", 'A="\\\\\'"'),
-    ("\\n literal", 'A="\\\\n literal"'),
     ('say "hi"\n\tbye', 'A="say \\"hi\\"\\n\\tbye"'),
     (
         "-----BEGIN KEY-----\nabc==\n-----END KEY-----\n",
@@ -88,7 +93,10 @@ def test_dumps_of_nothing_is_empty() -> None:
 
 
 def test_dumps_accepts_nested_keys_of_stores_starting_with_a_digit() -> None:
-    assert dumps({"9LIVES__X": "v"}) == "9LIVES__X=v\n"
+    text = dumps({"9LIVES__X": "v"})
+
+    assert text == "9LIVES__X=v\n"
+    assert _python_dotenv(text) == {"9LIVES__X": "v"}
 
 
 @pytest.mark.parametrize("name", ["", "A-B", "A B", "A=B", "#A", "Ä", "A\n"])
@@ -105,7 +113,8 @@ def test_dumps_refuses_nul_without_echoing_the_value() -> None:
 
 
 @pytest.mark.parametrize(
-    "value", ["it's $5", "a\nb$c", "C:\\$x", "multi\nline $HOME", "cr\r$", "x$'s"]
+    "value",
+    ["it's $5", "a\nb$c", "C:\\\\$x", "$x\\", "multi\nline $HOME", "cr\r$", "x$'s"],
 )
 def test_dumps_refuses_values_needing_double_quotes_that_contain_a_dollar(value: str) -> None:
     with pytest.raises(ValidationError, match=r"'TOKEN'.*double quotes.*\$") as excinfo:
@@ -134,11 +143,7 @@ def _representable(value: str) -> bool:
     return "$" not in value
 
 
-def _dotenv_keys() -> st.SearchStrategy[str]:
-    return st.one_of(variable_names(), st.from_regex(r"[0-9][A-Za-z0-9_]*", fullmatch=True))
-
-
-@given(st.dictionaries(_dotenv_keys(), values().filter(_representable), max_size=8))
+@given(st.dictionaries(variable_names(), values().filter(_representable), max_size=8))
 def test_values_without_dollar_round_trip_through_loads_and_python_dotenv(
     variables: dict[str, str],
 ) -> None:
@@ -160,15 +165,17 @@ def test_dumps_either_refuses_or_round_trips_exactly(variables: Mapping[str, str
     assert _python_dotenv(text) == variables
 
 
-_SINGLE_QUOTE_BREAKERS: Final[dict[int, int | None]] = str.maketrans("", "", "'\\\r\n")
+_SINGLE_QUOTE_BREAKERS: Final[dict[int, int | None]] = str.maketrans("", "", "'\r\n")
 
 
-@given(
-    values()
-    .map(lambda value: value.translate(_SINGLE_QUOTE_BREAKERS))
-    .filter(lambda value: "${" not in value)
-)
-def test_single_line_values_without_quote_or_backslash_keep_their_dollars(value: str) -> None:
+def _single_quotable(value: str) -> bool:
+    # python-dotenv decodes `\\` in single quotes, and a trailing `\` escapes the closing quote.
+    return "\\\\" not in value and not value.endswith("\\") and "${" not in value
+
+
+@given(values().map(lambda value: value.translate(_SINGLE_QUOTE_BREAKERS)).filter(_single_quotable))
+def test_single_line_values_without_quote_or_backslash_pair_keep_their_dollars(value: str) -> None:
+    # D37: every such value is written (single quotes), `$` and single backslashes included.
     text = dumps({"A": value})
 
     assert loads(text) == {"A": value}

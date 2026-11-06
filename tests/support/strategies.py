@@ -71,8 +71,6 @@ _TRICKY_VALUES: Final[tuple[str, ...]] = (
     "back\\slash\\n",
     "unicode äöü ✓ 😀",
 )
-_TIMESTAMP_MIN: Final[datetime] = datetime(1970, 1, 1)  # noqa: DTZ001 - st.datetimes needs naive
-_TIMESTAMP_MAX: Final[datetime] = datetime(2999, 12, 31, 23, 59, 59, 999999)  # noqa: DTZ001
 
 
 def store_names() -> st.SearchStrategy[str]:
@@ -117,8 +115,8 @@ def variable_maps(*, max_size: int = 8) -> st.SearchStrategy[dict[str, str]]:
 
 
 def timestamps() -> st.SearchStrategy[datetime]:
-    """Aware UTC datetimes with microseconds, within the range every backend stores."""
-    return st.datetimes(min_value=_TIMESTAMP_MIN, max_value=_TIMESTAMP_MAX, timezones=st.just(UTC))
+    """Aware UTC datetimes with microseconds, years 1 to 9999: every backend stores them all."""
+    return st.datetimes(timezones=st.just(UTC))
 
 
 @st.composite

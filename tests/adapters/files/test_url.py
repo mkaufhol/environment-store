@@ -53,3 +53,20 @@ def test_url_without_a_usable_directory_is_rejected(url: str) -> None:
 def test_unknown_user_in_tilde_path_is_rejected() -> None:
     with pytest.raises(ValidationError, match="home directory"):
         directory_from_url("json://~no-such-user-for-envstore-tests/envs", scheme="json")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "json://envs?mode=ro",
+        "toml://envs#x",
+        "json:///srv/envs?",
+        "toml://~/envs#",
+        "json://a?b/c",
+    ],
+)
+def test_url_with_a_query_or_fragment_is_rejected_like_sqlite(url: str) -> None:
+    scheme = url.partition(":")[0]
+
+    with pytest.raises(ValidationError, match="query or fragment"):
+        directory_from_url(url, scheme=scheme)
