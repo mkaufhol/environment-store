@@ -17,7 +17,7 @@ from textual.widgets.data_table import RowKey
 
 from environment_store.core.errors import EnvironmentStoreError
 from environment_store.core.models import StoreInfo
-from environment_store.tui.messages import notify_error, notify_problem
+from environment_store.tui.messages import message_for, notify_error, notify_problem
 from environment_store.tui.screens.unlock import UnlockScreen, describe_encryption
 from environment_store.tui.screens.variables import VariablesScreen
 from environment_store.tui.session import OpenedStore, StoreSession
@@ -118,7 +118,8 @@ class StoresScreen(Screen[None]):
             # The user did not choose this key, so the message names it and where it came from.
             notify_problem(
                 self.app,
-                f"unlocking with the key file '{path}' from the project file failed: {error}",
+                f"unlocking with the key file '{path}' from the project file failed: "
+                f"{message_for(error)}",
             )
             return None
 

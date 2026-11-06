@@ -17,7 +17,7 @@ from textual.widgets import Button, Footer, Input, Label
 from environment_store.core.errors import EnvironmentStoreError
 from environment_store.core.models import StoreInfo
 from environment_store.core.secrets import Secret
-from environment_store.tui.messages import notify_problem
+from environment_store.tui.messages import message_for, notify_problem
 from environment_store.tui.session import OpenedStore, StoreSession
 
 __all__ = ["UnlockScreen", "describe_encryption"]
@@ -111,7 +111,7 @@ class UnlockScreen(ModalScreen[OpenedStore | None]):
         except EnvironmentStoreError as error:
             passphrase.value = ""
             source = f"the key file '{path}'" if path else "the typed passphrase"
-            notify_problem(self.app, f"unlocking with {source} failed: {error}")
+            notify_problem(self.app, f"unlocking with {source} failed: {message_for(error)}")
             return
         self.dismiss(opened)
 

@@ -404,8 +404,31 @@ def test_invalid_key_file_notifies_with_the_tui_hint(
         await pilot.pause()
         assert isinstance(app.screen, UnlockScreen)
         [message] = notifications(app)
-        assert message.startswith("not a valid key file: ")
+        # D46's prefix names the input; D47's TUI remedy replaces the library hint.
+        assert message.startswith(
+            f"unlocking with the key file '{bad}' failed: not a valid key file: "
+        )
         assert message.endswith("; create one with envs keygen")
         assert "generate_key" not in message
 
     run_app(encrypted, scenario)
+
+
+def test_invalid_project_key_file_notifies_with_the_tui_hint(
+    encrypted: EnvironmentStore, tmp_path: Path
+) -> None:
+    bad = tmp_path / "bad.key"
+    bad.write_text("garbage\n", encoding="utf-8")
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        assert isinstance(app.screen, UnlockScreen)
+        [message] = notifications(app)
+        assert message.startswith(
+            f"unlocking with the key file '{bad}' from the project file failed: "
+            "not a valid key file: "
+        )
+        assert message.endswith("; create one with envs keygen")
+        assert "generate_key" not in message
+
+    run_app(encrypted, scenario, key_paths={"a": bad})
