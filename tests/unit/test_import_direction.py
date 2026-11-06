@@ -1,9 +1,10 @@
 """Import direction (IMPLEMENTATION-PLAN.md §3, §6.1).
 
 core <- crypto <- service; core <- adapters; core <- formats; core, crypto <- config;
-core, crypto, service, formats, config <- library; core, config, library, formats <- cli.
+core, crypto, service, formats, config <- library; core, config, library, formats <- cli, tui.
 Adapter subpackages import core and adapters.sql only, never each other. No frontend layer
-imports adapters, service or crypto (D31).
+imports adapters, service or crypto (D31). One recorded exception (PD 31): the `envs tui` command
+module may import `tui`, inside its command function only; the TUI never imports the CLI.
 """
 
 import ast
@@ -34,6 +35,12 @@ _ALLOWED: Final[dict[str, frozenset[str]]] = {
     "config": frozenset({"core", "crypto", "config"}),
     "library": frozenset({"core", "crypto", "service", "formats", "config", "library"}),
     "cli": frozenset({"core", "config", "library", "formats", "cli"}),
+    "tui": frozenset({"core", "config", "library", "formats", "tui"}),
+}
+
+# Module -> extra layers only it may import (PD 31).
+_MODULE_EXCEPTIONS: Final[dict[str, frozenset[str]]] = {
+    "environment_store.cli.tui_command": frozenset({"tui"}),
 }
 
 
@@ -65,7 +72,7 @@ def _violations(module: str, source: str) -> list[str]:
     layer = _layer(module)
     if layer not in _ALLOWED:
         return []
-    allowed = _ALLOWED[layer]
+    allowed = _ALLOWED[layer] | _MODULE_EXCEPTIONS.get(module, frozenset())
     return [
         imported
         for imported in _imported_modules(source)
@@ -100,6 +107,17 @@ def _source_modules() -> list[tuple[str, Path]]:
         ("environment_store.cli.app", "import environment_store.adapters.sqlite", 1),
         ("environment_store.cli.app", "from environment_store.tui import run_tui", 1),
         ("environment_store.cli.app", "import environment_store", 1),
+        ("environment_store.cli.tui_command", "from environment_store.tui import run_tui", 0),
+        ("environment_store.cli.tui_command", "from environment_store.service import X", 1),
+        ("environment_store.cli.stores", "import environment_store.tui", 1),
+        ("environment_store.tui.app", "from environment_store.library.store import x", 0),
+        ("environment_store.tui.app", "from environment_store.config.secrets import x", 0),
+        ("environment_store.tui.app", "from environment_store.tui.session import x", 0),
+        ("environment_store.tui.app", "from environment_store.cli.app import app", 1),
+        ("environment_store.tui.app", "from environment_store.cli import tui_command", 1),
+        ("environment_store.tui.app", "from environment_store.service import x", 1),
+        ("environment_store.tui.app", "from environment_store.crypto import x", 1),
+        ("environment_store.tui.app", "import environment_store.adapters.files", 1),
         ("environment_store.cli.app", "from environment_store.library.store import x", 0),
         ("environment_store.cli.app", "from environment_store.config.settings import x", 0),
         ("environment_store.cli.app", "from environment_store.formats.infer import x", 0),
@@ -165,6 +183,7 @@ def test_layer_packages_are_found_in_the_source_tree() -> None:
         "environment_store.config",
         "environment_store.library",
         "environment_store.cli",
+        "environment_store.tui",
     } <= found
 
 
@@ -192,3 +211,38 @@ def test_layer_loads_no_higher_layer_in_a_fresh_interpreter(
 
     loaded = {_layer(name) for name in result.stdout.split()}
     assert loaded.isdisjoint(forbidden)
+
+
+def _modules_importing(layer: str) -> set[str]:
+    return {
+        module
+        for module, path in _source_modules()
+        if any(
+            _layer(imported) == layer
+            for imported in _imported_modules(path.read_text(encoding="utf-8"))
+        )
+    }
+
+
+def test_only_the_tui_command_module_of_the_cli_imports_the_tui() -> None:
+    cli_modules = {module for module in _modules_importing("tui") if _layer(module) == "cli"}
+
+    assert cli_modules == {"environment_store.cli.tui_command"}
+
+
+def test_no_tui_module_imports_the_cli() -> None:
+    assert {module for module in _modules_importing("cli") if _layer(module) == "tui"} == set()
+
+
+def test_the_tui_command_imports_the_tui_only_inside_a_function() -> None:
+    path = _SRC / "cli" / "tui_command.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    top_level: list[ast.stmt] = [
+        node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))
+    ]
+
+    assert all(
+        _layer(module) != "tui"
+        for module in _imported_modules(ast.unparse(ast.Module(body=top_level, type_ignores=[])))
+    )
+    assert "environment_store.tui" in _imported_modules(path.read_text(encoding="utf-8"))

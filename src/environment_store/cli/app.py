@@ -15,7 +15,7 @@ except ImportError as missing:
 
 from importlib.metadata import version
 
-from environment_store.cli import encryption, exporting, migrate, stores, variables
+from environment_store.cli import encryption, exporting, migrate, stores, tui_command, variables
 from environment_store.cli._typer import EnvsGroup
 from environment_store.cli.output import out
 from environment_store.cli.runtime import Runtime
@@ -111,6 +111,7 @@ def build_app() -> typer.Typer:
     variables.register(app)
     exporting.register(app)
     encryption.register(app)
+    tui_command.register(app)
     return app
 
 

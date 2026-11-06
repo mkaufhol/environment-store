@@ -30,3 +30,14 @@ def test_all_extra_contains_nothing_but_the_other_extras() -> None:
 
 def test_cli_extra_requires_typer_with_vendored_click() -> None:
     assert _extras()["cli"] == ["typer>=0.26"]
+
+
+def test_tui_extra_requires_the_tested_textual_line() -> None:
+    # PD 15: the floor is the tested version line, not just any textual.
+    assert _extras()["tui"] == ["textual>=8.2"]
+
+
+def test_testing_group_installs_the_same_textual_line_as_the_tui_extra() -> None:
+    data = tomllib.loads(_PYPROJECT.read_text(encoding="utf-8"))
+
+    assert "textual>=8.2" in data["dependency-groups"]["testing"]
