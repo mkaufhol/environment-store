@@ -47,6 +47,8 @@ from environment_store.library.store import EnvironmentStore
 __all__ = ["existing_secret", "keep_or_discard", "new_secret", "resolve_existing"]
 
 _STDIN_PATH: Final = Path("-")
+# An empty --generate-key value arrives as Path(""), which is Path(".").
+_NO_FILE_PATH: Final = Path()
 # Raised before anything is written (PD 33). AlreadyExistsError is narrowed per command below.
 _BEFORE_WRITE: Final = (
     ValidationError,
@@ -136,7 +138,7 @@ def new_secret(
         The new secret, or `None`.
 
     Raises:
-        ValidationError: More than one option, or `--generate-key -` (PD 24).
+        ValidationError: More than one option, `--generate-key -` (PD 24), or an empty path.
     """
     choice = _choice(key=key, generate=generate, passphrase=passphrase, key_option=key_option)
     if choice is None:
@@ -158,8 +160,11 @@ def _choice(
             f"pass it with '{key_option} -'"
         )
         raise ValidationError(message)
+    if generate == _NO_FILE_PATH:
+        message = "--generate-key needs a file path"
+        raise ValidationError(message)
     if key is not None:
-        return NewKeyFile(parse_key_path(key))
+        return NewKeyFile(parse_key_path(key, option=key_option))
     if generate is not None:
         return GenerateKeyFile(generate)
     return NewPassphrase() if passphrase else None

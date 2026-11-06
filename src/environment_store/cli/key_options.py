@@ -79,11 +79,12 @@ def _split(value: str, stores: Sequence[str]) -> tuple[str, str]:
     return distinct[0], value
 
 
-def parse_key_path(path: str) -> KeySource:
+def parse_key_path(path: str, *, option: str = "-k") -> KeySource:
     """Parse a key path given on the command line: a file, or `-` for stdin.
 
     Args:
         path: The path text.
+        option: The option the path was given with, for messages.
 
     Returns:
         The key source.
@@ -92,6 +93,6 @@ def parse_key_path(path: str) -> KeySource:
         ValidationError: The path is empty.
     """
     if not path:
-        message = "the path of -k is empty; give a key file path or '-' for stdin"
+        message = f"the path of {option} is empty; give a key file path or '-' for stdin"
         raise ValidationError(message)
     return KeyStdin() if path == _STDIN else KeyFile(Path(path))

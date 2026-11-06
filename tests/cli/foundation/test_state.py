@@ -202,3 +202,26 @@ def test_get_state_outside_the_envs_app_is_a_type_error() -> None:
 
     with pytest.raises(TypeError, match="CliState"):
         get_state(ctx)
+
+
+def test_repr_hides_the_connection_option_and_the_opened_store_urls(
+    cli_json: CliHarness, app: typer.Typer
+) -> None:
+    # A connection string may hold a password (CONTRIBUTING §6), like Settings.connection.
+    option = f"json://{cli_json.root}/option-hunter2"
+    other = f"json://{cli_json.root}/other-hunter2"
+    seen: list[str] = []
+
+    @app.command("show-repr", cls=EnvsCommand)
+    def show_repr(ctx: typer.Context) -> None:
+        state = get_state(ctx)
+        state.open_store(ctx)
+        state.open_store(ctx, connection=other)
+        seen.append(repr(state))
+
+    result = cli_json.invoke("-c", option, "show-repr", app=app, connection=False)
+
+    assert_exit(result, 0)
+    assert len(seen) == 1
+    assert "CliState(" in seen[0]
+    assert "hunter2" not in seen[0]

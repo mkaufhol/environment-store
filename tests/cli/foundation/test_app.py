@@ -91,9 +91,11 @@ def test_missing_command_after_global_options_is_a_usage_error(cli_json: CliHarn
 def test_no_arguments_show_the_help_and_exit_with_one(cli_json: CliHarness) -> None:
     result = cli_json.invoke(connection=False)
 
+    # The plan's one exception to "nothing on stdout" for usage errors: the help goes to stdout.
     assert_exit(result, 1)
-    assert "Usage:" in result.output
-    assert "--connection" in result.output
+    assert "Usage:" in result.stdout
+    assert "--connection" in result.stdout
+    assert result.stderr == ""
 
 
 def test_help_is_printed_on_stdout_with_exit_zero(cli_json: CliHarness) -> None:

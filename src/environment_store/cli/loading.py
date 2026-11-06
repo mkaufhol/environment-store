@@ -6,6 +6,7 @@ then load. A typo never costs a prompt, and a wrong key is not asked for again.
 """
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import typer
 
@@ -14,10 +15,13 @@ from environment_store.cli.secrets import resolve_existing
 from environment_store.cli.state import get_state
 from environment_store.config.secrets import SecretResolver
 from environment_store.config.settings import Settings
-from environment_store.core.errors import StoreNotFoundError, ValidationError
+from environment_store.core.errors import KeyRequiredError, StoreNotFoundError, ValidationError
 from environment_store.core.validation import validate_store_name
 from environment_store.library.environment import Environment
 from environment_store.library.sources import Source
+
+if TYPE_CHECKING:
+    from environment_store.core.secrets import Secret
 
 __all__ = ["load_for_reading", "store_list"]
 
@@ -65,7 +69,8 @@ def load_for_reading(
     Raises:
         ValidationError: Bad names or `-k` values, keys for plaintext stores.
         StoreNotFoundError: Stores that do not exist (all named).
-        CryptoError: Missing or wrong keys.
+        CryptoError: Missing or wrong keys; with several stores, a missing key's hint names
+            the store-bound form `-k <store>=<path>`.
     """
     state = get_state(ctx)
     settings = state.settings()
@@ -78,10 +83,20 @@ def load_for_reading(
         message = f"stores not found: {', '.join(missing)}"
         raise StoreNotFoundError(message)
     resolver = SecretResolver(environment, state.secret_input("-k -"))
-    secrets = {
-        name: resolve_existing(state, resolver, name, sources.get(name))
-        for name in dict.fromkeys(names)
-    }
+    distinct = tuple(dict.fromkeys(names))
+    secrets: dict[str, Secret | None] = {}
+    for name in distinct:
+        try:
+            secrets[name] = resolve_existing(state, resolver, name, sources.get(name))
+        except KeyRequiredError as error:
+            if len(distinct) == 1:
+                raise
+            # The resolver's hint names the shorthand, which works with one store only (D33).
+            message = (
+                f"store {name!r} is encrypted and no key or passphrase was given: pass it "
+                f"with -k {name}=<path> (or -k {name}=- for stdin)"
+            )
+            raise KeyRequiredError(message) from error
     return environment.load(
         [Source(name, key=secrets[name]) for name in names],
         order=settings.merge_order(first_wins=first_wins),

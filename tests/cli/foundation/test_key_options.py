@@ -6,7 +6,11 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from environment_store.cli.key_options import parse_reading_keys, parse_writing_key
+from environment_store.cli.key_options import (
+    parse_key_path,
+    parse_reading_keys,
+    parse_writing_key,
+)
 from environment_store.config.secrets import KeyFile, KeyStdin
 from environment_store.core.errors import ValidationError
 from tests.support.strategies import store_names
@@ -120,3 +124,13 @@ def test_empty_writing_key_is_refused() -> None:
 @given(path=st.text(min_size=1).filter(lambda text: text != "-"))
 def test_any_writing_key_path_is_kept_as_given(path: str) -> None:
     assert parse_writing_key(path) == KeyFile(Path(path))
+
+
+def test_empty_key_path_names_the_option_it_came_from() -> None:
+    with pytest.raises(ValidationError, match="the path of --new-key is empty"):
+        parse_key_path("", option="--new-key")
+
+
+def test_empty_key_path_names_k_by_default() -> None:
+    with pytest.raises(ValidationError, match="the path of -k is empty"):
+        parse_key_path("")

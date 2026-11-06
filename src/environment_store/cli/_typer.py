@@ -10,13 +10,14 @@
   command `run` executes, untouched (C4).
 """
 
-from typing import TYPE_CHECKING, Any, Final, cast, override
+from typing import TYPE_CHECKING, Final, cast, override
 
 import typer
+from typer._click.exceptions import NoArgsIsHelpError
 from typer.core import TyperCommand, TyperGroup
 
 from environment_store.cli.errors import ExitCode, exit_code_for
-from environment_store.cli.output import err
+from environment_store.cli.output import err, out
 from environment_store.cli.state import get_state
 from environment_store.core.errors import EnvironmentStoreError
 
@@ -39,17 +40,24 @@ class EnvsGroup(TyperGroup):
         info_name: str | None,
         args: list[str],
         parent: "ClickContext | None" = None,
-        **extra: Any,
+        **extra: object,
     ) -> "ClickContext":
-        """Parse the global options; a usage error exits with 1."""
+        """Parse the global options; a usage error exits with 1.
+
+        A bare `envs` prints the help on stdout (click would print it on stderr) and exits
+        with 1: the one usage error that writes to stdout.
+        """
         try:
             return super().make_context(info_name, args, parent, **extra)
+        except NoArgsIsHelpError as error:
+            out(error.format_message())
+            raise typer.Exit(ExitCode.USAGE) from None
         except typer.TyperException as error:
             error.exit_code = ExitCode.USAGE
             raise
 
     @override
-    def invoke(self, ctx: "ClickContext") -> Any:
+    def invoke(self, ctx: "ClickContext") -> object:
         """Run the command; usage errors exit with 1, library errors with their code."""
         try:
             return super().invoke(ctx)
@@ -65,7 +73,7 @@ class EnvsCommand(TyperCommand):
     """A command that validates the configuration before its callback runs (PD 10)."""
 
     @override
-    def invoke(self, ctx: "ClickContext") -> Any:
+    def invoke(self, ctx: "ClickContext") -> object:
         """Resolve the settings (printing their warnings), then run the callback."""
         # Every context typer creates is a typer.Context at runtime.
         get_state(cast("typer.Context", ctx)).settings()

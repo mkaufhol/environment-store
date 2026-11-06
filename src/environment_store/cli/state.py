@@ -38,11 +38,15 @@ class CliState:
     """
 
     runtime: Runtime
-    connection_option: str | None
+    # A connection string may hold a password: kept out of the repr like Settings.connection.
+    connection_option: str | None = field(repr=False)
     use_project: bool
     noinput: bool
     _settings: Settings | None = field(default=None, init=False)
-    _stores: dict[tuple[str, SetupMode], EnvironmentStore] = field(default_factory=dict, init=False)
+    # Keyed by connection string, so hidden from the repr for the same reason.
+    _stores: dict[tuple[str, SetupMode], EnvironmentStore] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _stdin_claim: str | None = field(default=None, init=False)
 
     def settings(self) -> Settings:

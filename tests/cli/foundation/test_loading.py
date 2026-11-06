@@ -189,6 +189,30 @@ def test_without_prompting_a_missing_key_exits_with_four(
     assert "-k" in result.stderr
 
 
+def test_missing_key_with_several_stores_hints_the_store_bound_form(
+    cli_json: CliHarness, app: typer.Typer
+) -> None:
+    _arrange(cli_json)
+
+    result = cli_json.invoke("show", "base", "phrase", app=app)
+
+    assert_exit(result, 4)
+    assert "store 'phrase' is encrypted" in result.stderr
+    assert "-k phrase=<path> (or -k phrase=- for stdin)" in result.stderr
+    assert "-k <path>" not in result.stderr
+
+
+def test_missing_key_with_one_store_repeated_keeps_the_shorthand_hint(
+    cli_json: CliHarness, app: typer.Typer
+) -> None:
+    _arrange(cli_json)
+
+    result = cli_json.invoke("show", "phrase", "phrase", app=app)
+
+    assert_exit(result, 4)
+    assert "-k <path> (or -k - for stdin)" in result.stderr
+
+
 def test_key_option_beats_project_key_beats_prompt(cli_json: CliHarness, app: typer.Typer) -> None:
     stores = _arrange(cli_json)
     cli_json.project_file("[keys]\nsecret = 'missing.key'\nphrase = 'p.txt'")

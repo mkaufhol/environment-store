@@ -248,6 +248,25 @@ def test_more_than_one_new_secret_option_exits_with_one(
     assert not (cli_json.root / "b.key").exists()
 
 
+def test_empty_new_key_names_the_new_key_option(cli_json: CliHarness, app: typer.Typer) -> None:
+    result = cli_json.invoke("new", "--new-key", "", app=app)
+
+    assert_exit(result, 1)
+    assert "the path of --new-key is empty" in result.stderr
+    assert "of -k" not in result.stderr
+
+
+@pytest.mark.parametrize("value", ["", "."])
+def test_generate_key_without_a_file_path_is_a_usage_error(
+    cli_json: CliHarness, app: typer.Typer, value: str
+) -> None:
+    result = cli_json.invoke("new", "--generate-key", value, app=app)
+
+    assert_exit(result, 1)
+    assert "--generate-key needs a file path" in result.stderr
+    assert "already exists" not in result.stderr
+
+
 def test_generate_key_to_stdout_is_refused_with_the_keygen_hint(
     cli_json: CliHarness, app: typer.Typer
 ) -> None:
