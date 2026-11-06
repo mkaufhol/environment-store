@@ -54,6 +54,12 @@ def test_default_stdout_check_asks_the_current_stdout(
     assert Runtime().stdout_is_tty() is tty
 
 
+def test_default_stdout_check_of_a_closed_stdout_is_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "stdout", None)
+
+    assert Runtime().stdout_is_tty() is False
+
+
 def test_runtime_is_immutable() -> None:
     with pytest.raises(AttributeError):
         Runtime().uid = 1  # ty: ignore[invalid-assignment] - the point of the test

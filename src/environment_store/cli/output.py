@@ -6,10 +6,13 @@ they go through the prompter, also on stderr (PD 20).
 """
 
 import json
+import sys
 from collections.abc import Mapping, Sequence
 from typing import Final
 
 import typer
+
+from environment_store.core.errors import BackendError
 
 __all__ = ["JsonValue", "display_value", "emit_json", "err", "out", "table", "write_value"]
 
@@ -25,7 +28,14 @@ def out(text: str = "", *, newline: bool = True) -> None:
     Args:
         text: The text.
         newline: Whether to end it with a newline.
+
+    Raises:
+        BackendError: stdout is closed.
     """
+    if sys.stdout is None:
+        # Descriptor 1 is closed: typer.echo would drop the data silently and exit 0.
+        message = "cannot write the output: stdout is closed"
+        raise BackendError(message)
     data = text + "\n" if newline else text
     # Bytes go straight to the binary stream: no locale encoding, no newline translation.
     typer.echo(data.encode("utf-8"), nl=False)
@@ -89,5 +99,8 @@ def write_value(value: str, *, tty: bool) -> None:
     Args:
         value: The value, written byte-exact.
         tty: Whether stdout is a terminal; only then a newline is added.
+
+    Raises:
+        BackendError: stdout is closed.
     """
     out(value, newline=tty)

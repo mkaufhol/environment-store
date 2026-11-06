@@ -6,6 +6,7 @@ an open adapter always sees what other connections committed. WAL mode lets read
 one connection writes; the busy timeout makes writers queue instead of failing.
 """
 
+import os
 import sqlite3
 import threading
 from collections.abc import Generator, Sequence
@@ -49,6 +50,8 @@ BUSY_TIMEOUT_SECONDS: Final[float] = 30.0
 
 # Literal statements with parameters only; the column lists match STORES_COLUMNS and
 # STORE_INFO_COLUMNS (checked by the tests).
+_FILE_MODE: Final = 0o600
+
 _LIST: Final = "SELECT name, encrypted, cipher_meta, revision, created_at, updated_at FROM stores"
 _READ: Final = (
     "SELECT name, encrypted, cipher_meta, variables, ciphertext, revision, created_at, "
@@ -139,11 +142,14 @@ class SqliteAdapter:
         self._ready = False
         self._lock = threading.Lock()
         self._connection = None
+        _create_private(self.path)
         with self._errors():
             # check_same_thread=False: the lock, not the creating thread, guards the connection.
             self._connection = sqlite3.connect(
                 self.path, timeout=busy_timeout, autocommit=True, check_same_thread=False
             )
+            # Freed pages are zeroed: a deleted or replaced plaintext value leaves no trace.
+            self._connection.execute("PRAGMA secure_delete = ON")
             # The driver's own UTF-8 decode error quotes the whole column (secret values); with
             # surrogateescape invalid bytes reach the codec, which reports them without a value.
             self._connection.text_factory = _decode_text
@@ -210,7 +216,7 @@ class SqliteAdapter:
         with self._session() as connection:
             row = connection.execute(_READ, (name,)).fetchone()
         if row is None:
-            raise _not_found(name)
+            raise _not_found(name, self.path)
         return row_to_record(
             StoreRow(**dict(zip(STORES_COLUMNS, row, strict=True))), dialect=Dialect.SQLITE
         )
@@ -245,7 +251,7 @@ class SqliteAdapter:
                 return
             exists = connection.execute(_EXISTS, (record.name,)).fetchone() is not None
         if not exists:
-            raise _not_found(record.name)
+            raise _not_found(record.name, self.path)
         message = (
             f"store {record.name!r} was changed concurrently (expected revision "
             f"{expected_revision}); nothing was written, read it again and retry"
@@ -266,7 +272,7 @@ class SqliteAdapter:
         with self._session() as connection:
             deleted = connection.execute(_DELETE, (name,)).rowcount
         if not deleted:
-            raise _not_found(name)
+            raise _not_found(name, self.path)
 
     def migrate(self) -> MigrationReport:
         """Create (new or empty file) or upgrade (older schema) the schema; no-op when current.
@@ -340,8 +346,21 @@ class SqliteAdapter:
         return self._connection
 
 
-def _not_found(name: str) -> StoreNotFoundError:
-    return StoreNotFoundError(f"store {name!r} not found")
+def _not_found(name: str, path: Path) -> StoreNotFoundError:
+    return StoreNotFoundError(f"store {name!r} not found in {path}")
+
+
+def _create_private(path: Path) -> None:
+    """Create a missing database file with mode 0600, like the file backend's store files.
+
+    SQLite gives its -wal and -shm files the database file's mode, so they are private too.
+    An existing file keeps its mode; a failure is left to `sqlite3.connect` to report.
+    """
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, _FILE_MODE)
+    except OSError:
+        return
+    os.close(fd)
 
 
 def _decode_text(data: bytes) -> str:

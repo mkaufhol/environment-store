@@ -1,7 +1,10 @@
 """SQLite specifics beyond the contract: connection strings, constraints, corrupt rows, threads."""
 
+import os
 import sqlite3
+import stat
 import traceback
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,7 +16,11 @@ from environment_store.adapters.sqlite import SqliteAdapter, open_sqlite
 from environment_store.adapters.sqlite.schema import transaction
 from environment_store.core.adapter import Adapter, MigratableAdapter
 from environment_store.core.connection import open_adapter
-from environment_store.core.errors import BackendError, UnsupportedFormatError
+from environment_store.core.errors import (
+    BackendError,
+    StoreNotFoundError,
+    UnsupportedFormatError,
+)
 from environment_store.core.models import MAX_REVISION, Cipher, CipherMeta, KeyMode, StoreRecord
 from tests.adapters.sqlite.backend import raw, url_of
 
@@ -88,6 +95,58 @@ def test_memory_like_file_name_is_a_real_file(
 
     with open_sqlite("sqlite:///:memory:") as reopened:
         assert reopened.read_store("base") == _plain()
+
+
+@pytest.fixture
+def umask_022() -> Iterator[None]:
+    previous = os.umask(0o022)
+    try:
+        yield
+    finally:
+        os.umask(previous)
+
+
+@pytest.mark.usefixtures("umask_022")
+def test_a_new_database_file_is_readable_by_the_owner_only(path: Path) -> None:
+    # Plaintext stores live in the file; like the file backend's store files it is 0600.
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(_plain())
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.usefixtures("umask_022")
+def test_an_existing_database_file_keeps_its_mode(path: Path) -> None:
+    path.touch(mode=0o640)
+    path.chmod(0o640)
+
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(_plain())
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o640
+
+
+def test_a_database_in_a_missing_directory_cannot_be_opened(tmp_path: Path) -> None:
+    with pytest.raises(BackendError, match="unable to open"):
+        open_sqlite(url_of(tmp_path / "missing" / "envs.db"))
+
+
+def test_deleted_values_do_not_stay_in_the_file(path: Path) -> None:
+    marker = "deleted-secret-value-7f3a"
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(
+            StoreRecord.plain(name="gone", variables={"PW": marker}, created_at=_T0)
+        )
+        adapter.delete_store("gone")
+
+    assert marker.encode() not in path.read_bytes()
+
+
+def test_a_missing_store_names_the_database_file(path: Path) -> None:
+    with open_sqlite(url_of(path)) as adapter, pytest.raises(StoreNotFoundError) as raised:
+        adapter.read_store("nope")
+
+    assert str(raised.value) == f"store 'nope' not found in {path}"
 
 
 # --- schema constraints (D12) --------------------------------------------------------------

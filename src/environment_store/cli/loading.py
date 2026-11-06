@@ -77,11 +77,15 @@ def load_for_reading(
     names = store_list(stores, settings)
     sources = parse_reading_keys(keys or (), names)
     environment = state.open_store(ctx)
-    existing = {info.name for info in environment.list_stores()}
-    missing = [name for name in dict.fromkeys(names) if name not in existing]
+    missing: list[str] = []
+    for name in dict.fromkeys(names):
+        try:
+            environment.store_info(name)
+        except StoreNotFoundError as error:
+            # The adapter's own wording, with its location, as in every other command.
+            missing.append(str(error))
     if missing:
-        message = f"stores not found: {', '.join(missing)}"
-        raise StoreNotFoundError(message)
+        raise StoreNotFoundError("; ".join(missing))
     resolver = SecretResolver(environment, state.secret_input("-k -"))
     distinct = tuple(dict.fromkeys(names))
     secrets: dict[str, Secret | None] = {}

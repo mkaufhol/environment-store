@@ -109,8 +109,7 @@ def test_get_of_a_variable_missing_in_one_store_exits_2(cli: CliHarness) -> None
     result = cli.invoke("get", "NOPE", "base")
 
     assert_exit(result, 2)
-    assert "NOPE" in result.stderr
-    assert "base" in result.stderr
+    assert "Error: variable 'NOPE' not found in store 'base'\n" in result.stderr
     assert result.stdout == ""
 
 
@@ -120,13 +119,23 @@ def test_get_of_a_variable_missing_in_every_store_names_them_all(cli_json: CliHa
     result = cli_json.invoke("get", "NOPE", "base", "secret", "base", "-k", f"secret={key}")
 
     assert_exit(result, 2)
-    assert "'NOPE' not found in stores: base, secret" in result.stderr
+    assert "Error: variable 'NOPE' not found in stores 'base', 'secret'\n" in result.stderr
 
 
 def test_get_of_a_missing_store_exits_2(cli_json: CliHarness) -> None:
     result = cli_json.invoke("get", "HOST", "nope")
 
     assert_exit(result, 2)
+
+
+def test_a_missing_store_is_worded_like_in_the_writing_commands(cli: CliHarness) -> None:
+    reading = cli.invoke("get", "HOST", "nope")
+    writing = cli.invoke("set", "-s", "nope", "HOST=x")
+
+    assert_exit(reading, 2)
+    assert_exit(writing, 2)
+    assert reading.stderr == writing.stderr
+    assert "store 'nope' not found in " in reading.stderr
 
 
 def test_get_validates_the_variable_name_before_prompting(cli_json: CliHarness) -> None:

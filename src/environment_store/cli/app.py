@@ -54,7 +54,9 @@ NoProjectOpt = Annotated[
 NoInputOpt = Annotated[
     bool,
     typer.Option(
-        "--noinput", help="Never prompt, even on a terminal: missing keys fail with exit code 4."
+        "--noinput",
+        help="Never prompt, even on a terminal: missing keys fail with exit code 4, missing "
+        "confirmations (no -y) with exit code 1.",
     ),
 ]
 VersionOpt = Annotated[

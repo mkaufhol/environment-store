@@ -16,7 +16,7 @@ from environment_store.cli._typer import passthrough_args
 from environment_store.cli.loading import load_for_reading
 from environment_store.cli.options import (
     FirstWinsOpt,
-    NestedOpt,
+    NestedPrefixOpt,
     OverwriteOpt,
     ReadKeysOpt,
     StoresArg,
@@ -36,7 +36,7 @@ def run(  # noqa: PLR0913 - the options of spec §6.13
     stores: StoresArg = None,
     *,
     overwrite: OverwriteOpt = False,
-    nested: NestedOpt = False,
+    nested: NestedPrefixOpt = False,
     first_wins: FirstWinsOpt = False,
     keys: ReadKeysOpt = None,
 ) -> None:

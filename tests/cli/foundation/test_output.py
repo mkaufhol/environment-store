@@ -1,10 +1,12 @@
 """Output helpers: data on stdout, diagnostics on stderr, JSON documents (D33, spec §6)."""
 
 import json
+import sys
 
 import pytest
 
 from environment_store.cli.output import display_value, emit_json, err, out, table, write_value
+from environment_store.core.errors import BackendError
 
 
 def test_out_writes_a_line_to_stdout_only(capsysbinary: pytest.CaptureFixture[bytes]) -> None:
@@ -100,3 +102,18 @@ def test_write_value_adds_a_newline_on_a_terminal(
     write_value("secret", tty=True)
 
     assert capsysbinary.readouterr().out == b"secret\n"
+
+
+def test_out_to_a_closed_stdout_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A closed descriptor 1 makes sys.stdout None; writing nothing must not pass as success.
+    monkeypatch.setattr(sys, "stdout", None)
+
+    with pytest.raises(BackendError, match="stdout is closed"):
+        out("A=1")
+
+
+def test_write_value_to_a_closed_stdout_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "stdout", None)
+
+    with pytest.raises(BackendError, match="stdout is closed"):
+        write_value("secret", tty=False)

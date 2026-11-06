@@ -37,7 +37,8 @@ def stdin_is_tty() -> bool:
 
 def stdout_is_tty() -> bool:
     """Return whether the current stdout is a terminal."""
-    return sys.stdout.isatty()
+    # A closed descriptor 1 leaves sys.stdout None; that is no terminal.
+    return sys.stdout is not None and sys.stdout.isatty()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

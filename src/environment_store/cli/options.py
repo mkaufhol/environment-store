@@ -21,17 +21,20 @@ from typing import Annotated
 
 import typer
 
-from environment_store.formats.infer import Format
+from environment_store.core.errors import ValidationError
+from environment_store.formats.infer import Format, infer_format
 
 __all__ = [
     "CreateKeyOpt",
-    "FileOpt",
     "FirstWinsOpt",
     "ForceOpt",
     "GenerateKeyOpt",
+    "InputFileOpt",
     "JsonOpt",
     "NestedOpt",
+    "NestedPrefixOpt",
     "NewKeyOpt",
+    "OutputFileOpt",
     "OverwriteOpt",
     "PassphraseOpt",
     "ReadKeysOpt",
@@ -40,6 +43,7 @@ __all__ = [
     "TypeOpt",
     "WriteKeyOpt",
     "YesOpt",
+    "resolve_format",
 ]
 
 StoresArg = Annotated[
@@ -121,14 +125,28 @@ OverwriteOpt = Annotated[
     bool, typer.Option("-o", "--overwrite", help="Overwrite existing variables.")
 ]
 NestedOpt = Annotated[
-    bool, typer.Option("--nested", help="Keep stores apart: STORE__NAME or one table per store.")
+    bool,
+    typer.Option(
+        "--nested",
+        help="Keep stores apart: one table per store (json, toml) or STORE__NAME (dotenv).",
+    ),
 ]
+"""`--nested` of `export`, which has both forms."""
+NestedPrefixOpt = Annotated[
+    bool,
+    typer.Option("--nested", help="Prefix each variable with its store name: STORE__NAME."),
+]
+"""`--nested` of `export-shell` and `run`, which only prefix (spec §6.12, §6.13)."""
 JsonOpt = Annotated[bool, typer.Option("--json", help="Print one JSON document.")]
 YesOpt = Annotated[bool, typer.Option("-y", "--yes", help="Do not ask for confirmation.")]
-FileOpt = Annotated[
+InputFileOpt = Annotated[
+    str | None,
+    typer.Option("-f", "--file", metavar="PATH|-", help="Input file; '-' or none reads stdin."),
+]
+OutputFileOpt = Annotated[
     str | None,
     typer.Option(
-        "-f", "--file", metavar="PATH|-", help="File to use; '-' or none for stdin / stdout."
+        "-f", "--file", metavar="PATH|-", help="Output file; '-' or none writes to stdout."
     ),
 ]
 TypeOpt = Annotated[
@@ -142,3 +160,29 @@ TypeOpt = Annotated[
     ),
 ]
 ForceOpt = Annotated[bool, typer.Option("--force", help="Replace an existing output file.")]
+
+
+def resolve_format(path: Path | None, fmt: Format | None) -> Format:
+    """Resolve the format of `import` and `export` (D22).
+
+    Args:
+        path: The file; `None` for stdin / stdout.
+        fmt: The `-t` value, if given.
+
+    Returns:
+        `-t` if given; else the format inferred from the file name; dotenv for stdin / stdout.
+
+    Raises:
+        ValidationError: The file name determines no format.
+    """
+    if fmt is not None:
+        return fmt
+    if path is None:
+        return Format.DOTENV
+    inferred = infer_format(path)
+    if inferred is None:
+        message = (
+            f"cannot infer the format of '{path}' from its name: pass -t dotenv, -t json or -t toml"
+        )
+        raise ValidationError(message)
+    return inferred

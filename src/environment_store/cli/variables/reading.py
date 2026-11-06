@@ -19,7 +19,7 @@ from environment_store.cli.output import (
     write_value,
 )
 from environment_store.cli.state import get_state
-from environment_store.core.errors import NotFoundError, VariableNotFoundError
+from environment_store.core.errors import NotFoundError
 from environment_store.core.validation import validate_variable_name
 
 __all__ = ["get_variable", "list_variables"]
@@ -86,9 +86,9 @@ def get_variable(  # noqa: PLR0913 - one parameter per argument and option
     merged = environment.with_sources()
     if key not in merged:
         searched = tuple(dict.fromkeys(name for name, _ in environment.stores))
-        if len(searched) == 1:
-            raise VariableNotFoundError([key], store=searched[0])
-        message = f"variable {key!r} not found in stores: {', '.join(searched)}"
+        # One wording whatever the number of stores: only the noun follows the count.
+        noun = "store" if len(searched) == 1 else "stores"
+        message = f"variable {key!r} not found in {noun} {', '.join(map(repr, searched))}"
         raise NotFoundError(message)
     value, store = merged[key]
     if as_json:

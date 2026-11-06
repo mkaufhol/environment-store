@@ -110,5 +110,6 @@ def test_variable_exists_error_lists_all_conflicting_names() -> None:
     assert error.names == ("DB_HOST",)
     assert error.store == "base"
     assert str(error) == (
-        "variables already exist in store 'base': DB_HOST (use overwrite to replace them)"
+        "variables already exist in store 'base': DB_HOST; use overwrite (-o/--overwrite) to "
+        "replace them"
     )

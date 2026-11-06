@@ -10,7 +10,7 @@ import typer
 from environment_store.cli.loading import load_for_reading
 from environment_store.cli.options import (
     FirstWinsOpt,
-    NestedOpt,
+    NestedPrefixOpt,
     OverwriteOpt,
     ReadKeysOpt,
     StoresArg,
@@ -26,7 +26,7 @@ def export_shell(  # noqa: PLR0913 - the options of spec §6.12
     stores: StoresArg = None,
     *,
     overwrite: OverwriteOpt = False,
-    nested: NestedOpt = False,
+    nested: NestedPrefixOpt = False,
     first_wins: FirstWinsOpt = False,
     keys: ReadKeysOpt = None,
 ) -> None:

@@ -187,8 +187,8 @@ class VariableExistsError(AlreadyExistsError):
         self.names = tuple(names)
         self.store = store
         message = (
-            f"variables already exist in store '{store}': {', '.join(self.names)} "
-            "(use overwrite to replace them)"
+            f"variables already exist in store '{store}': {', '.join(self.names)}; "
+            "use overwrite (-o/--overwrite) to replace them"
         )
         super().__init__(message)
 

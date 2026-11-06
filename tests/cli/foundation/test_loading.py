@@ -134,8 +134,8 @@ def test_all_stores_must_exist_before_any_prompt(cli_json: CliHarness, app: type
     result = cli_json.invoke("show", "secret", "nope", "gone", app=app, stdin_tty=True)
 
     assert_exit(result, 2)
-    assert "nope" in result.stderr
-    assert "gone" in result.stderr
+    assert "store 'nope' not found in " in result.stderr
+    assert "store 'gone' not found in " in result.stderr
 
 
 def test_repeated_store_is_prompted_once(cli_json: CliHarness, app: typer.Typer) -> None:

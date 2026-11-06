@@ -79,6 +79,19 @@ def test_import_of_a_file_whose_format_cannot_be_inferred_fails(cli_json: CliHar
     assert cli_json.store().variables("a") == {}
 
 
+def test_import_and_export_give_the_same_format_hint(cli_json: CliHarness) -> None:
+    cli_json.store().create_store("a")
+    path = _write(cli_json, "input.yaml", "A=1\n")
+
+    imported = cli_json.invoke("import", "-s", "a", "-f", str(path))
+    exported = cli_json.invoke("export", "a", "-f", str(path))
+
+    assert_exit(imported, 1)
+    assert_exit(exported, 1)
+    assert imported.stderr == exported.stderr
+    assert "pass -t dotenv, -t json or -t toml" in imported.stderr
+
+
 def test_import_reads_dotenv_from_stdin_by_default(cli: CliHarness) -> None:
     cli.store().create_store("a")
 
