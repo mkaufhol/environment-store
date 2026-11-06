@@ -1,5 +1,6 @@
 import dataclasses
 from datetime import UTC, datetime
+from typing import Final
 
 import pytest
 
@@ -15,7 +16,7 @@ from environment_store.core.errors import ValidationError
 from environment_store.core.models import StoreRecord
 from tests.support.memory_adapter import MemoryAdapter, MemoryBackend
 
-_T0 = datetime(2026, 11, 6, 10, 0, tzinfo=UTC)
+_T0: Final[datetime] = datetime(2026, 11, 6, 10, 0, tzinfo=UTC)
 
 
 def _record(*, name: str = "base", revision: int = 1) -> StoreRecord:

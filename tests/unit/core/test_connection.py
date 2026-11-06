@@ -4,6 +4,7 @@ import textwrap
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -19,11 +20,11 @@ from tests.support.memory_adapter import MemoryAdapter
 
 type ModuleWriter = Callable[[str], str]
 
-_FACTORY_SOURCE = """
+_FACTORY_SOURCE: Final[str] = """
 from environment_store.core.adapter import SetupMode
 from tests.support.memory_adapter import MemoryAdapter
 
-CALLS = []
+CALLS: list[tuple[str, SetupMode]] = []
 
 
 def open_fake(url: str, *, setup: SetupMode = SetupMode.AUTO) -> MemoryAdapter:
@@ -290,9 +291,12 @@ def test_open_adapter_propagates_a_missing_factory_attribute(write_module: Modul
 def test_open_adapter_propagates_errors_raised_by_the_factory(write_module: ModuleWriter) -> None:
     module = write_module(
         """
+        from typing import NoReturn
+
+        from environment_store.core.adapter import SetupMode
         from environment_store.core.errors import BackendError
 
-        def open_broken(url, *, setup):
+        def open_broken(url: str, *, setup: SetupMode) -> NoReturn:
             raise BackendError("cannot open")
         """
     )

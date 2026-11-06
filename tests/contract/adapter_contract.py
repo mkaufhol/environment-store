@@ -409,18 +409,24 @@ class AdapterContract:
             with backend.open() as reopened:
                 assert reopened.read_store(initial.name) == written
 
-    @pytest.mark.parametrize("expected_revision", [2, 7])
+    @pytest.mark.parametrize(
+        "expected_revision", [1, 2, 4, 7], ids=["stale-1", "stale-2", "future-4", "future-7"]
+    )
     def test_write_with_a_stale_or_future_revision_raises_and_writes_nothing(
         self, adapter: Adapter, expected_revision: int
     ) -> None:
         original = _plain()
         adapter.create_store(original)
-        stale = _plain(variables={"LOST": "update"}, revision=expected_revision + 1)
+        second = _next(original, STEP="2")
+        adapter.write_store(second, expected_revision=1)
+        current = _next(second, STEP="3")
+        adapter.write_store(current, expected_revision=2)
+        mismatched = _plain(variables={"LOST": "update"}, revision=expected_revision + 1)
 
         with pytest.raises(ConcurrentModificationError):
-            adapter.write_store(stale, expected_revision=expected_revision)
+            adapter.write_store(mismatched, expected_revision=expected_revision)
 
-        assert adapter.read_store("base") == original
+        assert adapter.read_store("base") == current
 
     def test_write_after_a_concurrent_write_raises_and_keeps_the_first(
         self, adapter: Adapter
@@ -650,6 +656,23 @@ class AdapterContract:
 
         with pytest.raises(RuntimeError, match="boom"):
             fail_inside()
+
+    def test_leaving_the_context_by_an_exception_closes_the_adapter(self, backend: Backend) -> None:
+        adapter = backend.open()
+
+        def fail_inside() -> None:
+            with adapter:
+                adapter.create_store(_plain())
+                message = "boom"
+                raise RuntimeError(message)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            fail_inside()
+
+        with pytest.raises(BackendError):
+            adapter.list_stores()
+        with backend.open() as reopened:
+            assert reopened.read_store("base") == _plain()
 
     @pytest.mark.parametrize(
         "operation",
