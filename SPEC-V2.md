@@ -1,6 +1,6 @@
 # Environment Store V2 — Specification
 
-**Status:** Refined. All questions and proposals are decided (D1–D40). Ready for implementation planning.
+**Status:** Refined. All questions and proposals are decided (D1–D47). Ready for implementation planning.
 **Scope:** Complete rebuild. No backward compatibility with V1 (0.1.x).
 
 > **How to read this document**
@@ -122,6 +122,10 @@ serialization.
 > *(decided, D33)*
 > - Path resolution mirrors SQLite: `json://relative/dir`, `json:///absolute/dir`, `json://~/dir` expands `~`.
 >   The directory is created on first write.
+> - *(decided, D43)* The same path rules hold for all three file-based backends: `json://`, `toml://` and
+>   `sqlite:///` expand a leading `~` and create a missing directory (the store directory, or the SQLite file's
+>   parent directory) on first write with mode `0700`; store files and the SQLite database (with its `-wal` /
+>   `-shm` files) are created with mode `0600`.
 > - Writes are atomic (write to temp file, `os.replace`), guarded by a per-store lock and the revision check (D7).
 >   Locking via `fcntl.flock` on POSIX and `msvcrt.locking` on Windows.
 > - The store name is the file name. It is not repeated inside the file.
@@ -291,7 +295,7 @@ third-party dependency. `pip install environment-store` always supports encrypti
 | Source | Syntax | Notes |
 |---|---|---|
 | Key file | `-k ./a.key` | Default. For `keyfile` stores the file holds the key. For `passphrase` stores it holds the passphrase (one trailing newline is stripped). |
-| Stdin | `-k -` | Reads the key or passphrase from stdin, e.g. `op read … \| envs ls -s a -k -`. Only one `-k -` per command. |
+| Stdin | `-k -` | Reads the key or passphrase from stdin, e.g. `op read … \| envs ls a -k -`. Only one `-k -` per command. |
 | Interactive prompt | *(no `-k`)* | If a store is encrypted, no `-k` is given and stdin is a terminal, the CLI asks with a hidden prompt. Never triggered in non-interactive use. That case fails with exit code `4`. |
 
 - No literal keys as CLI arguments (they would end up in shell history and `ps`).
@@ -305,8 +309,8 @@ third-party dependency. `pip install environment-store` always supports encrypti
 | `ls-store` | no |
 | `create-store --encrypt` | a new key (generated, existing file, or passphrase) |
 | `rm-store` | no (D21) |
-| `ls`, `get`, `set`, `rm` | yes |
-| `export`, `export-shell` | yes, for every encrypted store in the list |
+| `ls`, `get`, `set`, `rm`, `import` | yes |
+| `export`, `export-shell`, `run` | yes, for every encrypted store in the list |
 | `rekey` | old and new key |
 | `encrypt` | new key |
 | `keygen` | no |
@@ -358,7 +362,7 @@ any storage provider a one-liner; the adapters implement the actual connection.
 **No default** *(decided, D29)*: if no connection is configured (no `-c`, no `ENV_STORE_CONNECTION`, no
 `connection` in the project file), every command that opens a store fails with a message that explains these three ways to set it. No
 data is ever written to a location the user didn't choose. *(Amended in phase 3:)* `keygen`, `--help` and
-`--version` open no store and work without a connection.
+`--version` open no store and work without a connection; they do not read the project file either (D44).
 
 ### 5.2 `ENV_STORE_ORDERED_OVERWRITE`
 
@@ -515,6 +519,10 @@ Dropped from V1: `children`, `levels`, `delete-level` (hierarchy concepts), `exp
 
 Lists all available stores with the information whether they are encrypted.
 
+*(decided, D42)* When the backend holds no stores, stdout stays empty (`[]` with `--json`), exit `0`, and stderr says
+`no stores in <location>` with the resolved location (absolute directory, database file, or PostgreSQL host,
+database and schema without the password), so a mistyped connection is visible.
+
 ### 6.3 `create-store <store-name>`
 
 Creates a new store.
@@ -586,8 +594,8 @@ Sets one or more variables in one store, in a single write (one revision).
 | Form | Example | Allowed for |
 |---|---|---|
 | `KEY=VALUE` pairs | `envs set -s base_conf DB_HOST=localhost DB_PORT=5432` | **Unencrypted stores only** (values on the command line end up in shell history) |
-| Stdin | `envs set -s customer_a DB_PASSWORD < secret.txt` | All stores; also the way to set multi-line values. One trailing newline (LF or CRLF) is stripped, as for passphrase files (D3), so `echo secret \| envs set …` stores `secret` |
-| Hidden prompt | `envs set -s customer_a DB_PASSWORD` (on a terminal) | All stores; asks twice to confirm |
+| Stdin | `envs set -s customer_a DB_PASSWORD < secret.txt` | All stores; also the way to set multi-line values. One trailing newline (LF or CRLF) is stripped, as for passphrase files (D3), so `echo secret \| envs set …` stores `secret`. *(D41)* Stdin with zero bytes (e.g. `< /dev/null`, or a forgotten pipe in CI) is an error (exit 1) so a variable is never blanked by accident; an empty value is set with `echo \| envs set …` (the newline is stripped) or `KEY=` |
+| Hidden prompt | `envs set -s customer_a DB_PASSWORD` (on a terminal) | All stores; asks twice to confirm, and asks again (up to three attempts) when the two entries differ |
 
 | Option | Type | Description |
 |---|---|---|
@@ -719,6 +727,10 @@ touched.
 ### 6.14 `tui` *(D15)*
 
 Starts the TUI. Needs `environment-store[tui]`; without it, the command fails with a hint to install the extra.
+
+*(decided, D46)* The Textual command palette is disabled, because its Screenshot action could save revealed values
+to disk. Every screen's footer lists the keys that work there (including Enter to open or edit), and dialogs show
+their own keys.
 
 ---
 
@@ -883,3 +895,10 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D38 | 2026-11-06 | `set` from stdin | One trailing newline (LF or CRLF) is stripped from a value read from stdin, like D3 for passphrase files; values that must end in a newline are set with `import`. | phase 3 plan review |
 | D39 | 2026-11-06 | Merge-order override | Last wins is the default; `--first-wins` is the only CLI override of `ordered_overwrite`; no `--last-wins` flag. §5 no longer promises a CLI option for every setting in both directions. | phase 3 audit |
 | D40 | 2026-11-06 | Store names are shell compatible | Amends D27: a store name cast to SCREAMING_SNAKE_CASE must be a valid POSIX shell variable name, so the first character must be `a-z`, not a digit. Every nested key `STORE__VAR` is then a valid variable name, and `export-shell`, `run --nested` and import of nested dotenv never refuse a store name. The store name rule must keep this property. | phase 3 review |
+| D41 | 2026-11-06 | Empty stdin for `set` | Zero bytes on stdin is an error (exit 1); an empty value needs `echo \| envs set …` or `KEY=`. Prevents a forgotten pipe from blanking a variable. | docs review |
+| D42 | 2026-11-06 | Empty `ls-store` | stdout empty (`[]` with `--json`), exit 0, stderr `no stores in <location>` with the resolved location. | docs review |
+| D43 | 2026-11-06 | File-based backend paths | `json://`, `toml://` and `sqlite:///` all expand `~` and create a missing directory (mode `0700`) on first write; files `0600`. | docs review |
+| D44 | 2026-11-06 | Commands without a connection | `keygen`, `--help` and `--version` read neither the connection nor the project file, so a broken `.envstore.toml` cannot stop them. | docs review |
+| D45 | 2026-11-06 | New key from stdin | When a new store key comes from stdin (`create-store -e -k -`, `encrypt -k -`, `rekey --new-key -`, `cp-store`/`mv-store --new-key -`), the CLI warns on stderr that envs does not save the key and the store is unreadable without it. | docs review |
+| D46 | 2026-11-06 | TUI command palette | Disabled: its Screenshot action could write revealed values to disk. | docs review |
+| D47 | 2026-11-06 | Library error wording | Library errors name library parameters (`overwrite=True`, `force=True`, `fmt=`, `keys=`); the CLI and TUI add their own hints (`-o`, `--force`, `-t`, `-k`). Key text (`envstore-key-v1:…`) can be passed to the library without a file. | docs review |
