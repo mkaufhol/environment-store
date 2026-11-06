@@ -1,4 +1,4 @@
-"""Pure domain core: errors, validation, secrets, models and clock.
+"""Pure domain core: errors, validation, secrets, models, clock and merging.
 
 Imports nothing outside `environment_store.core` except the standard library.
 """
@@ -33,6 +33,16 @@ from environment_store.core.errors import (
     ValidationError,
     VariableExistsError,
     VariableNotFoundError,
+)
+from environment_store.core.merge import (
+    MergeOrder,
+    merge,
+    merge_with_sources,
+    nested,
+    nested_flat,
+    nested_flat_key,
+    order_from_setting,
+    parse_bool_setting,
 )
 from environment_store.core.models import (
     PAYLOAD_FORMAT_VERSION,
@@ -82,6 +92,7 @@ __all__ = [
     "KeyMode",
     "KeyModeMismatchError",
     "KeyRequiredError",
+    "MergeOrder",
     "MissingExtraError",
     "NotEncryptedError",
     "NotFoundError",
@@ -100,6 +111,13 @@ __all__ = [
     "ValidationError",
     "VariableExistsError",
     "VariableNotFoundError",
+    "merge",
+    "merge_with_sources",
+    "nested",
+    "nested_flat",
+    "nested_flat_key",
+    "order_from_setting",
+    "parse_bool_setting",
     "utc_now",
     "validate_store_name",
     "validate_value",
