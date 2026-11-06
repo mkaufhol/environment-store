@@ -244,7 +244,8 @@ def _decode_json(value: object, *, store: object, column: str, dialect: Dialect)
         raise _corrupt(store, f"{column} is not JSON text")
     try:
         return json.loads(value)
-    except ValueError as err:
+    except (ValueError, RecursionError) as err:
+        # RecursionError: nesting too deep for the decoder, still a corrupt document.
         # The decoder's message is not used: it may quote the (secret) document.
         raise _corrupt(store, f"{column} is not valid JSON") from err
 
@@ -269,7 +270,7 @@ def _key_mode(cipher_meta: object, *, dialect: Dialect) -> KeyMode | None:
             return None
         try:
             document = json.loads(cipher_meta)
-        except ValueError:
+        except (ValueError, RecursionError):
             return None
     try:
         return CipherMeta.from_json(document).mode

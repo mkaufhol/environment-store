@@ -51,6 +51,8 @@ _SEALED = StoreRecord.sealed(
     revision=7,
 )
 _FUTURE_META = {"cipher": "age", "mode": "x25519"}
+# Nesting deep enough that json.loads raises RecursionError rather than ValueError.
+_DEEP_JSON = "[" * 200_000 + "]" * 200_000
 
 
 @pytest.fixture
@@ -308,6 +310,7 @@ def test_row_to_record_reads_offset_timestamps_from_sqlite_as_utc() -> None:
         pytest.param({"encrypted": None}, id="flag-null"),
         pytest.param({"encrypted": 1}, id="flag-encrypted-but-plaintext"),
         pytest.param({"variables": "{not json"}, id="variables-not-json"),
+        pytest.param({"variables": _DEEP_JSON}, id="variables-too-deep"),
         pytest.param({"variables": b"{}"}, id="variables-bytes"),
         pytest.param({"variables": "[]"}, id="variables-not-object"),
         pytest.param({"variables": '{"A": 1}'}, id="value-not-string"),
@@ -363,6 +366,11 @@ def test_unrecognised_cipher_meta_raises_unsupported_format_naming_the_store(
         row_to_record(_sqlite_sealed_row(cipher_meta=cipher_meta), dialect=Dialect.SQLITE)
 
 
+def test_sealed_sqlite_row_with_too_deep_cipher_meta_raises_backend_error() -> None:
+    with pytest.raises(BackendError, match=r"store 'vault'.*cipher_meta is not valid JSON"):
+        row_to_record(_sqlite_sealed_row(cipher_meta=_DEEP_JSON), dialect=Dialect.SQLITE)
+
+
 def test_sealed_row_with_text_ciphertext_raises_backend_error() -> None:
     with pytest.raises(BackendError, match="store 'vault'"):
         row_to_record(_sqlite_sealed_row(ciphertext="nonce"), dialect=Dialect.SQLITE)
@@ -399,6 +407,7 @@ def test_row_to_info_matches_the_record_info(dialect: Dialect, record: StoreReco
     [
         pytest.param(Dialect.SQLITE, json.dumps(_FUTURE_META), id="sqlite-unknown-cipher"),
         pytest.param(Dialect.SQLITE, "{not json", id="sqlite-not-json"),
+        pytest.param(Dialect.SQLITE, _DEEP_JSON, id="sqlite-too-deep"),
         pytest.param(Dialect.SQLITE, 42, id="sqlite-not-text"),
         pytest.param(Dialect.SQLITE, None, id="sqlite-missing"),
         pytest.param(Dialect.POSTGRES, _FUTURE_META, id="postgres-unknown-cipher"),
