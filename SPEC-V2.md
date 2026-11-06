@@ -654,11 +654,18 @@ BASE_CONF__DB_HOST=localhost
 CUSTOMER_A__DB_HOST=10.0.0.5
 ```
 
-> *(decided, D37, replaces the D33 wording)* dotenv quoting, compatible with python-dotenv and Docker Compose:
-> unquoted for simple values; single quotes (literal in both tools) for single-line values without `'`; double
-> quotes with `\\`, `\"`, `\n`, `\r`, `\t` escapes for values with newlines or `'` and no `$`. A value that needs
-> double quotes **and** contains `$` cannot be read back exactly by both tools and is refused with a hint to use
-> `-t json`, `-t toml` or `run`.
+> *(decided, D37, replaces the D33 wording; amended after measuring python-dotenv 1.2)* dotenv quoting, compatible
+> with python-dotenv and Docker Compose:
+>
+> 1. unquoted for non-empty values made only of `[A-Za-z0-9_./:@%+,-]`;
+> 2. single quotes for single-line values without `'`, without `\\` and not ending in `\` (python-dotenv decodes
+>    `\\` and `\'` inside single quotes; any other backslash stays literal);
+> 3. double quotes with `\\`, `\"`, `\n`, `\r`, `\t` escapes for all other values, as long as they contain no `$`;
+> 4. refused, with a hint to use `-t json`, `-t toml` or `run`: values that need double quotes **and** contain `$`
+>    (Compose interpolates `$` in double quotes), and values containing `${` in any form (python-dotenv interpolates
+>    `${…}` even inside single quotes).
+>
+> Importing dotenv never interpolates: `${X}` is stored as written.
 
 ### 6.12 `export-shell [stores…]`
 
@@ -681,7 +688,8 @@ shell (Unix `export`).
 > ```
 >
 > Without `--overwrite`, the generated statements skip variables already set in the shell, e.g.
-> `[ -z "${DB_HOST+x}" ] && export DB_HOST='…'`. Values are quoted with `shlex.quote`.
+> `[ -n "${DB_HOST+x}" ] || export DB_HOST='…'` (this form keeps the exit status 0 when
+> the last variable is already set, so `eval` does not fail). Values are quoted with `shlex.quote`.
 
 **Shells** *(decided, D23)*: POSIX shells only (bash, zsh, dash, …). fish and PowerShell users use `run`, which works
 independently of the shell.
@@ -865,4 +873,4 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D34 | 2026-11-06 | Passphrase KDF | Argon2id instead of scrypt (`t=3, m=64 MiB, p=4`, RFC 9106); requires `cryptography` ≥ 44. | review |
 | D35 | 2026-11-06 | `--noinput` | Global flag for CI: never prompt; missing key → exit 4, missing confirmation → exit 1. | review |
 | D36 | 2026-11-06 | Library one-liner | `environment_store.load(*stores)` resolves config like the CLI and applies to `os.environ`. | review |
-| D37 | 2026-11-06 | dotenv quoting | Unquoted / single quotes / double quotes without `$`; values needing double quotes and containing `$` are refused (no escape works in both python-dotenv and Compose). | plan review |
+| D37 | 2026-11-06 | dotenv quoting | Unquoted / single quotes (no `'`, no `\\`, no trailing `\`) / double quotes without `$`; refused: values needing double quotes with `$`, and any value containing `${` (python-dotenv interpolates it even in single quotes). Import never interpolates. Amended after golden tests against python-dotenv 1.2. | plan review, A4 |

@@ -366,19 +366,20 @@ foreign schema refused, outdated schema refused on AUTO open and upgraded by `mi
 `formats/`: `dotenv.dumps(mapping) -> str` and `dotenv.loads(text) -> dict[str, str]`; `json_format` /
 `toml_format` `dumps` / `loads` for flat (`dict[str, str]`) and nested (`dict[str, dict[str, str]]`) documents —
 `loads` accepts only flat objects of strings (D33); `shell.posix_exports(mapping, *, overwrite: bool) -> str` using
-`shlex.quote` and `[ -z "${VAR+x}" ] && export VAR=…` without overwrite (D23); `infer_format(path) -> Format |
+`shlex.quote` and `[ -n "${VAR+x}" ] || export VAR=…` without overwrite (D23); `infer_format(path) -> Format |
 None` (D22).
 
-**dotenv compatibility (resolves the review finding on `$`):** python-dotenv only interpolates `${…}` and only
-inside unquoted or double-quoted values; Docker Compose interpolates `$VAR` / `${VAR}` in unquoted and
+**dotenv compatibility (resolves the review finding on `$`):** python-dotenv interpolates `${…}` in every quoting
+style (measured with 1.2; single quotes included); Docker Compose interpolates `$VAR` / `${VAR}` in unquoted and
 double-quoted values and treats single-quoted values literally. The writer therefore uses:
 
 1. unquoted for values made only of `[A-Za-z0-9_./:@%+,-]` (non-empty);
-2. **single quotes** for single-line values that contain no `'` — literal in both tools, so `$` needs no escape;
-3. **double quotes** with `\\`, `\"`, `\n`, `\r`, `\t` escapes for values with newlines or `'`, as long as they
-   contain no `$`;
-4. a value that needs double quotes **and** contains `$` cannot be written so that both tools read it back exactly
-   → `ValidationError` naming the variable and recommending `-t json`, `-t toml` or `envs run`.
+2. **single quotes** for single-line values without `'`, without `\\` and not ending in `\` (python-dotenv decodes
+   `\\` and `\'` inside single quotes);
+3. **double quotes** with `\\`, `\"`, `\n`, `\r`, `\t` escapes for all other values, as long as they contain no `$`;
+4. refused with `ValidationError` naming the variable and recommending `-t json`, `-t toml` or `envs run`: values that
+   need double quotes **and** contain `$`, and values containing `${` (python-dotenv interpolates `${…}` in every
+   quoting style, single quotes included — measured in A4, D37 amended accordingly).
 
 The exact rules are verified with golden tests against python-dotenv (testing dependency) and documented Compose
 semantics; if the measured behaviour differs from the above, stop and report before choosing another rule. Property
