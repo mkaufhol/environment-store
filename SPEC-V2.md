@@ -1,6 +1,6 @@
 # Environment Store V2 — Specification
 
-**Status:** Refined. All questions and proposals are decided (D1–D38). Ready for implementation planning.
+**Status:** Refined. All questions and proposals are decided (D1–D39). Ready for implementation planning.
 **Scope:** Complete rebuild. No backward compatibility with V1 (0.1.x).
 
 > **How to read this document**
@@ -345,8 +345,9 @@ Applies to **all** stores, encrypted or not.
 
 ## 5. Configuration
 
-Configuration is done via environment variables. Every environment variable has an equivalent global CLI option
-that takes precedence.
+Configuration is done via environment variables. Each environment variable has a CLI option that takes
+precedence: `-c/--connection` for `ENV_STORE_CONNECTION`, and the per-command `--first-wins` for
+`ENV_STORE_ORDERED_OVERWRITE` (D39).
 
 ### 5.1 `ENV_STORE_CONNECTION`
 
@@ -369,6 +370,10 @@ are not overwritten (first wins).
 
 **CLI override** *(decided, D14)*: `--first-wins` on every command that merges stores (`ls`, `get`, `export`,
 `export-shell`, `run`). It takes precedence over the environment variable.
+
+*(decided, D39)* Last wins is the default and the intended behaviour, so `--first-wins` is the only CLI override.
+There is no `--last-wins`: when `ENV_STORE_ORDERED_OVERWRITE=false` or `ordered_overwrite = false` in the project
+file selects first wins, last wins is restored by unsetting or changing that setting, not by a flag.
 
 > *(decided, D33)* accepted values `true/false/1/0/yes/no` (case-insensitive).
 
@@ -876,3 +881,4 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D36 | 2026-11-06 | Library one-liner | `environment_store.load(*stores)` resolves config like the CLI and applies to `os.environ`. | review |
 | D37 | 2026-11-06 | dotenv quoting | Unquoted / single quotes (no `'`, no `\\`, no trailing `\`) / double quotes without `$`; refused: values needing double quotes with `$`, and any value containing `${` (python-dotenv interpolates it even in single quotes). Import never interpolates. Amended after golden tests against python-dotenv 1.2. | plan review, A4 |
 | D38 | 2026-11-06 | `set` from stdin | One trailing newline (LF or CRLF) is stripped from a value read from stdin, like D3 for passphrase files; values that must end in a newline are set with `import`. | phase 3 plan review |
+| D39 | 2026-11-06 | Merge-order override | Last wins is the default; `--first-wins` is the only CLI override of `ordered_overwrite`; no `--last-wins` flag. §5 no longer promises a CLI option for every setting in both directions. | phase 3 audit |
