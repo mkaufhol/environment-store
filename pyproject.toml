@@ -1,39 +1,40 @@
 [project]
 name = "environment-store"
-version = "0.1.0rc2"
-description = "Python library to store and manage environment variables persistently."
+version = "2.0.0.dev0"
+description = "Keep environment variables in named, optionally encrypted stores and load them anywhere."
 authors = [
-    {name = "Maalik Kaufhold",email = "mail@maalikaufhold.de"}
+    {name = "Maalik Kaufhold", email = "mail@maalikaufhold.de"}
 ]
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.12,<3.16"
+requires-python = ">=3.13"
+# The core depends on cryptography only (D6); >= 44 for Argon2id (D34).
 dependencies = [
-    "pydantic>=2.12.5",
+    "cryptography>=44",
 ]
 keywords = [
-    "aws",
     "environment",
-    "variables",
     "environment-variables",
-    "parameter-store",
-    "secrets-manager",
-    "ssm",
-    "boto3",
+    "dotenv",
+    "configuration",
+    "secrets",
+    "encryption",
+    "sqlite",
+    "postgresql",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3.15",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
 ]
-
-[project.scripts]
-environment-store = "environment_store.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/mkaufhol/environment-store"
@@ -41,77 +42,100 @@ Repository = "https://github.com/mkaufhol/environment-store"
 Issues = "https://github.com/mkaufhol/environment-store/issues"
 Changelog = "https://github.com/mkaufhol/environment-store/blob/main/CHANGELOG.md"
 
+# Entry points (environment-store, envs) are added with the CLI foundation (C1).
+
 [project.optional-dependencies]
-aws = ["boto3>=1.42.68"]
-postgres = ["psycopg>=3.3.3", "sqlalchemy>=2.0.48", "yoyo-migrations>=9.0.0"]
-tui = ["textual>=8.2"]
-full = [
-    "boto3>=1.42.68",
-    "psycopg>=3.3.3",
-    "sqlalchemy>=2.0.48",
-    "textual>=8.2",
-    "yoyo-migrations>=9.0.0",
+postgres = ["psycopg[binary]>=3.2"]
+cli = ["typer>=0.15"]
+tui = ["textual>=3"]
+all = [
+    "psycopg[binary]>=3.2",
+    "typer>=0.15",
+    "textual>=3",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.6",
-    "ty>=0.0.1",
-    "pre-commit>=4.3.0",
     "bandit>=1.9.4",
-    "tox>=4.49.1",
-    "tox-uv>=1.0.0",
-    "yoyo-migrations>=9.0.0",
-]
-stubs = [
-    "boto3-stubs>=1.42.68",
+    "pre-commit>=4.7.0",
+    "ruff>=0.17.4",
+    "ty>=0.0.98",
 ]
 testing = [
-    "pytest>=9.0.2",
-    "moto>=5.1.22",
-    "coverage>=7.13.4",
-    "sqlalchemy>=2.0.48",
-    "psycopg[binary]>=3.3.3",
-    "textual>=8.2",
+    "coverage>=7.17.2",
+    "hypothesis>=6.170.14",
+    "pytest>=9.2.0",
+    # Optional imports, so that ty and the tests see every extra.
+    "psycopg[binary]>=3.2",
+    "typer>=0.15",
+    "textual>=3",
+    # Only for the dotenv compatibility tests of the dotenv writer (A4).
+    "python-dotenv>=1.2.4",
 ]
 
 [tool.uv]
-default-groups = ["dev", "testing", "stubs"]
-# Rebuild path installs (uvx --from <path>, uv add <path>) when sources change, not only pyproject.toml
+default-groups = ["dev", "testing"]
+# Rebuild path installs (uvx --from <path>, uv add <path>) when sources change, not only pyproject.toml.
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "src/**/*.py" },
-    { file = "src/**/*.sql" },
 ]
 
 [build-system]
-requires = ["uv_build>=0.11.0,<0.12.0"]
+requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
-line-length = 96
-extend-exclude = [
-    "src/environment_store/adapters/postgresql/queries.py",
-    "src/environment_store/adapters/postgresql/models.py",
-]
+target-version = "py313"
+line-length = 100
 
 [tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
 docstring-code-format = true
-docstring-code-line-length = 30
-skip-magic-trailing-comma = false
-line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "PL", "RUF", "ANN", "S", "PT",
+    "TID", "TC", "ERA", "PERF", "FBT", "EM", "TRY", "D",
+    # Beyond the plan's minimum: aware datetimes only, no print in the library, no blind except
+    # (CONTRIBUTING.md sections 4 and 5).
+    "DTZ", "T20", "BLE",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use plain asserts, need no docstrings and compare against literal expected values.
+"tests/**" = ["S101", "D", "PLR2004"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
+filterwarnings = ["error"]
+testpaths = ["tests"]
+markers = [
+    "postgres: needs a PostgreSQL server (ENV_STORE_TEST_POSTGRES_URL or initdb/pg_ctl on PATH)",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["environment_store"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    '\.\.\.$',
+    "raise NotImplementedError",
+    'if sys\.platform == "win32":',
+]
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101"]
-
-[tool.ty.environment]
-python-version = "3.12"
-
-[tool.ty.src]
-exclude = [
-    "src/environment_store/adapters/postgresql/queries.py",
-    "src/environment_store/adapters/postgresql/models.py",
-]

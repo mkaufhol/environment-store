@@ -4,19 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/) (pre-release versions follow PEP 440).
 
-## [Unreleased]
+## [Unreleased] — 2.0.0
 
-### Added
+Version 2 is a rewrite defined by [SPEC-V2.md](SPEC-V2.md). It is not compatible with 0.1.
 
-- `environment-store export-dotenv` writes the resolved variables of a level to a `.env` file
-  (`--file` sets the path or name, default `./.env`; `--force` overwrites an existing file).
-- `environment-store levels` (alias `tree`) shows the existing levels as a tree, as `paths` or as nested `json`;
-  `-o`/`-p`/`-e` and `--depth` limit it to part of the hierarchy.
-- Commands that work on a level open an interactive tree picker when they get none of `-o`/`-p`/`-e`/`-s` and run
-  on a terminal. `--root` picks the root level without asking; without a terminal nothing changes.
-- `--no-interaction` (or `ENVIRONMENT_STORE_NO_INTERACTION=1`) makes the CLI never prompt, as if there were no
-  terminal: no level picker, no `delete` confirmation, and `delete-level` requires `--confirm`.
-- `-h` explains the hierarchy options in detail and shows examples of addressing each level.
+### Changed
+
+- Rebuilt from scratch: named stores instead of the organisation / project / environment / service hierarchy,
+  optional AES-256-GCM encryption per store, JSON / TOML file, SQLite and PostgreSQL backends.
+- Requires Python 3.13 or newer. The core depends on `cryptography` only; PostgreSQL, CLI and TUI are extras
+  (`postgres`, `cli`, `tui`, `all`).
+
+### Removed
+
+- All V1 code, tests and docs: the hierarchy model, the JSON file, PostgreSQL (SQLAlchemy / yoyo) and AWS
+  adapters, the CLI, the TUI, the agent skill and the tox setup. AWS adapters may return after 2.0.
+- The V1 changes below were never released and are dropped with V1:
+  - `environment-store export-dotenv` writes the resolved variables of a level to a `.env` file
+    (`--file` sets the path or name, default `./.env`; `--force` overwrites an existing file).
+  - `environment-store levels` (alias `tree`) shows the existing levels as a tree, as `paths` or as nested `json`;
+    `-o`/`-p`/`-e` and `--depth` limit it to part of the hierarchy.
+  - Commands that work on a level open an interactive tree picker when they get none of `-o`/`-p`/`-e`/`-s` and run
+    on a terminal. `--root` picks the root level without asking; without a terminal nothing changes.
+  - `--no-interaction` (or `ENVIRONMENT_STORE_NO_INTERACTION=1`) makes the CLI never prompt, as if there were no
+    terminal: no level picker, no `delete` confirmation, and `delete-level` requires `--confirm`.
+  - `-h` explains the hierarchy options in detail and shows examples of addressing each level.
 
 ## [0.1.0rc2] - 2026-10-15
 
