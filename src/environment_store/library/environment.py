@@ -168,7 +168,7 @@ class Environment:
 def _format(fmt: Format | str) -> Format:
     try:
         return Format(fmt)
-    except ValueError:
+    except ValueError as err:
         choices = ", ".join(member.value for member in Format)
         message = f"unknown format {fmt!r}: use one of {choices}"
-        raise ValidationError(message) from None
+        raise ValidationError(message) from err

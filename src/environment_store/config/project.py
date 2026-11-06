@@ -2,8 +2,10 @@
 
 Discovery walks from a start directory up to the filesystem root (or a boundary) and takes the
 first regular file named `.envstore.toml`. A file owned by another user or writable by every
-user is not trusted and is ignored (PD 32). Error messages name the file and the offending key,
-never a value.
+user, or a symbolic link owned by another user, is not trusted and is ignored (PD 32). The trust
+check runs on the opened file and the bytes parsed are read from that same descriptor, so the
+path cannot be swapped in between. Error messages name the file and the offending key, never a
+value.
 """
 
 import os
@@ -17,8 +19,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final
 
-from environment_store.core.errors import ConfigurationError
-from environment_store.core.validation import STORE_NAME_PATTERN
+from environment_store.core.errors import ConfigurationError, ValidationError
+from environment_store.core.validation import STORE_NAME_PATTERN, validate_store_name
 from environment_store.crypto.keyfile import looks_like_key_file
 
 __all__ = [
@@ -26,6 +28,8 @@ __all__ = [
     "ProjectFile",
     "ProjectFileCandidate",
     "anchor_connection",
+    "check_key_paths",
+    "decode_project_file",
     "find_project_file",
     "parse_project_file",
     "read_project_file",
@@ -37,6 +41,8 @@ PROJECT_FILE_NAME: Final = ".envstore.toml"
 
 _ALLOWED_KEYS: Final[tuple[str, ...]] = ("connection", "keys", "ordered_overwrite", "stores")
 _ROOT_UID: Final = 0
+# Opening a FIFO named like the project file must not block the search.
+_OPEN_FLAGS: Final = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)
 # `json://relative`, `toml://relative` (not `scheme:///absolute`, not `~`).
 _RELATIVE_DIRECTORY: Final[re.Pattern[str]] = re.compile(
     r"(?P<scheme>json|toml)://(?P<path>[^/~].*)", re.IGNORECASE | re.DOTALL
@@ -67,9 +73,35 @@ class ProjectFile:
     connection: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
-        """Freeze the store list and the key table."""
+        """Freeze the store list and the key table, and check them.
+
+        Raises:
+            ValidationError: A relative path, an invalid store name or a relative key path.
+        """
         object.__setattr__(self, "stores", tuple(self.stores))
         object.__setattr__(self, "keys", MappingProxyType(dict(self.keys)))
+        if not self.path.is_absolute():
+            message = f"the project file path '{self.path}' must be absolute"
+            raise ValidationError(message)
+        for store in self.stores:
+            validate_store_name(store)
+        check_key_paths(self.keys)
+
+
+def check_key_paths(keys: Mapping[str, Path]) -> None:
+    """Check a key table: valid store names mapped to absolute paths.
+
+    Args:
+        keys: Store name → key file path.
+
+    Raises:
+        ValidationError: An invalid store name or a relative path.
+    """
+    for store, key_path in keys.items():
+        validate_store_name(store)
+        if not key_path.is_absolute():
+            message = f"the key file path for store {store!r} must be absolute"
+            raise ValidationError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,10 +111,13 @@ class ProjectFileCandidate:
     Attributes:
         path: The file.
         untrusted_reason: Why the file must be ignored (PD 32), or `None` if it is trusted.
+        content: The bytes of a trusted file, read from the descriptor the trust check ran on;
+            empty for an untrusted file.
     """
 
     path: Path
     untrusted_reason: str | None
+    content: bytes = field(default=b"", repr=False, compare=False)
 
 
 def untrusted_reason(st_uid: int, st_mode: int, uid: int) -> str | None:
@@ -119,7 +154,10 @@ def find_project_file(
         uid: The user that must own the file (or root); `None` means the effective user.
 
     Returns:
-        The file found, or `None`.
+        The file found, or `None`; a trusted file comes with its content.
+
+    Raises:
+        ConfigurationError: A trusted file cannot be read.
     """
     directory = start.absolute()
     directories = [directory, *directory.parents]
@@ -128,12 +166,44 @@ def find_project_file(
     for candidate_directory in directories:
         candidate = candidate_directory / PROJECT_FILE_NAME
         try:
-            status = candidate.stat()
+            entry = candidate.lstat()
+            status = candidate.stat() if stat.S_ISLNK(entry.st_mode) else entry
         except OSError:
             continue
         if stat.S_ISREG(status.st_mode):
-            return ProjectFileCandidate(candidate, _reason(status, uid))
+            return _examine(candidate, entry, status, uid)
     return None
+
+
+def _examine(
+    path: Path, entry: os.stat_result, status: os.stat_result, uid: int | None
+) -> ProjectFileCandidate:
+    # A link owned by someone else may be retargeted at any time; never follow it.
+    if stat.S_ISLNK(entry.st_mode) and _reason(entry, uid) == "owned by another user":
+        return ProjectFileCandidate(path, "a symbolic link owned by another user")
+    reason = _reason(status, uid)
+    if reason is not None:
+        return ProjectFileCandidate(path, reason)
+    try:
+        fd = os.open(path, _OPEN_FLAGS)
+    except OSError as err:
+        raise _read_error(path, err) from err
+    try:
+        # Decide again on what was opened: the path may have changed since the check.
+        opened = os.fstat(fd)
+        reason = _reason(opened, uid) if stat.S_ISREG(opened.st_mode) else "not a regular file"
+        if reason is not None:
+            return ProjectFileCandidate(path, reason)
+        with os.fdopen(fd, "rb", closefd=False) as file:
+            return ProjectFileCandidate(path, None, content=file.read())
+    except OSError as err:
+        raise _read_error(path, err) from err
+    finally:
+        os.close(fd)
+
+
+def _read_error(path: Path, err: OSError) -> ConfigurationError:
+    return ConfigurationError(f"cannot read project file '{path}': {err.strerror}")
 
 
 def _reason(status: os.stat_result, uid: int | None) -> str | None:
@@ -158,8 +228,23 @@ def read_project_file(path: Path) -> ProjectFile:
     try:
         data = path.read_bytes()
     except OSError as err:
-        message = f"cannot read project file '{path}': {err.strerror}"
-        raise ConfigurationError(message) from err
+        raise _read_error(path, err) from err
+    return decode_project_file(data, path=path)
+
+
+def decode_project_file(data: bytes, *, path: Path) -> ProjectFile:
+    """Decode and parse the bytes of a project file, e.g. those read at discovery (PD 32).
+
+    Args:
+        data: The raw content.
+        path: The file's absolute path.
+
+    Returns:
+        The parsed settings.
+
+    Raises:
+        ConfigurationError: The content is not UTF-8 or violates the schema.
+    """
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
@@ -227,7 +312,7 @@ def _keys(value: object, path: Path) -> dict[str, Path]:
         raise _error(path, "[keys]", rule)
     keys: dict[str, Path] = {}
     for store, raw in value.items():
-        if not _is_store_name(store) or not isinstance(raw, str) or not raw:
+        if not _is_store_name(store) or not isinstance(raw, str) or not raw or "\0" in raw:
             raise _error(path, "[keys]", rule)
         if looks_like_key_file(raw):
             raise _error(
@@ -258,9 +343,9 @@ def _ordered_overwrite(value: object, path: Path) -> bool | None:
 
 
 def _connection(value: object, path: Path) -> str | None:
-    if value is None or (isinstance(value, str) and value):
+    if value is None or (isinstance(value, str) and value and "\0" not in value):
         return value
-    raise _error(path, "'connection'", "must be a non-empty string")
+    raise _error(path, "'connection'", "must be a non-empty string without NUL characters")
 
 
 def _is_store_name(value: object) -> bool:

@@ -29,14 +29,23 @@ def write_output_file(path: Path, text: str, *, force: bool) -> None:
         force: Replace an existing file.
 
     Raises:
-        ValidationError: The file exists and `force` is not set.
+        ValidationError: The file exists and `force` is not set, or the path holds a NUL
+            character.
         BackendError: Any other OS error; no partial or temporary file is left behind.
     """
+    _check_path(path, what="output file")
     data = text.encode("utf-8")
     if force:
         _replace(path, data)
     else:
         _create(path, data)
+
+
+def _check_path(path: Path, *, what: str) -> None:
+    if "\0" in str(path):
+        # The OS refuses such a path with a ValueError, not an OSError.
+        message = f"{what} path {str(path)!r} contains a NUL character"
+        raise ValidationError(message)
 
 
 def _create(path: Path, data: bytes) -> None:
@@ -94,8 +103,9 @@ def read_input_file(path: Path) -> str:
 
     Raises:
         BackendError: The file cannot be read.
-        ValidationError: The file is not UTF-8.
+        ValidationError: The file is not UTF-8, or the path holds a NUL character.
     """
+    _check_path(path, what="input file")
     try:
         data = path.read_bytes()
     except OSError as err:

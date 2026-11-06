@@ -194,3 +194,21 @@ def test_read_input_file_not_utf8_is_a_validation_error(tmp_path: Path) -> None:
 
     assert str(path) in str(caught.value)
     assert caught.value.__cause__ is None
+
+
+# --- paths the OS refuses ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_output_path_with_a_nul_character_is_a_validation_error(
+    tmp_path: Path,
+    force: bool,  # noqa: FBT001 - parametrised table column
+) -> None:
+    with pytest.raises(ValidationError, match="NUL"):
+        write_output_file(tmp_path / "out\0.env", "A=1\n", force=force)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_input_path_with_a_nul_character_is_a_validation_error(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="NUL"):
+        read_input_file(tmp_path / "in\0.env")

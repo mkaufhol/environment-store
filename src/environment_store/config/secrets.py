@@ -12,6 +12,7 @@ from typing import Final, NoReturn, Protocol
 
 from environment_store.config.prompt import Prompter
 from environment_store.core.errors import (
+    BackendError,
     KeyRequiredError,
     KeySourceError,
     NotEncryptedError,
@@ -129,8 +130,13 @@ def read_secret_file(path: Path) -> str:
         The text.
 
     Raises:
-        KeySourceError: The file cannot be read, is not UTF-8 or is empty (PD 3).
+        KeySourceError: The path holds a NUL character, or the file cannot be read, is not
+            UTF-8 or is empty (PD 3).
     """
+    if "\0" in str(path):
+        # The OS refuses such a path with a ValueError, not an OSError.
+        message = f"key file path {str(path)!r} contains a NUL character"
+        raise KeySourceError(message)
     what = f"key file '{path}'"
     try:
         data = path.read_bytes()
@@ -155,7 +161,9 @@ def _decode(data: bytes, *, what: str) -> str:
 
 
 def _check_not_empty(text: str, *, what: str) -> str:
-    if not text.removesuffix("\n").removesuffix("\r"):
+    # Empty after D3's stripping of exactly one trailing LF or CRLF, as passphrase_from_text.
+    stripped = text[:-2] if text.endswith("\r\n") else text.removesuffix("\n")
+    if not stripped:
         message = f"{what} is empty"
         raise KeySourceError(message)
     return text
@@ -264,9 +272,17 @@ class NewSecret:
     generated: Path | None
 
     def discard(self) -> None:
-        """Remove a generated key file; the caller decides when this is safe (PD 33)."""
+        """Remove a generated key file; the caller decides when this is safe (PD 33).
+
+        Raises:
+            BackendError: The file exists but cannot be removed.
+        """
         if self.generated is not None:
-            self.generated.unlink(missing_ok=True)
+            try:
+                self.generated.unlink(missing_ok=True)
+            except OSError as err:
+                message = f"cannot remove generated key file '{self.generated}': {err.strerror}"
+                raise BackendError(message) from err
 
 
 def resolve_new_secret(choice: NewSecretChoice, secret_input: SecretInput) -> NewSecret:

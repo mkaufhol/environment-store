@@ -247,7 +247,9 @@ def test_project_key_for_a_plaintext_store_is_an_error(
     _key_file(tmp_path)
     _project(tmp_path, '[keys]\nbase = "keyed.key"\n')
 
-    with pytest.raises(NotEncryptedError):
+    with pytest.raises(
+        NotEncryptedError, match=r"\[keys\] in '.*\.envstore\.toml'.*'base'.*remove"
+    ):
         _load(tmp_path, opener, "base")
 
 
@@ -281,6 +283,48 @@ def test_missing_store_is_reported_before_prompting(
 
     with pytest.raises(StoreNotFoundError):
         _load(tmp_path, opener, "missing", "phrased", interactive=True, prompter=prompts)
+    assert prompts.asked == []
+
+
+@pytest.mark.usefixtures("seeded")
+@pytest.mark.parametrize(
+    ("later", "error"), [("missing", StoreNotFoundError), ("Bad-Name", ValidationError)]
+)
+def test_every_store_is_checked_before_an_earlier_one_is_prompted_for(
+    tmp_path: Path, opener: RecordingOpener, later: str, error: type[Exception]
+) -> None:
+    prompts = Prompts(PASSPHRASE.text)
+
+    with pytest.raises(error):
+        _load(tmp_path, opener, "phrased", later, interactive=True, prompter=prompts)
+    assert prompts.asked == []
+
+
+@pytest.mark.usefixtures("seeded")
+def test_missing_store_is_reported_before_its_key_file_is_read(
+    tmp_path: Path, opener: RecordingOpener
+) -> None:
+    with pytest.raises(StoreNotFoundError):
+        _load(tmp_path, opener, "missing", keys={"missing": tmp_path / "nokey"})
+
+
+@pytest.mark.usefixtures("seeded")
+def test_invalid_explicit_key_is_reported_before_prompting(
+    tmp_path: Path, opener: RecordingOpener
+) -> None:
+    prompts = Prompts(PASSPHRASE.text)
+    keys: dict[str, object] = {"keyed": "not a key input"}
+
+    with pytest.raises(ValidationError, match="Path"):
+        _load(
+            tmp_path,
+            opener,
+            "phrased",
+            "keyed",
+            keys=keys,  # ty: ignore[invalid-argument-type] - a wrong key type on purpose
+            interactive=True,
+            prompter=prompts,
+        )
     assert prompts.asked == []
 
 

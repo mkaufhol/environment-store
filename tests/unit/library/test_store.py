@@ -5,6 +5,7 @@ from typing import Self
 
 import pytest
 
+from environment_store.config.settings import resolve_settings
 from environment_store.core.adapter import MigrationReport, SetupMode
 from environment_store.core.errors import (
     AlreadyEncryptedError,
@@ -105,7 +106,7 @@ def test_invalid_connection_string_is_refused_before_opening(opener: RecordingOp
     assert opener.opened == []
 
 
-def test_opener_errors_propagate(backend: MemoryBackend) -> None:
+def test_opener_errors_propagate_unchanged(backend: MemoryBackend) -> None:
     def failing(url: str, setup: SetupMode) -> MemoryAdapter:
         message = "database refused"
         raise BackendError(message)
@@ -150,8 +151,6 @@ def test_from_env_defaults_to_the_process_environment(
 def test_from_settings_uses_the_resolved_connection(
     opener: RecordingOpener, tmp_path: Path
 ) -> None:
-    from environment_store.config.settings import resolve_settings  # noqa: PLC0415 - local
-
     settings = resolve_settings(connection=CONNECTION, use_project=False, environ={}, cwd=tmp_path)
 
     with EnvironmentStore.from_settings(settings, opener=opener):
@@ -163,8 +162,6 @@ def test_from_settings_uses_the_resolved_connection(
 def test_from_settings_without_connection_is_a_configuration_error(
     opener: RecordingOpener, tmp_path: Path
 ) -> None:
-    from environment_store.config.settings import resolve_settings  # noqa: PLC0415 - local
-
     settings = resolve_settings(connection=None, use_project=False, environ={}, cwd=tmp_path)
 
     with pytest.raises(ConfigurationError, match="-c/--connection"):
@@ -278,7 +275,7 @@ def test_set_many_with_overwrite(store: EnvironmentStore) -> None:
     assert store.variables("base") == {"A": "2", "B": "3"}
 
 
-def test_get_a_missing_variable(store: EnvironmentStore) -> None:
+def test_get_of_a_missing_variable_raises_variable_not_found(store: EnvironmentStore) -> None:
     store.create_store("base")
 
     with pytest.raises(VariableNotFoundError) as caught:
@@ -339,14 +336,16 @@ def test_key_file_for_a_passphrase_store(store: EnvironmentStore, key_file: Path
         store.variables("secret", key=key_file)
 
 
-def test_missing_key_file(store: EnvironmentStore, tmp_path: Path) -> None:
+def test_variables_with_a_missing_key_file_raises_key_source_error(
+    store: EnvironmentStore, tmp_path: Path
+) -> None:
     store.create_store("secret", encrypt=True, key=KEY)
 
     with pytest.raises(KeySourceError):
         store.variables("secret", key=tmp_path / "missing.key")
 
 
-def test_wrong_key(store: EnvironmentStore) -> None:
+def test_variables_with_a_wrong_key_raises_decryption_error(store: EnvironmentStore) -> None:
     store.create_store("secret", encrypt=True, key=KEY)
 
     with pytest.raises(DecryptionError):
@@ -430,7 +429,7 @@ def test_copy_store_keeps_the_encryption_by_default(
     assert store.variables("src", key=KEY) == {"A": "1"}
 
 
-def test_copy_store_plain(store: EnvironmentStore) -> None:
+def test_copy_store_plain_makes_an_unencrypted_copy(store: EnvironmentStore) -> None:
     store.create_store("src", encrypt=True, key=KEY)
     store.set("src", "A", "1", key=KEY)
 
@@ -530,7 +529,7 @@ def test_load_merges_sources_in_order(store: EnvironmentStore, key_file: Path) -
     assert [name for name, _ in environment.stores] == ["base", "secret"]
 
 
-def test_load_first_wins(store: EnvironmentStore) -> None:
+def test_load_first_wins_keeps_the_first_value(store: EnvironmentStore) -> None:
     store.create_store("a")
     store.set("a", "X", "a")
     store.create_store("b")

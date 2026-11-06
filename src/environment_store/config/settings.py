@@ -14,12 +14,14 @@ from typing import Final
 from environment_store.config.project import (
     PROJECT_FILE_NAME,
     ProjectFile,
+    check_key_paths,
+    decode_project_file,
     find_project_file,
-    read_project_file,
 )
 from environment_store.core.connection import connection_has_credentials
 from environment_store.core.errors import ConfigurationError
 from environment_store.core.merge import MergeOrder, order_from_setting, parse_bool_setting
+from environment_store.core.validation import validate_store_name
 
 __all__ = [
     "ENV_CONNECTION",
@@ -82,10 +84,17 @@ class Settings:
     warnings: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        """Freeze the collections."""
+        """Freeze the collections and check the store names and key paths.
+
+        Raises:
+            ValidationError: An invalid store name or a relative key path.
+        """
         object.__setattr__(self, "stores", tuple(self.stores))
         object.__setattr__(self, "key_paths", MappingProxyType(dict(self.key_paths)))
         object.__setattr__(self, "warnings", tuple(self.warnings))
+        for store in self.stores:
+            validate_store_name(store)
+        check_key_paths(self.key_paths)
 
     def require_connection(self) -> str:
         """Return the connection string.
@@ -175,7 +184,8 @@ def _project(
         # PD 32: an untrusted file contributes nothing but this warning.
         warnings.append(f"ignoring project file '{candidate.path}': {candidate.untrusted_reason}")
         return None
-    return read_project_file(candidate.path)
+    # Parse the bytes the trust check saw, never the path a second time (PD 32).
+    return decode_project_file(candidate.content, path=candidate.path)
 
 
 def _credentials_warning(path: Path) -> str:

@@ -5,7 +5,7 @@ from typing import Final
 
 import pytest
 
-from environment_store.config.project import PROJECT_FILE_NAME
+from environment_store.config.project import PROJECT_FILE_NAME, ProjectFileCandidate
 from environment_store.config.settings import (
     ENV_CONNECTION,
     ENV_ORDERED_OVERWRITE,
@@ -14,7 +14,7 @@ from environment_store.config.settings import (
     Settings,
     resolve_settings,
 )
-from environment_store.core.errors import ConfigurationError
+from environment_store.core.errors import ConfigurationError, ValidationError
 from environment_store.core.merge import MergeOrder
 
 _HIDDEN: Final = "hunter2-very-secret"
@@ -47,7 +47,7 @@ def _resolve(
     )
 
 
-def test_environment_variable_names() -> None:
+def test_environment_variable_names_follow_the_spec() -> None:
     assert ENV_CONNECTION == "ENV_STORE_CONNECTION"
     assert ENV_ORDERED_OVERWRITE == "ENV_STORE_ORDERED_OVERWRITE"
 
@@ -226,11 +226,49 @@ def test_broken_project_file_is_a_configuration_error(tmp_path: Path) -> None:
         _resolve(tmp_path)
 
 
-def test_settings_are_immutable(tmp_path: Path) -> None:
+def test_settings_freeze_the_key_paths(tmp_path: Path) -> None:
     _project(tmp_path, '[keys]\na = "a.key"\n')
     settings = _resolve(tmp_path)
 
     assert isinstance(settings.key_paths, MappingProxyType)
+
+
+def test_project_file_is_parsed_from_the_bytes_read_at_discovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # PD 32: what is parsed is what the trust check saw, not whatever the path names later.
+    path = _project(tmp_path, 'stores = ["on_disk"]\n')
+
+    def found(*_args: object, **_kwargs: object) -> ProjectFileCandidate:
+        return ProjectFileCandidate(path, None, content=b'stores = ["checked"]\n')
+
+    monkeypatch.setattr("environment_store.config.settings.find_project_file", found)
+
+    assert _resolve(tmp_path).stores == ("checked",)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"stores": ("NOT VALID",)},
+        {"key_paths": {"X Y": Path("/k")}},
+        {"key_paths": {"a": Path("relative.key")}},
+    ],
+)
+def test_settings_validate_their_invariants(fields: dict[str, object]) -> None:
+    arguments: dict[str, object] = {
+        "connection": None,
+        "connection_source": None,
+        "ordered_overwrite": True,
+        "stores": (),
+        "key_paths": {},
+        "project_file": None,
+        "warnings": (),
+        **fields,
+    }
+
+    with pytest.raises(ValidationError):
+        Settings(**arguments)
 
 
 # --- password warning (D25, D33, PD 9) ---------------------------------------------------------

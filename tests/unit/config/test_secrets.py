@@ -23,6 +23,7 @@ from environment_store.config.secrets import (
     resolve_new_secret,
 )
 from environment_store.core.errors import (
+    BackendError,
     InvalidKeyFileError,
     KeyModeMismatchError,
     KeyRequiredError,
@@ -278,6 +279,26 @@ def test_empty_prompt_answer_is_a_key_source_error(inspector: ServiceInspector) 
         _resolver(inspector, tty=True, prompter=RecordingPrompter("")).existing("phrased", None)
 
 
+@pytest.mark.parametrize(("data", "secret"), [(b"\r", "\r"), (b"\r\r\n", "\r")])
+def test_lone_carriage_return_is_a_passphrase_not_an_empty_secret(
+    inspector: ServiceInspector, tmp_path: Path, data: bytes, secret: str
+) -> None:
+    # D3 strips one LF or CRLF only, as passphrase_from_text does.
+    store = "crphrase"
+    inspector.service.create_store(store, secret=Passphrase(text=secret))
+
+    resolved = _resolver(inspector).existing(store, KeyFile(_file(tmp_path, data)))
+
+    assert resolved == Passphrase(text=secret)
+
+
+def test_secret_file_path_with_a_nul_character_is_a_key_source_error(
+    inspector: ServiceInspector, tmp_path: Path
+) -> None:
+    with pytest.raises(KeySourceError, match="NUL"):
+        _resolver(inspector).existing("keyed", KeyFile(tmp_path / "k\0ey"))
+
+
 def test_read_secret_file_returns_the_text_unchanged(tmp_path: Path) -> None:
     assert read_secret_file(_file(tmp_path, "a\r\nb\n")) == "a\r\nb\n"
 
@@ -345,6 +366,18 @@ def test_discard_removes_a_generated_key_file(tmp_path: Path) -> None:
     assert not path.exists()
 
 
+def test_discard_that_cannot_remove_the_file_is_a_backend_error(tmp_path: Path) -> None:
+    path = tmp_path / "gen"
+    path.mkdir()
+    new = NewSecret(secret=PASSPHRASE, generated=path)
+
+    with pytest.raises(BackendError, match="cannot remove generated key file") as caught:
+        new.discard()
+
+    assert str(path) in str(caught.value)
+    assert isinstance(caught.value.__cause__, OSError)
+
+
 def test_discard_keeps_a_given_key_file(tmp_path: Path) -> None:
     path = _file(tmp_path, KEY_TEXT)
     new = resolve_new_secret(NewKeyFile(KeyFile(path)), _input())
@@ -397,7 +430,7 @@ def test_empty_prompted_new_passphrase_is_a_key_source_error() -> None:
         resolve_new_secret(NewPassphrase(), _input(tty=True, prompter=RecordingPrompter("")))
 
 
-def test_new_secret_hides_the_secret_in_its_repr(tmp_path: Path) -> None:
+def test_new_secret_hides_the_secret_in_its_repr() -> None:
     new = NewSecret(secret=PASSPHRASE, generated=None)
 
     assert PASSPHRASE.text not in repr(new)

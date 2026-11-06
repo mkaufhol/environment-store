@@ -37,7 +37,7 @@ def test_variables_last_wins_sorted_by_name() -> None:
     ]
 
 
-def test_variables_first_wins() -> None:
+def test_variables_first_wins_keeps_the_first_value() -> None:
     assert _env(BASE, STAGING, order=MergeOrder.FIRST_WINS).variables()["HOST"] == "localhost"
 
 
@@ -141,11 +141,11 @@ def test_apply_defaults_to_the_process_environment(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.parametrize("fmt", [Format.DOTENV, "dotenv"])
-def test_dumps_dotenv(fmt: Format | str) -> None:
+def test_dumps_dotenv_writes_one_assignment_per_line(fmt: Format | str) -> None:
     assert _env(BASE).dumps(fmt) == "HOST=localhost\nPORT=5432\n"
 
 
-def test_dumps_dotenv_nested() -> None:
+def test_dumps_dotenv_nested_prefixes_names_with_the_store() -> None:
     assert _env(BASE).dumps(Format.DOTENV, nested=True) == (
         "BASE__HOST=localhost\nBASE__PORT=5432\n"
     )
@@ -166,8 +166,10 @@ def test_dumps_toml_flat_and_nested() -> None:
 
 
 def test_dumps_refuses_an_unknown_format() -> None:
-    with pytest.raises(ValidationError, match="dotenv, json, toml"):
+    with pytest.raises(ValidationError, match="dotenv, json, toml") as caught:
         _env(BASE).dumps("yaml")
+
+    assert isinstance(caught.value.__cause__, ValueError)
 
 
 # --- to_file -----------------------------------------------------------------------------------
@@ -208,6 +210,11 @@ def test_to_file_without_inferable_format_asks_for_fmt(tmp_path: Path) -> None:
     assert not path.exists()
 
 
+def test_to_file_with_a_nul_character_in_the_path_is_a_validation_error(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="NUL"):
+        _env(BASE).to_file(tmp_path / "x\0.json")
+
+
 def test_to_file_refuses_an_existing_file_unless_forced(tmp_path: Path) -> None:
     path = tmp_path / ".env"
     path.write_text("old", encoding="utf-8")
@@ -219,7 +226,7 @@ def test_to_file_refuses_an_existing_file_unless_forced(tmp_path: Path) -> None:
     assert path.read_text(encoding="utf-8") == "HOST=localhost\nPORT=5432\n"
 
 
-def test_to_file_nested(tmp_path: Path) -> None:
+def test_to_file_nested_writes_one_table_per_store(tmp_path: Path) -> None:
     path = tmp_path / "out.json"
 
     _env(BASE).to_file(path, nested=True)

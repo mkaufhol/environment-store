@@ -19,10 +19,11 @@ from environment_store.config.settings import (
     Settings,
     resolve_settings,
 )
-from environment_store.core.errors import ConfigurationError, ValidationError
+from environment_store.core.errors import ConfigurationError, NotEncryptedError, ValidationError
 from environment_store.core.secrets import Secret
+from environment_store.core.validation import validate_store_name
 from environment_store.library.environment import Environment
-from environment_store.library.sources import KeyInput, Source
+from environment_store.library.sources import KeyInput, Source, check_key_input
 from environment_store.library.store import (
     AdapterOpener,
     EnvironmentStore,
@@ -139,11 +140,15 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
         stdin_is_tty=interactive,
         prompter=prompter if interactive and not noinput else None,
     )
+    unique = tuple(dict.fromkeys(names))
     with EnvironmentStore.from_settings(settings, opener=opener) as store:
+        # Like the CLI (PD 18): every store must exist before a key is read or prompted for,
+        # so a typo never costs a prompt.
+        for name in unique:
+            store.store_info(name)
         resolver = SecretResolver(store, secret_input)
         secrets = {
-            name: _secret(store, resolver, name, explicit.get(name), settings)
-            for name in dict.fromkeys(names)
+            name: _secret(store, resolver, name, explicit.get(name), settings) for name in unique
         }
         environment = store.load(
             [Source(name, key=secrets[name]) for name in names],
@@ -161,6 +166,8 @@ def _store_names(stores: Sequence[str], settings: Settings) -> tuple[str, ...]:
             ".envstore.toml"
         )
         raise ConfigurationError(message)
+    for name in names:
+        validate_store_name(name)
     return names
 
 
@@ -172,6 +179,8 @@ def _explicit_keys(
     if unused:
         message = f"a key was given for store {unused[0]!r}, which is not loaded"
         raise ValidationError(message)
+    for key in given.values():
+        check_key_input(key)
     return given
 
 
@@ -185,5 +194,15 @@ def _secret(
     if key is not None:
         return store.secret_for(name, key)
     path = settings.key_paths.get(name)
-    # Keys are bound by store name, so a project key for a used plaintext store is an error (PD 5).
-    return resolver.existing(name, None if path is None else KeyFile(path))
+    if path is None:
+        return resolver.existing(name, None)
+    try:
+        return resolver.existing(name, KeyFile(path))
+    except NotEncryptedError as err:
+        # Keys are bound by store name, so a project key for a used plaintext store is an error
+        # (PD 5); the user gave no key, so the message points at where it came from.
+        message = (
+            f"[keys] in '{settings.project_file}' names a key for store {name!r}, which is not "
+            "encrypted: remove the entry"
+        )
+        raise NotEncryptedError(message) from err
