@@ -42,15 +42,19 @@ Repository = "https://github.com/mkaufhol/environment-store"
 Issues = "https://github.com/mkaufhol/environment-store/issues"
 Changelog = "https://github.com/mkaufhol/environment-store/blob/main/CHANGELOG.md"
 
-# Entry points (environment-store, envs) are added with the CLI foundation (C1).
+[project.scripts]
+# Both names run the same CLI (D20).
+environment-store = "environment_store.cli:main"
+envs = "environment_store.cli:main"
 
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2"]
-cli = ["typer>=0.15"]
+# >= 0.26: click is vendored; the CLI relies on its exception hierarchy (PD 15).
+cli = ["typer>=0.26"]
 tui = ["textual>=3"]
 all = [
     "psycopg[binary]>=3.2",
-    "typer>=0.15",
+    "typer>=0.26",
     "textual>=3",
 ]
 
@@ -67,7 +71,7 @@ testing = [
     "pytest>=9.2.0",
     # Optional imports, so that ty and the tests see every extra.
     "psycopg[binary]>=3.2",
-    "typer>=0.15",
+    "typer>=0.26",
     "textual>=3",
     # Only for the dotenv compatibility tests of the dotenv writer (A4).
     "python-dotenv>=1.2.4",

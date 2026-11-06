@@ -1,8 +1,9 @@
 """Import direction (IMPLEMENTATION-PLAN.md §3, §6.1).
 
 core <- crypto <- service; core <- adapters; core <- formats; core, crypto <- config;
-core, crypto, service, formats, config <- library. Adapter subpackages import core and
-adapters.sql only, never each other. No frontend layer imports adapters (D31).
+core, crypto, service, formats, config <- library; core, config, library, formats <- cli.
+Adapter subpackages import core and adapters.sql only, never each other. No frontend layer
+imports adapters, service or crypto (D31).
 """
 
 import ast
@@ -32,6 +33,7 @@ _ALLOWED: Final[dict[str, frozenset[str]]] = {
     "formats": frozenset({"core", "formats", "_toml"}),
     "config": frozenset({"core", "crypto", "config"}),
     "library": frozenset({"core", "crypto", "service", "formats", "config", "library"}),
+    "cli": frozenset({"core", "config", "library", "formats", "cli"}),
 }
 
 
@@ -93,7 +95,15 @@ def _source_modules() -> list[tuple[str, Path]]:
         ("environment_store.adapters.files", "from environment_store._toml import dumps", 0),
         ("environment_store.service", "from environment_store.crypto import seal", 0),
         ("environment_store.service", "import json\nfrom typing import Final", 0),
-        ("environment_store.cli.app", "from environment_store.service import X", 0),
+        ("environment_store.cli.app", "from environment_store.service import X", 1),
+        ("environment_store.cli.app", "from environment_store.crypto import x", 1),
+        ("environment_store.cli.app", "import environment_store.adapters.sqlite", 1),
+        ("environment_store.cli.app", "from environment_store.tui import run_tui", 1),
+        ("environment_store.cli.app", "import environment_store", 1),
+        ("environment_store.cli.app", "from environment_store.library.store import x", 0),
+        ("environment_store.cli.app", "from environment_store.config.settings import x", 0),
+        ("environment_store.cli.app", "from environment_store.formats.infer import x", 0),
+        ("environment_store.cli.state", "from environment_store.cli.output import x", 0),
         (
             "environment_store.adapters.files",
             "from environment_store.adapters.postgres import o",
@@ -154,6 +164,7 @@ def test_layer_packages_are_found_in_the_source_tree() -> None:
         "environment_store.adapters.sql",
         "environment_store.config",
         "environment_store.library",
+        "environment_store.cli",
     } <= found
 
 
