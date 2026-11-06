@@ -14,9 +14,9 @@ from environment_store.core.validation import (
 
 
 @pytest.mark.parametrize(
-    "name", ["a", "0", "base_conf", "customer-a", "a1-b2_c3", "x" * 63, "9lives", "a--b__c"]
+    "name", ["a", "a9", "base_conf", "customer-a", "a1-b2_c3", "x" * 63, "a--b__c"]
 )
-def test_validate_store_name_accepts_names_matching_d27(name: str) -> None:
+def test_validate_store_name_accepts_names_matching_d27_and_d40(name: str) -> None:
     assert validate_store_name(name) == name
 
 
@@ -51,8 +51,15 @@ def test_validate_store_name_rejects_non_strings() -> None:
 
 
 def test_validate_store_name_error_names_the_rule() -> None:
-    with pytest.raises(ValidationError, match=r"\^\[a-z0-9\]\[a-z0-9_-\]\{0,62\}\$"):
+    with pytest.raises(ValidationError, match=r"\^\[a-z\]\[a-z0-9_-\]\{0,62\}\$"):
         validate_store_name("Bad")
+
+
+@pytest.mark.parametrize("name", ["9lives", "0abc", "0", "1-a", "2_b"])
+def test_validate_store_name_rejects_names_starting_with_a_digit_d40(name: str) -> None:
+    # D40: the nested prefix `STORE__VAR` must always be a valid shell variable name.
+    with pytest.raises(ValidationError, match=r"starting with a letter \("):
+        validate_store_name(name)
 
 
 # --- variable names (D33) ----------------------------------------------------------------------

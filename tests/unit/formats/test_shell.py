@@ -56,7 +56,7 @@ def test_posix_exports_of_nothing_is_empty() -> None:
     assert posix_exports({}, overwrite=False) == ""
 
 
-@pytest.mark.parametrize("name", ["9LIVES__X", "A-B", "", "A B", "A;rm -rf /", "Ä"])
+@pytest.mark.parametrize("name", ["1A", "A-B", "", "A B", "A;rm -rf /", "Ä"])
 def test_posix_exports_refuses_names_that_are_not_posix_variable_names(name: str) -> None:
     with pytest.raises(ValidationError, match="POSIX") as excinfo:
         posix_exports({name: "v"}, overwrite=True)

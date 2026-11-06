@@ -19,14 +19,15 @@ __all__ = [
 ]
 
 # Lowercase only: store names become file names on case-insensitive file systems (D27).
-STORE_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
+# A letter first, so the nested prefix `STORE__VAR` is always a shell variable name (D40).
+STORE_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z][a-z0-9_-]{0,62}$")
 # Portable POSIX environment variable names, case-sensitive (D33).
 VARIABLE_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _LONE_SURROGATE: Final[re.Pattern[str]] = re.compile("[\ud800-\udfff]")
 
 
 def validate_store_name(name: str) -> str:
-    """Check a store name against D27.
+    """Check a store name against D27 and D40.
 
     Args:
         name: The store name.
@@ -44,7 +45,7 @@ def validate_store_name(name: str) -> str:
     if not STORE_NAME_PATTERN.fullmatch(name):
         message = (
             f"invalid store name {name!r}: use 1 to 63 lowercase letters, digits, '_' or '-', "
-            f"starting with a letter or digit ({STORE_NAME_PATTERN.pattern})"
+            f"starting with a letter ({STORE_NAME_PATTERN.pattern})"
         )
         raise ValidationError(message)
     return name

@@ -96,7 +96,7 @@ _INVALID_NAMES: Final[tuple[str, ...]] = (
     "café",
 )
 # Code point order: '-' < digits < '_' < letters. A collating database sorts these differently.
-_UNSORTED_NAMES: Final[tuple[str, ...]] = ("b", "a_1", "a-2", "a", "0x", "z9", "a1", "a-")
+_UNSORTED_NAMES: Final[tuple[str, ...]] = ("b", "a_1", "a-2", "a", "a0", "z9", "a1", "a-")
 _RACERS: Final[int] = 8
 _RACE_TIMEOUT: Final[float] = 30.0
 

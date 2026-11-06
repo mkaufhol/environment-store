@@ -92,15 +92,8 @@ def test_dumps_of_nothing_is_empty() -> None:
     assert dumps({}) == ""
 
 
-def test_dumps_accepts_nested_keys_of_stores_starting_with_a_digit() -> None:
-    text = dumps({"9LIVES__X": "v"})
-
-    assert text == "9LIVES__X=v\n"
-    assert _python_dotenv(text) == {"9LIVES__X": "v"}
-
-
-@pytest.mark.parametrize("name", ["", "A-B", "A B", "A=B", "#A", "Ä", "A\n"])
-def test_dumps_refuses_names_dotenv_cannot_hold(name: str) -> None:
+@pytest.mark.parametrize("name", ["", "A-B", "A B", "A=B", "#A", "Ä", "A\n", "1A", "9LIVES__X"])
+def test_dumps_refuses_names_that_are_not_variable_names(name: str) -> None:
     with pytest.raises(ValidationError, match="dotenv"):
         dumps({name: "v"})
 

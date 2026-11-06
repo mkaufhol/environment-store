@@ -41,6 +41,7 @@ def test_path_after_the_first_equals_sign_may_contain_equals_signs() -> None:
         ("C:\\keys\\a.key", KeyFile(Path("C:\\keys\\a.key"))),
         ("=x", KeyFile(Path("=x"))),
         ("Upper=x", KeyFile(Path("Upper=x"))),
+        ("9lives=x", KeyFile(Path("9lives=x"))),
     ],
 )
 def test_bare_path_is_the_single_store_shorthand(value: str, expected: KeyFile | KeyStdin) -> None:

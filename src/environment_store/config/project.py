@@ -297,7 +297,10 @@ def _error(path: Path, key: str, rule: str) -> ConfigurationError:
 
 
 def _stores(value: object, path: Path) -> tuple[str, ...]:
-    rule = "must be a list of store names (lowercase letters, digits, '_', '-')"
+    rule = (
+        "must be a list of store names (lowercase letters, digits, '_', '-', "
+        "starting with a letter)"
+    )
     if not isinstance(value, list):
         raise _error(path, "'stores'", rule)
     for name in value:

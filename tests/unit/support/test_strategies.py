@@ -37,6 +37,16 @@ def test_store_names_are_valid(name: str) -> None:
     assert validate_store_name(name) == name
 
 
+@given(store_names())
+def test_store_names_start_with_a_letter(name: str) -> None:
+    assert "a" <= name[0] <= "z"
+
+
+@pytest.mark.parametrize("example", ["9lives", "0"])
+def test_invalid_store_names_include_names_starting_with_a_digit(example: str) -> None:
+    assert _reaches(invalid_store_names(), lambda name: name == example)
+
+
 @given(invalid_store_names())
 def test_invalid_store_names_are_rejected(name: str) -> None:
     with pytest.raises(ValidationError):

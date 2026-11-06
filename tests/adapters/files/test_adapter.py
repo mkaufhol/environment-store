@@ -209,6 +209,7 @@ def test_listing_ignores_other_extensions_invalid_stems_and_directories(
         f"Upper{serializer.extension}",
         f"a.b{serializer.extension}",
         f"-dash{serializer.extension}",
+        f"9lives{serializer.extension}",
         f".hidden{serializer.extension}",
         f"{'x' * 64}{serializer.extension}",
         f"upper-ext{serializer.extension.upper()}",

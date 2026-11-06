@@ -31,11 +31,7 @@ from typing import Final, NoReturn
 from environment_store.core.errors import ValidationError
 from environment_store.core.validation import VARIABLE_NAME_PATTERN, validate_value
 
-__all__ = ["KEY_PATTERN", "dumps", "loads"]
-
-KEY_PATTERN: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_]+")
-"""Keys `dumps` writes: variable names, plus nested keys of stores starting with a digit
-(`9LIVES__X`). `loads` accepts variable names only (D33), like the JSON and TOML loaders."""
+__all__ = ["dumps", "loads"]
 
 _UNQUOTED: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_./:@%+,-]+")
 _NEEDS_DOUBLE_QUOTES: Final[frozenset[str]] = frozenset("'\n\r")
@@ -80,13 +76,14 @@ def dumps(variables: Mapping[str, str]) -> str:
     """Serialize variables as dotenv lines (D37).
 
     Args:
-        variables: Keys and values, in output order. Keys match `KEY_PATTERN`.
+        variables: Keys and values, in output order. Keys are variable names (D33); nested keys
+            (`STORE__VAR`) are too, because store names start with a letter (D40).
 
     Returns:
         One `KEY=VALUE` line per variable, each ending with a newline; empty for no variables.
 
     Raises:
-        ValidationError: A key does not match `KEY_PATTERN`, a value contains NUL, or a value
+        ValidationError: A key is not a variable name, a value contains NUL, or a value
             cannot be written so that python-dotenv and Docker Compose both read it back
             exactly. Values are never echoed.
     """
@@ -94,10 +91,10 @@ def dumps(variables: Mapping[str, str]) -> str:
 
 
 def _key(name: str) -> str:
-    if not KEY_PATTERN.fullmatch(name):
+    if not VARIABLE_NAME_PATTERN.fullmatch(name):
         message = (
-            f"{name!r} cannot be written as a dotenv key: use letters, digits and '_' "
-            f"({KEY_PATTERN.pattern})"
+            f"{name!r} cannot be written as a dotenv key: use letters, digits and '_', not "
+            f"starting with a digit ({VARIABLE_NAME_PATTERN.pattern})"
         )
         raise ValidationError(message)
     return name

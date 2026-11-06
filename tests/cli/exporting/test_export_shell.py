@@ -92,18 +92,6 @@ def test_nested_prefixes_variables_with_the_store_name(cli: CliHarness) -> None:
     )
 
 
-def test_nested_store_starting_with_a_digit_is_refused(cli_json: CliHarness) -> None:
-    library = cli_json.store()
-    library.create_store("9lives")
-    library.set("9lives", "X", "1")
-
-    result = cli_json.invoke("export-shell", "--nested", "9lives")
-
-    assert_exit(result, 1)
-    assert result.stdout == ""
-    assert "9LIVES__X" in result.stderr
-
-
 def test_encrypted_store_is_prompted_for_on_stderr_only(cli_json: CliHarness) -> None:
     library = cli_json.store()
     library.create_store("secret", encrypt=True, key=Passphrase(text="pw"))

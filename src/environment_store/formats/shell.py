@@ -29,9 +29,8 @@ def posix_exports(variables: Mapping[str, str], *, overwrite: bool) -> str:
         One statement per line, each ending with a newline; empty for no variables.
 
     Raises:
-        ValidationError: A name is not a POSIX variable name (e.g. the nested key `9LIVES__X` of
-            a store whose name starts with a digit) or a value contains NUL. Values are never
-            echoed.
+        ValidationError: A name is not a POSIX variable name or a value contains NUL. Values
+            are never echoed.
     """
     lines: list[str] = []
     for name, value in variables.items():
@@ -49,7 +48,6 @@ def _check_name(name: str) -> None:
     if not VARIABLE_NAME_PATTERN.fullmatch(name):
         message = (
             f"{name!r} is not a POSIX shell variable name ({VARIABLE_NAME_PATTERN.pattern}), "
-            "so it cannot be exported to a shell; nested keys of stores whose name starts with "
-            "a digit have this problem. Use `envs run` or a dotenv, JSON or TOML export instead"
+            "so it cannot be exported to a shell"
         )
         raise ValidationError(message)

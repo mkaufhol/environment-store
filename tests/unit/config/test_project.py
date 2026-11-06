@@ -350,6 +350,7 @@ def test_repr_hides_the_connection() -> None:
         ("stores = [1]\n", "'stores'"),
         (f'stores = ["{_HIDDEN.upper()}"]\n', "'stores'"),
         ('stores = [""]\n', "'stores'"),
+        ('stores = ["9lives"]\n', "starting with a letter"),
         (f'keys = "{_HIDDEN}"\n', "[keys]"),
         (f'[keys]\n"{_HIDDEN.upper()}" = "a.key"\n', "[keys]"),
         ("[keys]\na = 1\n", "[keys]"),

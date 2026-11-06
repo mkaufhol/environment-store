@@ -115,7 +115,7 @@ def test_loads_refuses_malformed_lines_without_echoing_their_text(text: str, lin
 
 @pytest.mark.parametrize("text", ["9LIVES__X=v", "A=1\n1A=2", "export 0=x"])
 def test_loads_refuses_names_starting_with_a_digit_naming_the_line(text: str) -> None:
-    # Import fills one flat store, whose names follow D33; nested export keys are not importable.
+    # Import fills one flat store, whose names follow D33.
     line = text.count("\n") + 1
     with pytest.raises(ValidationError, match=rf"line {line}\b.*invalid variable name"):
         loads(text)

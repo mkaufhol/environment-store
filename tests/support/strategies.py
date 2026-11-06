@@ -47,6 +47,8 @@ _DANGEROUS_STORE_NAMES: Final[tuple[str, ...]] = (
     "Base",
     "-a",
     "_a",
+    "9lives",
+    "0",
     "a.b",
     "a b",
     "a\n",
@@ -74,12 +76,12 @@ _TRICKY_VALUES: Final[tuple[str, ...]] = (
 
 
 def store_names() -> st.SearchStrategy[str]:
-    """Valid store names (D27)."""
+    """Valid store names (D27, D40): they start with a letter."""
     return st.from_regex(STORE_NAME_PATTERN, fullmatch=True)
 
 
 def invalid_store_names() -> st.SearchStrategy[str]:
-    """Strings that violate D27, including path traversal and uppercase names."""
+    """Strings that violate D27 / D40: path traversal, uppercase and digit-leading names."""
     return st.one_of(
         st.sampled_from(_DANGEROUS_STORE_NAMES),
         st.text(max_size=70).filter(lambda name: STORE_NAME_PATTERN.fullmatch(name) is None),

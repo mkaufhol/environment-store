@@ -75,7 +75,7 @@ def test_listing_is_in_code_point_order_under_a_linguistic_collation(
     postgres_server: PostgresServer,
 ) -> None:
     # Code point order: '-' < digits < '_' < letters; an ICU collation ignores punctuation.
-    names = ["b", "a_1", "a-2", "a", "0x", "z9", "a1", "a-"]
+    names = ["b", "a_1", "a-2", "a", "a0", "z9", "a1", "a-"]
     with postgres_server.database(icu_locale="en-US") as database:
         with open_postgres(postgres_server.url(database)) as adapter:
             for name in names:
