@@ -24,6 +24,8 @@ class EnvironmentStoreApp(App[None]):
     """The TUI over one open `EnvironmentStore`."""
 
     TITLE: str | None = "Environment Store"
+    ENABLE_COMMAND_PALETTE: ClassVar[bool] = False
+    """Off (D46): the palette's Screenshot action could write revealed values to disk."""
     CSS: ClassVar[str] = """
     ModalScreen {
         align: center middle;

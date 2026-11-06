@@ -13,7 +13,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, TextArea
+from textual.widgets import Button, Footer, Input, Label, TextArea
 from textual.widgets.text_area import Document
 
 from environment_store.core.errors import ValidationError
@@ -93,6 +93,7 @@ class EditVariableScreen(ModalScreen[Edited | None]):
             with Horizontal(classes="buttons"):
                 yield Button("Save (ctrl+s)", id="save", variant="primary")
                 yield Button("Cancel (esc)", id="cancel")
+        yield Footer()
 
     def on_mount(self) -> None:
         """Focus the first thing to type in."""

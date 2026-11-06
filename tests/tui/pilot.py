@@ -6,12 +6,14 @@ from pathlib import Path
 
 from textual.pilot import Pilot
 from textual.widgets import DataTable, Input, TextArea
+from textual.widgets._footer import FooterKey
 
 from environment_store.library.store import EnvironmentStore
 from environment_store.tui.app import EnvironmentStoreApp
 
 __all__ = [
     "Scenario",
+    "footer",
     "notifications",
     "rows",
     "run_app",
@@ -45,6 +47,11 @@ def rows(app: EnvironmentStoreApp) -> list[list[str]]:
     """The cells of the current screen's table, as text."""
     table = app.screen.query_one(DataTable)
     return [[str(cell) for cell in table.get_row_at(row)] for row in range(table.row_count)]
+
+
+def footer(app: EnvironmentStoreApp) -> list[tuple[str, str]]:
+    """The keys and descriptions the current screen's footer shows, in order."""
+    return [(key.key, key.description) for key in app.screen.query(FooterKey)]
 
 
 def notifications(app: EnvironmentStoreApp) -> list[str]:

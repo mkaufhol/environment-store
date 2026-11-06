@@ -12,12 +12,12 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label
+from textual.widgets import Button, Footer, Input, Label
 
 from environment_store.core.errors import EnvironmentStoreError
 from environment_store.core.models import StoreInfo
 from environment_store.core.secrets import Secret
-from environment_store.tui.messages import notify_error, notify_problem
+from environment_store.tui.messages import notify_problem
 from environment_store.tui.session import OpenedStore, StoreSession
 
 __all__ = ["UnlockScreen", "describe_encryption"]
@@ -30,12 +30,19 @@ def describe_encryption(info: StoreInfo) -> str:
         info: The store's listing entry.
 
     Returns:
-        `plain`, or `encrypted (<key mode>)`.
+        `plain`, `encrypted (<key mode>)`, or `encrypted (unknown)` for cipher metadata this
+        version does not know, worded like the CLI's `ls-store`.
     """
     if not info.encrypted:
         return "plain"
-    mode = "unknown key mode" if info.key_mode is None else info.key_mode.value
+    mode = "unknown" if info.key_mode is None else info.key_mode.value
     return f"encrypted ({mode})"
+
+
+class _KeyInput(Input):
+    """An input whose enter unlocks, and says so in the footer."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("enter", "submit", "Unlock")]
 
 
 class UnlockScreen(ModalScreen[OpenedStore | None]):
@@ -65,11 +72,12 @@ class UnlockScreen(ModalScreen[OpenedStore | None]):
                 f"Unlock store {self._info.name!r}, {describe_encryption(self._info)}",
                 markup=False,
             )
-            yield Input(placeholder="Key or passphrase file, e.g. ~/.keys/a.key", id="path")
-            yield Input(placeholder="or the passphrase", password=True, id="passphrase")
+            yield _KeyInput(placeholder="Key or passphrase file, e.g. ~/.keys/a.key", id="path")
+            yield _KeyInput(placeholder="or the passphrase", password=True, id="passphrase")
             with Horizontal(classes="buttons"):
                 yield Button("Unlock", id="unlock", variant="primary")
                 yield Button("Cancel (esc)", id="cancel")
+        yield Footer()
 
     def on_mount(self) -> None:
         """Focus the path input."""
@@ -87,7 +95,10 @@ class UnlockScreen(ModalScreen[OpenedStore | None]):
             self.action_cancel()
 
     def action_unlock(self) -> None:
-        """Read the store with the given key; on success close with it."""
+        """Read the store with the given key; on success close with it.
+
+        A failure names the input it came from: the key file path, or the typed passphrase.
+        """
         passphrase = self.query_one("#passphrase", Input)
         path = self.query_one("#path", Input).value.strip()
         if bool(path) == bool(passphrase.value):
@@ -99,7 +110,8 @@ class UnlockScreen(ModalScreen[OpenedStore | None]):
             opened = self._session.open(name, secret)
         except EnvironmentStoreError as error:
             passphrase.value = ""
-            notify_error(self.app, error)
+            source = f"the key file '{path}'" if path else "the typed passphrase"
+            notify_problem(self.app, f"unlocking with {source} failed: {error}")
             return
         self.dismiss(opened)
 

@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Label
+from textual.widgets import Button, Footer, Label
 
 __all__ = ["ConfirmScreen"]
 
@@ -21,7 +21,7 @@ class ConfirmScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("y", "answer(True)", "Yes"),
         Binding("n", "answer(False)", "No"),
-        Binding("escape", "answer(False)", "No"),
+        Binding("escape", "cancel", "Cancel"),
     ]
 
     _question: str
@@ -43,6 +43,7 @@ class ConfirmScreen(ModalScreen[bool]):
             with Horizontal(classes="buttons"):
                 yield Button("Yes", id="yes", variant="error")
                 yield Button("No", id="no", variant="primary")
+        yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Answer with the pressed button."""
@@ -55,3 +56,7 @@ class ConfirmScreen(ModalScreen[bool]):
             answer: `True` for yes.
         """
         self.dismiss(answer)
+
+    def action_cancel(self) -> None:
+        """Close the dialog as a no."""
+        self.dismiss(False)  # noqa: FBT003 - the dialog's result
