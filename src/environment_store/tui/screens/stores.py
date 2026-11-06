@@ -4,7 +4,7 @@ An encrypted store is opened with the project file's key when it names one (PD 5
 asking; otherwise, or when that key does not fit, the `UnlockScreen` asks for one.
 """
 
-from typing import ClassVar
+from typing import ClassVar, override
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -44,6 +44,7 @@ class StoresScreen(Screen[None]):
         self._session = session
         self._stores = {}
 
+    @override
     def compose(self) -> ComposeResult:
         """Show the table between header and footer."""
         yield Header()

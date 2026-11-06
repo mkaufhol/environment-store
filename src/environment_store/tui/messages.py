@@ -4,13 +4,15 @@ Library error messages never contain values or secrets (CONTRIBUTING §6), and n
 added to them. Markup is off, so text such as `[keys]` is shown as written.
 """
 
+from typing import Final
+
 from textual.app import App
 
 from environment_store.core.errors import EnvironmentStoreError
 
 __all__ = ["notify_error", "notify_problem"]
 
-_TITLE = "Error"
+_TITLE: Final = "Error"
 
 
 def notify_error(app: App[object], error: EnvironmentStoreError) -> None:

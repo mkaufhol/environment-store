@@ -151,6 +151,41 @@ def test_wrong_project_key_notifies_and_asks_for_a_key(
     run_app(encrypted, scenario, key_paths={"a": wrong})
 
 
+def test_plaintext_store_with_a_project_key_notifies_and_stays_on_the_list(
+    store: EnvironmentStore, tmp_path: Path
+) -> None:
+    store.create_store("a")
+    project = tmp_path / ".envstore.toml"
+    app = EnvironmentStoreApp(
+        store, key_paths={"a": tmp_path / "missing.key"}, project_file=project
+    )
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        assert isinstance(app.screen, StoresScreen)
+        assert notifications(app) == [
+            f"[keys] in '{project}' names a key for store 'a', which is not encrypted: "
+            "remove the entry"
+        ]
+
+    run_app(store, scenario, app=app)
+
+
+def test_unlock_with_an_unknown_home_directory_notifies_and_stays_locked(
+    encrypted: EnvironmentStore,
+) -> None:
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        await set_input(pilot, "#path", "~nosuchuser_zz/a.key")
+        await pilot.click("#unlock")
+        await pilot.pause()
+        assert isinstance(app.screen, UnlockScreen)
+        [message] = notifications(app)
+        assert "~nosuchuser_zz/a.key" in message
+
+    run_app(encrypted, scenario)
+
+
 def test_encrypted_store_without_project_key_asks_for_a_key(encrypted: EnvironmentStore) -> None:
     async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
         await _open_first(pilot)

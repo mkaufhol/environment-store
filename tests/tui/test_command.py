@@ -17,13 +17,22 @@ class FakeRunTui:
     """Records the calls of `run_tui` instead of starting the TUI."""
 
     calls: list[tuple[EnvironmentStore, dict[str, Path]]]
+    project_files: list[Path | None]
 
     def __init__(self) -> None:
         self.calls = []
+        self.project_files = []
 
-    def __call__(self, store: EnvironmentStore, *, key_paths: Mapping[str, Path]) -> None:
+    def __call__(
+        self,
+        store: EnvironmentStore,
+        *,
+        key_paths: Mapping[str, Path],
+        project_file: Path | None = None,
+    ) -> None:
         assert not store.closed
         self.calls.append((store, dict(key_paths)))
+        self.project_files.append(project_file)
 
 
 @pytest.fixture
@@ -52,13 +61,14 @@ def test_tui_closes_the_store_when_the_tui_ends(cli_json: CliHarness, run_tui: F
 
 
 def test_tui_passes_the_project_file_keys(cli_json: CliHarness, run_tui: FakeRunTui) -> None:
-    cli_json.project_file("[keys]\na = 'a.key'\n")
+    project = cli_json.project_file("[keys]\na = 'a.key'\n")
 
     result = cli_json.invoke("tui", stdin_tty=True, stdout_tty=True)
 
     assert_exit(result, 0)
     [(_, key_paths)] = run_tui.calls
     assert key_paths == {"a": cli_json.root / "a.key"}
+    assert run_tui.project_files == [project]
 
 
 def test_tui_ignores_the_project_file_keys_with_no_project(

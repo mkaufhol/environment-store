@@ -6,7 +6,7 @@ dialog open; the key is never remembered beyond the shown store (D3).
 """
 
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, override
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -57,6 +57,7 @@ class UnlockScreen(ModalScreen[OpenedStore | None]):
         self._session = session
         self._info = info
 
+    @override
     def compose(self) -> ComposeResult:
         """Show the two inputs and the buttons."""
         with Vertical(classes="dialog"):

@@ -1,6 +1,6 @@
 """`ConfirmScreen`: a yes / no question as a modal dialog."""
 
-from typing import ClassVar
+from typing import ClassVar, override
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -12,8 +12,12 @@ __all__ = ["ConfirmScreen"]
 
 
 class ConfirmScreen(ModalScreen[bool]):
-    """Ask a question; dismisses with `True` for yes and `False` for no or escape."""
+    """Ask a question; dismisses with `True` for yes and `False` for no or escape.
 
+    `No` has the focus, so enter, the key that opens and edits elsewhere, never answers yes.
+    """
+
+    AUTO_FOCUS: ClassVar[str | None] = "#no"
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("y", "answer(True)", "Yes"),
         Binding("n", "answer(False)", "No"),
@@ -31,6 +35,7 @@ class ConfirmScreen(ModalScreen[bool]):
         super().__init__()
         self._question = question
 
+    @override
     def compose(self) -> ComposeResult:
         """Show the question and the two answers."""
         with Vertical(classes="dialog"):

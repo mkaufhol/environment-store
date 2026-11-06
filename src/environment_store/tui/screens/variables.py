@@ -7,7 +7,7 @@ conflicts with a change made elsewhere (D7) writes nothing and offers to reload.
 
 import json
 from collections.abc import Callable
-from typing import ClassVar, Final
+from typing import ClassVar, Final, override
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -16,9 +16,9 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Header
 
 from environment_store.core.errors import ConcurrentModificationError, EnvironmentStoreError
-from environment_store.tui.messages import notify_error
+from environment_store.tui.messages import notify_error, notify_problem
 from environment_store.tui.screens.confirm import ConfirmScreen
-from environment_store.tui.screens.edit import Edited, EditVariableScreen
+from environment_store.tui.screens.edit import Edited, EditVariableScreen, editable
 from environment_store.tui.session import OpenedStore, StoreSession
 
 __all__ = ["MASK", "VariablesScreen", "shown_value"]
@@ -74,6 +74,7 @@ class VariablesScreen(Screen[None]):
         """The store as currently shown."""
         return self._opened
 
+    @override
     def compose(self) -> ComposeResult:
         """Show the table between header and footer."""
         yield Header()
@@ -106,6 +107,13 @@ class VariablesScreen(Screen[None]):
         if name is None:
             return
         value = self._opened.variables[name]
+        if not editable(value):
+            notify_problem(
+                self.app,
+                f"variable {name!r} has line breaks the editor cannot keep unchanged (mixed line "
+                "endings or other line separators): change it with 'envs set'",
+            )
+            return
         dialog = EditVariableScreen(store=self._opened.name, name=name, value=value)
         self.app.push_screen(dialog, self._replace)
 

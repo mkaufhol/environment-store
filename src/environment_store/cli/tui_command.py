@@ -37,4 +37,5 @@ def tui(ctx: typer.Context) -> None:
     from environment_store.tui import run_tui  # noqa: PLC0415 - optional extra, imported only when "envs tui" runs
 
     store = state.open_store(ctx)
-    run_tui(store, key_paths=state.settings().key_paths)
+    settings = state.settings()
+    run_tui(store, key_paths=settings.key_paths, project_file=settings.project_file)

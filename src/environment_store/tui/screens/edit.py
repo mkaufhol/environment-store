@@ -1,30 +1,45 @@
 """`EditVariableScreen`: add a variable or edit a value, with a multi-line editor (PD 29).
 
 The name and the value are validated here, so a typo keeps the dialog and what was typed; the
-write itself happens in the variables screen.
+write itself happens in the variables screen. The `TextArea` keeps a single line-ending style and
+treats other line separators as line breaks, so a value is edited only if it comes back from the
+editor unchanged (`editable`), and an edited value saved without a change writes nothing (D28).
 """
 
 from collections.abc import Collection
-from typing import ClassVar
+from typing import ClassVar, override
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, TextArea
+from textual.widgets.text_area import Document
 
 from environment_store.core.errors import ValidationError
 from environment_store.core.validation import validate_value, validate_variable_name
 from environment_store.tui.messages import notify_problem
 
-__all__ = ["EditVariableScreen", "Edited"]
+__all__ = ["EditVariableScreen", "Edited", "editable"]
 
 type Edited = tuple[str, str]
 """The name and the new value."""
 
 
+def editable(value: str) -> bool:
+    """Tell whether the editor shows a value exactly, so saving it unchanged keeps it.
+
+    Args:
+        value: The value.
+
+    Returns:
+        `False` for mixed line endings or line separators other than LF, CRLF and CR.
+    """
+    return Document(value).text == value
+
+
 class EditVariableScreen(ModalScreen[Edited | None]):
-    """Ask for a name and a value; dismisses with them, or `None` when cancelled."""
+    """Ask for a name and a value; dismisses with them, or `None` when cancelled or unchanged."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("ctrl+s", "save", "Save"),
@@ -49,7 +64,7 @@ class EditVariableScreen(ModalScreen[Edited | None]):
         Args:
             store: The store the variable belongs to (for the title).
             name: The variable to edit; `None` to add a new one.
-            value: The current value.
+            value: The current value; it must be `editable`.
             existing: The names already in the store; adding one of them is refused.
         """
         super().__init__()
@@ -58,6 +73,7 @@ class EditVariableScreen(ModalScreen[Edited | None]):
         self._value = value
         self._existing = frozenset(existing)
 
+    @override
     def compose(self) -> ComposeResult:
         """Show the name input, the value editor and the buttons."""
         title = (
@@ -103,6 +119,9 @@ class EditVariableScreen(ModalScreen[Edited | None]):
             validate_value(value, variable=name)
         except ValidationError as error:
             notify_problem(self.app, str(error))
+            return
+        if self._name is not None and value == self._value:
+            self.dismiss(None)
             return
         if self._name is None and name in self._existing:
             notify_problem(

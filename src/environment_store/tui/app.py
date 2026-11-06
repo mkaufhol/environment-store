@@ -6,8 +6,9 @@ edit or delete variables. Store lifecycle, import / export and key lifecycle sta
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, override
 
+from rich.traceback import Traceback
 from textual.app import App
 from textual.screen import Screen
 
@@ -54,6 +55,7 @@ class EnvironmentStoreApp(App[None]):
         store: EnvironmentStore,
         *,
         key_paths: Mapping[str, Path],
+        project_file: Path | None = None,
         read_key_file: ReadKeyFile = read_secret_file,
     ) -> None:
         """Create the app.
@@ -61,21 +63,45 @@ class EnvironmentStoreApp(App[None]):
         Args:
             store: The open store; the caller closes it after the app ends.
             key_paths: The project file's `[keys]`, tried before asking (PD 5).
+            project_file: The project file the keys come from, named in errors about them.
             read_key_file: Reads key and passphrase files.
         """
         super().__init__()
-        self._session = StoreSession(store, key_paths=key_paths, read_key_file=read_key_file)
+        self._session = StoreSession(
+            store, key_paths=key_paths, project_file=project_file, read_key_file=read_key_file
+        )
 
+    @override
     def get_default_screen(self) -> Screen[None]:
         """Start with the list of stores."""
         return StoresScreen(self._session)
 
+    @override
+    def _fatal_error(self) -> None:
+        """Exit after an unexpected exception with its traceback, but without frame locals.
 
-def run_tui(store: EnvironmentStore, *, key_paths: Mapping[str, Path]) -> None:
+        Textual's own crash report shows the locals of every frame, which can hold decrypted
+        values or secrets (CONTRIBUTING §6).
+        """
+        self.bell()
+        self.panic(Traceback(show_locals=False, width=None))
+
+
+def run_tui(
+    store: EnvironmentStore, *, key_paths: Mapping[str, Path], project_file: Path | None = None
+) -> None:
     """Run the TUI in the terminal until the user quits.
 
     Args:
         store: The open store; the caller closes it.
         key_paths: The project file's `[keys]`.
+        project_file: The project file the keys come from, named in errors about them.
+
+    Raises:
+        SystemExit: The app stopped after an unexpected error (its traceback is printed); the
+            exit code is the app's non-zero return code, so `envs tui` does not report success.
     """
-    EnvironmentStoreApp(store, key_paths=key_paths).run()
+    app = EnvironmentStoreApp(store, key_paths=key_paths, project_file=project_file)
+    app.run()
+    if app.return_code:
+        raise SystemExit(app.return_code)

@@ -191,6 +191,49 @@ def test_edit_replaces_the_value_of_the_selected_variable(
     assert plain.get("a", "PORT") == "1\n2\n"
 
 
+def test_saving_an_unchanged_value_writes_nothing(store: EnvironmentStore) -> None:
+    store.create_store("a")
+    store.set("a", "CRLF", "x\r\ny\r\n")
+    revision = store.store_info("a").revision
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open(pilot)
+        await pilot.press("e")
+        await pilot.pause()
+        assert isinstance(app.screen, EditVariableScreen)
+        await _save(pilot)
+        assert isinstance(app.screen, VariablesScreen)
+
+    run_app(store, scenario)
+
+    assert store.get("a", "CRLF") == "x\r\ny\r\n"
+    assert store.store_info("a").revision == revision
+
+
+@pytest.mark.parametrize(
+    "value", ["x\r\ny\nz", "a\r\nb\rc", "p\u2028q", "a\x0bb", "a\x0cb", "a\x85b"]
+)
+def test_a_value_the_editor_cannot_keep_is_not_edited(store: EnvironmentStore, value: str) -> None:
+    store.create_store("a")
+    store.set("a", "X", value)
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open(pilot)
+        await pilot.press("e")
+        await pilot.pause()
+        assert isinstance(app.screen, VariablesScreen)
+        await _save(pilot)
+        [message] = notifications(app)
+        assert message == (
+            "variable 'X' has line breaks the editor cannot keep unchanged (mixed line "
+            "endings or other line separators): change it with 'envs set'"
+        )
+
+    run_app(store, scenario)
+
+    assert store.get("a", "X") == value
+
+
 def test_cancelled_edit_writes_nothing(plain: EnvironmentStore) -> None:
     async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
         await _open(pilot)
@@ -230,7 +273,7 @@ def test_delete_after_yes_removes_the_selected_variable(plain: EnvironmentStore)
     assert plain.variables("a") == {"PORT": "5432"}
 
 
-@pytest.mark.parametrize("answer", ["n", "escape", "#no"])
+@pytest.mark.parametrize("answer", ["n", "escape", "#no", "enter"])
 def test_delete_without_yes_keeps_the_variable(plain: EnvironmentStore, answer: str) -> None:
     async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
         await _open(pilot)
@@ -387,6 +430,7 @@ def test_a_backend_failure_notifies_with_its_message_as_written(
         async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
             await _open(pilot)
             await pilot.press("e")
+            await set_text(pilot, "#value", "changed")
             await _save(pilot)
             assert notifications(app) == ["see [keys] in the project file"]
 

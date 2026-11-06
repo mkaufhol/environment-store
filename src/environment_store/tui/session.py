@@ -12,7 +12,11 @@ from pathlib import Path
 from types import MappingProxyType
 
 from environment_store.config.secrets import read_secret_file
-from environment_store.core.errors import ConcurrentModificationError
+from environment_store.core.errors import (
+    ConcurrentModificationError,
+    KeySourceError,
+    NotEncryptedError,
+)
 from environment_store.core.models import StoreInfo
 from environment_store.core.secrets import Secret
 from environment_store.library.store import EnvironmentStore
@@ -49,6 +53,7 @@ class StoreSession:
 
     _store: EnvironmentStore
     _key_paths: Mapping[str, Path]
+    _project_file: Path | None
     _read_key_file: ReadKeyFile
 
     def __init__(
@@ -56,6 +61,7 @@ class StoreSession:
         store: EnvironmentStore,
         *,
         key_paths: Mapping[str, Path],
+        project_file: Path | None = None,
         read_key_file: ReadKeyFile = read_secret_file,
     ) -> None:
         """Work on an open store.
@@ -63,10 +69,12 @@ class StoreSession:
         Args:
             store: The store; the caller closes it.
             key_paths: The project file's `[keys]`, tried before asking (PD 5).
+            project_file: The project file the keys come from, named in errors about them.
             read_key_file: Reads key and passphrase files.
         """
         self._store = store
         self._key_paths = MappingProxyType(dict(key_paths))
+        self._project_file = project_file
         self._read_key_file = read_key_file
 
     def stores(self) -> list[StoreInfo]:
@@ -102,7 +110,12 @@ class StoreSession:
             KeySourceError: The file cannot be read or is empty.
             CryptoError: The text does not fit the store's key mode.
         """
-        return self._store.parse_secret(name, self._read_key_file(path.expanduser()))
+        try:
+            expanded = path.expanduser()
+        except RuntimeError as err:
+            message = f"key file path '{path}' names an unknown home directory"
+            raise KeySourceError(message) from err
+        return self._store.parse_secret(name, self._read_key_file(expanded))
 
     def secret_from_text(self, name: str, text: str) -> Secret:
         """Interpret typed text (a passphrase) by the store's key mode (D3).
@@ -131,9 +144,19 @@ class StoreSession:
 
         Raises:
             StoreNotFoundError: The store does not exist.
+            NotEncryptedError: The store is plaintext but the project file names a key for it;
+                keys are bound by store name, so this is an error like in the CLI (PD 5).
             CryptoError: The secret is missing or wrong.
         """
-        revision = self._store.store_info(name).revision
+        info = self._store.store_info(name)
+        if not info.encrypted and name in self._key_paths:
+            where = "the project file" if self._project_file is None else f"'{self._project_file}'"
+            message = (
+                f"[keys] in {where} names a key for store {name!r}, which is not encrypted: "
+                "remove the entry"
+            )
+            raise NotEncryptedError(message)
+        revision = info.revision
         variables = self._store.variables(name, key=secret)
         return OpenedStore(name=name, secret=secret, revision=revision, variables=variables)
 

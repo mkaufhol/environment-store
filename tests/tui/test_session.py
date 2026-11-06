@@ -8,6 +8,7 @@ from environment_store.core.errors import (
     ConcurrentModificationError,
     DecryptionError,
     KeySourceError,
+    NotEncryptedError,
     StoreNotFoundError,
     VariableExistsError,
 )
@@ -109,6 +110,39 @@ def test_secret_from_a_missing_file_raises_key_source_error(
 
     with pytest.raises(KeySourceError):
         StoreSession(store, key_paths={}).secret_from_file("a", tmp_path / "missing")
+
+
+def test_secret_from_a_path_with_an_unknown_home_directory_raises_key_source_error(
+    store: EnvironmentStore,
+) -> None:
+    store.create_store("a", encrypt=True, key=Passphrase(text="pw"))
+
+    with pytest.raises(KeySourceError, match="unknown home directory") as raised:
+        StoreSession(store, key_paths={}).secret_from_file("a", Path("~nosuchuser_zz/a.key"))
+
+    assert "~nosuchuser_zz/a.key" in str(raised.value)
+    assert isinstance(raised.value.__cause__, RuntimeError)
+
+
+@pytest.mark.parametrize(
+    ("project_file", "named"),
+    [
+        (Path("/w/.envstore.toml"), "[keys] in '/w/.envstore.toml'"),
+        (None, "[keys] in the project file"),
+    ],
+)
+def test_open_a_plaintext_store_with_a_project_key_raises_not_encrypted(
+    store: EnvironmentStore, tmp_path: Path, project_file: Path | None, named: str
+) -> None:
+    store.create_store("a")
+    session = StoreSession(store, key_paths={"a": tmp_path / "a.key"}, project_file=project_file)
+
+    with pytest.raises(NotEncryptedError) as raised:
+        session.open("a")
+
+    assert str(raised.value) == (
+        f"{named} names a key for store 'a', which is not encrypted: remove the entry"
+    )
 
 
 def test_secret_from_text_is_a_passphrase_for_a_passphrase_store(store: EnvironmentStore) -> None:
