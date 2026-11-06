@@ -6,9 +6,17 @@
   checks the revision under the lock, writes a temporary file in the same directory and moves it
   into place with `os.replace`, so readers see the old or the new file, never a mix.
 - Create publishes the temporary file with a hard link (`os.link`), which fails if the store
-  file exists: the `O_EXCL` semantics that let exactly one of two racing creates win.
+  file exists: the `O_EXCL` semantics that let exactly one of two racing creates win. On file
+  systems without hard links (exFAT, FAT, some network mounts) it checks that the store file
+  does not exist and moves the temporary file into place, still under the lock every writer
+  of the store takes.
+- Every per-store operation requires a directory entry named exactly `<store>.<ext>`. On a
+  case-insensitive file system (macOS, Windows) `Base.json` would otherwise be opened as
+  `base.json`, although listing ignores it (D27): such a file is never read, replaced or
+  deleted, and creating `base` next to it fails.
 """
 
+import errno
 import os
 import tempfile
 from collections.abc import Generator
@@ -43,6 +51,11 @@ __all__ = ["DEFAULT_LOCK_TIMEOUT", "FileAdapter", "open_json", "open_toml"]
 
 DEFAULT_LOCK_TIMEOUT: Final[float] = 10.0
 """Seconds a write waits for another writer of the same store before it fails."""
+
+# `os.link` errors that mean "this file system has no hard links" (Linux FAT gives EPERM).
+_NO_HARD_LINKS: Final[frozenset[int]] = frozenset(
+    {errno.ENOTSUP, errno.EOPNOTSUPP, errno.EPERM, errno.ENOSYS}
+)
 
 
 def open_json(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "FileAdapter":
@@ -166,9 +179,16 @@ class FileAdapter:
             with self._lock(record.name):
                 try:
                     self._publish(text, record.name, exclusive=True)
-                except FileExistsError:
-                    message = f"store {record.name!r} already exists in {self.directory}"
-                    raise StoreExistsError(message) from None
+                except FileExistsError as err:
+                    if self._has_entry(record.name):
+                        message = f"store {record.name!r} already exists in {self.directory}"
+                        raise StoreExistsError(message) from err
+                    message = (
+                        f"could not create store {record.name!r} in {self.directory}: a file "
+                        f"whose name differs only in case from {self._path(record.name).name!r} "
+                        "exists and this file system ignores case; rename or remove it"
+                    )
+                    raise BackendError(message) from err
 
     def read_store(self, name: str) -> StoreRecord:
         """Read a store file.
@@ -187,6 +207,8 @@ class FileAdapter:
         """
         validate_store_name(name)
         self._check_open()
+        with self._os_errors(f"read store {name!r}"):
+            self._require_file(name)
         return document_to_record(
             self._load(name),
             name=name,
@@ -213,6 +235,7 @@ class FileAdapter:
         with self._os_errors(f"write store {record.name!r}"):
             self._require_file(record.name)
             with self._lock(record.name):
+                self._require_file(record.name)  # again: it may have changed while waiting
                 stored = document_to_info(
                     self._load(record.name),
                     name=record.name,
@@ -243,10 +266,11 @@ class FileAdapter:
         with self._os_errors(f"delete store {name!r}"):
             self._require_file(name)
             with self._lock(name):
+                self._require_file(name)  # again: it may have changed while waiting
                 try:
                     self._path(name).unlink()
-                except FileNotFoundError:
-                    raise self._not_found(name) from None
+                except FileNotFoundError as err:
+                    raise self._not_found(name) from err
 
     def close(self) -> None:
         """Close the adapter; it holds no open resources between operations."""
@@ -307,20 +331,29 @@ class FileAdapter:
                 and entry.is_file()
             )
 
+    def _has_entry(self, name: str) -> bool:
+        # Exact name comparison: on a case-insensitive file system `path.exists()` is also true
+        # for `Base.json`, a file that listing ignores.
+        wanted = self._path(name).name
+        return any(entry.name == wanted for entry in self.directory.iterdir())
+
     def _require_file(self, name: str) -> None:
-        # Checked before locking, so that a missing store creates no lock file (or directory).
+        # Checked before locking, so that a missing store creates no lock file (or directory),
+        # and by write and delete again under the lock.
         try:
-            self._path(name).stat()
-        except FileNotFoundError:
-            raise self._not_found(name) from None
+            found = self._has_entry(name)
+        except FileNotFoundError as err:
+            raise self._not_found(name) from err
+        if not found:
+            raise self._not_found(name)
 
     def _load(self, name: str) -> object:
         path = self._path(name)
         with self._os_errors(f"read store {name!r}"):
             try:
                 data = path.read_bytes()
-            except FileNotFoundError:
-                raise self._not_found(name) from None
+            except FileNotFoundError as err:
+                raise self._not_found(name) from err
         try:
             return self.serializer.loads(data.decode("utf-8"))
         except (ValueError, RecursionError) as err:
@@ -342,9 +375,21 @@ class FileAdapter:
                 handle.flush()
                 os.fsync(handle.fileno())
             if exclusive:
-                os.link(temp, target)
+                self._publish_new(temp, target)
             else:
                 temp.replace(target)
         finally:
             # Gone after os.replace; still there after os.link or a failure.
             temp.unlink(missing_ok=True)
+
+    @staticmethod
+    def _publish_new(temp: Path, target: Path) -> None:
+        try:
+            os.link(temp, target)
+        except OSError as err:
+            if err.errno not in _NO_HARD_LINKS:
+                raise  # FileExistsError included
+            # No hard links: safe under the store lock, which every writer of `target` holds.
+            if target.exists(follow_symlinks=False):
+                raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(target)) from err
+            temp.replace(target)

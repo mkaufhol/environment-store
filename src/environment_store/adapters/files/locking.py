@@ -3,7 +3,7 @@
 POSIX uses `fcntl.flock`; Windows uses `msvcrt.locking`, which is unverified in V2.0 (Windows is
 not tested). Both locks belong to an open file description, so two adapters in one process, two
 threads or two processes exclude each other alike. Locking polls with a non-blocking call, so a
-stuck holder makes the caller fail with `TimeoutError` instead of hanging forever.
+stuck holder makes the caller fail with `BackendError` instead of hanging forever.
 """
 
 import os
@@ -13,6 +13,8 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
+
+from environment_store.core.errors import BackendError
 
 __all__ = ["exclusive_lock"]
 
@@ -60,23 +62,35 @@ def exclusive_lock(path: Path, *, timeout: float) -> Generator[None]:
         Nothing; the lock is held until the block ends.
 
     Raises:
-        TimeoutError: The lock was not acquired within `timeout` seconds.
-        OSError: The lock file cannot be created or locked.
+        BackendError: The lock file cannot be created or locked, or the lock was not acquired
+            within `timeout` seconds. Errors raised inside the block pass through unchanged.
     """
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        deadline = time.monotonic() + timeout
-        while not _try_lock(fd):
-            if time.monotonic() >= deadline:
-                message = (
-                    f"could not lock {path} within {timeout:g} s: another process holds it; "
-                    "try again"
-                )
-                raise TimeoutError(message)
-            time.sleep(_POLL_INTERVAL)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as err:
+        message = f"could not open the lock file {path}: {err}"
+        raise BackendError(message) from err
+    try:
+        _acquire(fd, path=path, timeout=timeout)
         try:
             yield
         finally:
             _unlock(fd)
     finally:
         os.close(fd)
+
+
+def _acquire(fd: int, *, path: Path, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    try:
+        while not _try_lock(fd):
+            if time.monotonic() >= deadline:
+                message = (
+                    f"could not lock {path} within {timeout:g} s: another process holds it; "
+                    "try again"
+                )
+                raise BackendError(message)
+            time.sleep(_POLL_INTERVAL)
+    except OSError as err:
+        message = f"could not lock {path}: {err}"
+        raise BackendError(message) from err

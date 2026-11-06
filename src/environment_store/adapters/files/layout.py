@@ -98,6 +98,9 @@ def document_to_info(
         )
     except ValidationError as err:
         raise _corrupt(source, str(err)) from err
+    except OverflowError as err:
+        # StoreInfo converts to UTC: 9999-12-31T23:59:59-01:00 has no UTC equivalent.
+        raise _corrupt(source, "timestamp out of range") from err
 
 
 def document_to_record(

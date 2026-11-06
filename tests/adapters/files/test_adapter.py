@@ -1,8 +1,10 @@
 """Behaviour of the file adapters beyond the contract suite (spec §3.2, D7, D9, D27)."""
 
+import errno
 import os
 import stat
 from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Final
@@ -15,6 +17,7 @@ from environment_store.adapters.files import (
     FileAdapter,
     FileSerializer,
     exclusive_lock,
+    locking,
     open_json,
     open_toml,
 )
@@ -22,6 +25,7 @@ from environment_store.core.adapter import Adapter, SetupMode
 from environment_store.core.connection import open_adapter
 from environment_store.core.errors import (
     BackendError,
+    StoreExistsError,
     StoreNotFoundError,
     UnsupportedFormatError,
     ValidationError,
@@ -215,6 +219,118 @@ def test_listing_ignores_other_extensions_invalid_stems_and_directories(
     assert [info.name for info in adapter.list_stores()] == ["base"]
 
 
+def _case_variants(serializer: FileSerializer) -> list[str]:
+    return [f"Base{serializer.extension}", f"base{serializer.extension.upper()}"]
+
+
+def _ignores_case(directory: Path) -> bool:
+    """Whether the file system of `directory` treats names that differ in case as one name."""
+    probe = directory / "case-probe"
+    probe.touch()
+    try:
+        return (directory / "CASE-PROBE").exists()
+    finally:
+        probe.unlink()
+
+
+@pytest.mark.parametrize("variant", [0, 1], ids=["upper-stem", "upper-extension"])
+def test_case_variant_of_a_store_file_is_neither_listed_read_written_nor_deleted(
+    adapter: FileAdapter, directory: Path, serializer: FileSerializer, variant: int
+) -> None:
+    # A valid store file under a name that differs from `base.<ext>` only in case: on a
+    # case-insensitive file system (macOS, Windows) `base.<ext>` would open it.
+    adapter.create_store(_plain())
+    foreign = directory / _case_variants(serializer)[variant]
+    _file(directory, serializer).rename(foreign)
+    original = foreign.read_bytes()
+
+    assert adapter.list_stores() == []
+    for operation in (
+        lambda: adapter.read_store("base"),
+        lambda: adapter.write_store(_next(_plain(), A="new"), expected_revision=1),
+        lambda: adapter.delete_store("base"),
+    ):
+        with pytest.raises(StoreNotFoundError):
+            operation()
+
+    assert foreign.read_bytes() == original
+    assert [path.name for path in directory.iterdir() if not path.name.startswith(".")] == [
+        foreign.name
+    ]
+
+
+@pytest.mark.parametrize("variant", [0, 1], ids=["upper-stem", "upper-extension"])
+def test_create_next_to_a_case_variant_never_touches_it(
+    adapter: FileAdapter, directory: Path, serializer: FileSerializer, variant: int
+) -> None:
+    directory.mkdir()
+    foreign = directory / _case_variants(serializer)[variant]
+    foreign.write_text("not a store, user notes", encoding="utf-8")
+    # Case-insensitive: the names collide, so create must refuse; case-sensitive: both coexist.
+    refused = pytest.raises(BackendError, match="case") if _ignores_case(directory) else None
+
+    with refused or nullcontext():
+        adapter.create_store(_plain())
+
+    assert foreign.read_text(encoding="utf-8") == "not a store, user notes"
+
+
+def test_create_refuses_a_name_taken_by_a_case_variant(
+    adapter: FileAdapter,
+    directory: Path,
+    serializer: FileSerializer,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Simulates a case-insensitive file system on any platform: the link finds "base.<ext>"
+    # taken although no entry has exactly that name.
+    directory.mkdir()
+    foreign = directory / _case_variants(serializer)[0]
+    foreign.write_text("not a store", encoding="utf-8")
+    monkeypatch.setattr(os, "link", _failing(FileExistsError(errno.EEXIST, "File exists")))
+
+    with pytest.raises(BackendError, match="differs only in case") as caught:
+        adapter.create_store(_plain())
+
+    assert not isinstance(caught.value, StoreExistsError)
+    assert isinstance(caught.value.__cause__, FileExistsError)
+    monkeypatch.undo()
+    assert foreign.read_text(encoding="utf-8") == "not a store"
+    assert _leftovers(directory) == []
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda adapter: adapter.write_store(_next(_plain(), A="new"), expected_revision=1),
+        lambda adapter: adapter.delete_store("base"),
+    ],
+    ids=["write", "delete"],
+)
+def test_write_and_delete_recheck_the_store_file_under_the_lock(
+    adapter: FileAdapter,
+    directory: Path,
+    serializer: FileSerializer,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: Callable[[Adapter], object],
+) -> None:
+    # The store is replaced by a case variant while the operation waits for the lock.
+    adapter.create_store(_plain())
+    foreign = directory / _case_variants(serializer)[0]
+    real_lock = locking.exclusive_lock
+
+    def swap_then_lock(path: Path, *, timeout: float) -> AbstractContextManager[None]:
+        _file(directory, serializer).rename(directory / "moved")
+        foreign.write_text("not a store", encoding="utf-8")
+        return real_lock(path, timeout=timeout)
+
+    monkeypatch.setattr("environment_store.adapters.files.adapter.exclusive_lock", swap_then_lock)
+
+    with pytest.raises(StoreNotFoundError):
+        operation(adapter)
+
+    assert foreign.read_text(encoding="utf-8") == "not a store"
+
+
 def test_json_and_toml_stores_in_one_directory_are_independent(directory: Path) -> None:
     with (
         FileAdapter(directory, serializer=JSON_SERIALIZER) as json_adapter,
@@ -259,8 +375,44 @@ def test_delete_of_a_store_deleted_while_waiting_for_the_lock_raises_not_found(
 
     monkeypatch.setattr(Path, "unlink", deleted_meanwhile)
 
-    with pytest.raises(StoreNotFoundError):
+    with pytest.raises(StoreNotFoundError) as caught:
         adapter.delete_store("base")
+
+    assert isinstance(caught.value.__cause__, FileNotFoundError)
+
+
+def test_read_of_a_store_deleted_after_the_check_chains_the_os_error(
+    adapter: FileAdapter, serializer: FileSerializer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter.create_store(_plain())
+    read_bytes = Path.read_bytes
+
+    def deleted_meanwhile(path: Path) -> bytes:
+        if path.name == f"base{serializer.extension}":
+            raise FileNotFoundError(path)
+        return read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", deleted_meanwhile)
+
+    with pytest.raises(StoreNotFoundError) as caught:
+        adapter.read_store("base")
+
+    assert isinstance(caught.value.__cause__, FileNotFoundError)
+
+
+@pytest.mark.parametrize("missing", ["file", "directory"])
+def test_missing_store_raises_not_found(
+    adapter: FileAdapter, directory: Path, missing: str
+) -> None:
+    if missing == "file":
+        directory.mkdir()
+    for operation in (
+        lambda: adapter.read_store("base"),
+        lambda: adapter.write_store(_next(_plain()), expected_revision=1),
+        lambda: adapter.delete_store("base"),
+    ):
+        with pytest.raises(StoreNotFoundError):
+            operation()
 
 
 # --- store name path safety (D27) ---------------------------------------------------------------
@@ -343,13 +495,62 @@ def test_failed_fsync_writes_nothing_and_removes_the_temp_file(
 def test_failed_link_on_create_writes_nothing_and_removes_the_temp_file(
     adapter: FileAdapter, directory: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(os, "link", _failing(OSError(1, "Operation not permitted")))
+    monkeypatch.setattr(os, "link", _failing(OSError(errno.EIO, "Input/output error")))
 
-    with pytest.raises(BackendError, match="not permitted"):
+    with pytest.raises(BackendError, match="Input/output error"):
         adapter.create_store(_plain())
 
     monkeypatch.undo()
     assert adapter.list_stores() == []
+    assert _leftovers(directory) == []
+
+
+_NO_HARD_LINKS: Final = [
+    pytest.param(errno.ENOTSUP, id="ENOTSUP"),
+    pytest.param(errno.EPERM, id="EPERM"),
+    pytest.param(errno.ENOSYS, id="ENOSYS"),
+]
+
+
+@pytest.mark.parametrize("code", _NO_HARD_LINKS)
+def test_create_works_on_a_file_system_without_hard_links(
+    adapter: FileAdapter, directory: Path, monkeypatch: pytest.MonkeyPatch, code: int
+) -> None:
+    # exFAT, FAT and some network mounts: os.link fails, os.replace and flock work.
+    monkeypatch.setattr(os, "link", _failing(OSError(code, os.strerror(code))))
+
+    adapter.create_store(_plain())
+    with pytest.raises(StoreExistsError):
+        adapter.create_store(_plain(A="second"))
+
+    assert adapter.read_store("base") == _plain()
+    assert _leftovers(directory) == []
+
+
+def test_create_without_hard_links_refuses_a_case_variant(
+    adapter: FileAdapter,
+    directory: Path,
+    serializer: FileSerializer,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory.mkdir()
+    foreign = directory / _case_variants(serializer)[0]
+    foreign.write_text("not a store", encoding="utf-8")
+    monkeypatch.setattr(os, "link", _failing(OSError(errno.ENOTSUP, "Operation not supported")))
+    exists = Path.exists
+
+    def ignoring_case(path: Path, *, follow_symlinks: bool = True) -> bool:
+        if path.name == f"base{serializer.extension}":
+            return True
+        return exists(path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "exists", ignoring_case)
+
+    with pytest.raises(BackendError, match="differs only in case"):
+        adapter.create_store(_plain())
+
+    monkeypatch.undo()
+    assert foreign.read_text(encoding="utf-8") == "not a store"
     assert _leftovers(directory) == []
 
 
@@ -380,12 +581,52 @@ def test_lock_excludes_a_second_holder_until_released(tmp_path: Path) -> None:
 
     with (
         exclusive_lock(path, timeout=1.0),
-        pytest.raises(TimeoutError, match=r"x\.lock"),
+        pytest.raises(BackendError, match=r"x\.lock"),
         exclusive_lock(path, timeout=0.05),
     ):
         pass
     with exclusive_lock(path, timeout=0.05):
         pass
+
+
+def test_lock_file_that_cannot_be_opened_raises_backend_error(tmp_path: Path) -> None:
+    path = tmp_path / "missing" / "x.lock"
+
+    with pytest.raises(BackendError, match=r"x\.lock") as caught, exclusive_lock(path, timeout=1.0):
+        pass
+
+    assert isinstance(caught.value.__cause__, FileNotFoundError)
+
+
+def test_lock_that_fails_raises_backend_error_and_closes_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[int] = []
+    open_ = os.open
+
+    def tracking_open(path: Path, flags: int, mode: int) -> int:
+        opened.append(open_(path, flags, mode))
+        return opened[-1]
+
+    monkeypatch.setattr(locking, "_try_lock", _failing(OSError(errno.ENOLCK, "No locks")))
+    monkeypatch.setattr(os, "open", tracking_open)
+
+    with (
+        pytest.raises(BackendError, match="No locks") as caught,
+        exclusive_lock(tmp_path / "x.lock", timeout=1.0),
+    ):
+        pass
+
+    monkeypatch.undo()
+    assert isinstance(caught.value.__cause__, OSError)
+    assert len(opened) == 1
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(opened[0])
+
+
+def test_errors_inside_the_locked_block_pass_through_unchanged(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError), exclusive_lock(tmp_path / "x.lock", timeout=1.0):
+        raise FileNotFoundError
 
 
 @pytest.mark.parametrize(
@@ -482,6 +723,13 @@ _CORRUPT_HEADER: Final[dict[str, tuple[str, str | None]]] = {
     "naive-timestamp": (
         "{" + _JSON_HEADER.replace('10:00:00Z"', '10:00:00"', 1) + ', "variables": {}}',
         _TOML_HEADER.replace("10:00:00Z", "10:00:00", 1) + "[variables]\n",
+    ),
+    # Valid timestamps whose UTC equivalent lies outside the datetime range.
+    "timestamp-overflow": (
+        "{"
+        + _JSON_HEADER.replace("2026-11-06T10:00:00Z", "9999-12-31T23:59:59-01:00")
+        + ', "variables": {}}',
+        _TOML_HEADER.replace("2026-11-06T10:00:00Z", "0001-01-01T00:00:00+01:00") + "[variables]\n",
     ),
     "created-after-updated": (
         "{" + _JSON_HEADER.replace("2026", "2027", 1) + ', "variables": {}}',
