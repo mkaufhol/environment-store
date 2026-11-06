@@ -1,15 +1,23 @@
-"""The export, export-shell and run (C4)."""
+"""The export, export-shell and run commands (C4, spec §6.11-§6.13)."""
 
 import typer
+
+from environment_store.cli._typer import EnvsCommand, PassthroughCommand
+from environment_store.cli.exporting.export import export
+from environment_store.cli.exporting.run import run
+from environment_store.cli.exporting.shell import export_shell
 
 __all__ = ["register"]
 
 
 def register(app: typer.Typer) -> None:
-    """Register the commands of this package on the `envs` app (filled in by C4).
+    """Register `export`, `export-shell` and `run` on the `envs` app.
 
     Every command is registered with `cls=EnvsCommand` (`PassthroughCommand` for `run`).
 
     Args:
         app: The `envs` app.
     """
+    app.command("export", cls=EnvsCommand)(export)
+    app.command("export-shell", cls=EnvsCommand)(export_shell)
+    app.command("run", cls=PassthroughCommand)(run)
