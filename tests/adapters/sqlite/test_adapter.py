@@ -13,8 +13,9 @@ from typing import Final
 import pytest
 
 from environment_store.adapters.sqlite import SqliteAdapter, open_sqlite
+from environment_store.adapters.sqlite import adapter as adapter_module
 from environment_store.adapters.sqlite.schema import transaction
-from environment_store.core.adapter import Adapter, MigratableAdapter
+from environment_store.core.adapter import Adapter, MigratableAdapter, SetupMode
 from environment_store.core.connection import open_adapter
 from environment_store.core.errors import (
     BackendError,
@@ -55,9 +56,27 @@ def _plain(name: str = "base") -> StoreRecord:
     return StoreRecord.plain(name=name, variables={"HOST": "localhost"}, created_at=_T0)
 
 
+def _next(record: StoreRecord) -> StoreRecord:
+    return StoreRecord.plain(
+        name=record.name,
+        variables={"HOST": "remote"},
+        revision=record.revision + 1,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
 @pytest.fixture
 def path(tmp_path: Path) -> Path:
     return tmp_path / "envs.db"
+
+
+@pytest.fixture
+def set_up_path(path: Path) -> Path:
+    """A database file with the current schema and no stores."""
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.migrate()
+    return path
 
 
 # --- opening -------------------------------------------------------------------------------
@@ -126,9 +145,154 @@ def test_an_existing_database_file_keeps_its_mode(path: Path) -> None:
     assert stat.S_IMODE(path.stat().st_mode) == 0o640
 
 
-def test_a_database_in_a_missing_directory_cannot_be_opened(tmp_path: Path) -> None:
-    with pytest.raises(BackendError, match="unable to open"):
-        open_sqlite(url_of(tmp_path / "missing" / "envs.db"))
+# --- missing files and directories (D43) ---------------------------------------------------
+
+
+@pytest.mark.parametrize("setup", list(SetupMode))
+@pytest.mark.parametrize("parent", ["existing", "missing"])
+def test_opening_and_reading_a_missing_database_creates_nothing(
+    tmp_path: Path, setup: SetupMode, parent: str
+) -> None:
+    path = tmp_path / "envs.db" if parent == "existing" else tmp_path / "missing" / "envs.db"
+
+    with open_sqlite(url_of(path), setup=setup) as adapter:
+        assert adapter.list_stores() == []
+        with pytest.raises(StoreNotFoundError):
+            adapter.read_store("base")
+        with pytest.raises(StoreNotFoundError):
+            adapter.write_store(_next(_plain()), expected_revision=1)
+        with pytest.raises(StoreNotFoundError):
+            adapter.delete_store("base")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.fixture
+def deleted_after_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The first existence check finds the file, but it is gone when SQLite opens it."""
+    real = adapter_module._missing
+    checks: list[Path] = []
+
+    def missing(path: Path) -> bool:
+        checks.append(path)
+        return False if len(checks) == 1 else real(path)
+
+    monkeypatch.setattr(adapter_module, "_missing", missing)
+
+
+@pytest.mark.usefixtures("umask_022", "deleted_after_check")
+def test_a_read_on_a_file_deleted_mid_open_creates_nothing(path: Path) -> None:
+    # Check-then-connect race: SQLite must not create the file itself (as 0644) on a read.
+    with open_sqlite(url_of(path)) as adapter:
+        assert adapter.list_stores() == []
+        assert not path.exists()
+
+        adapter.create_store(_plain())
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_a_path_with_uri_special_characters_names_the_same_file(tmp_path: Path) -> None:
+    # The file is opened through a file: URI; spaces and percent signs must not be decoded.
+    path = tmp_path / "dir %20" / "a b%41.db"
+
+    with open_sqlite(url_of(path)) as writer:
+        writer.create_store(_plain())
+    with open_sqlite(url_of(path)) as reader:
+        assert reader.read_store("base") == _plain()
+
+    assert sorted(p.name for p in path.parent.iterdir() if p.suffix == ".db") == ["a b%41.db"]
+
+
+def test_a_directory_in_place_of_the_database_raises_backend_error(path: Path) -> None:
+    path.mkdir()
+
+    with pytest.raises(BackendError, match="unable to open"), open_sqlite(url_of(path)) as adapter:
+        adapter.list_stores()
+
+
+def test_a_write_on_a_directory_in_place_of_the_database_raises_backend_error(
+    path: Path,
+) -> None:
+    path.mkdir()
+
+    with (
+        pytest.raises(BackendError, match="unable to open"),
+        open_sqlite(url_of(path), setup=SetupMode.NONE) as adapter,
+    ):
+        adapter.create_store(_plain())
+
+
+@pytest.mark.usefixtures("umask_022")
+def test_first_write_creates_missing_directories_with_mode_0700(tmp_path: Path) -> None:
+    path = tmp_path / "a" / "b" / "envs.db"
+
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(_plain())
+
+    modes = [stat.S_IMODE(directory.stat().st_mode) for directory in (path.parents[1], path.parent)]
+    assert modes == [0o700, 0o700]
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.usefixtures("umask_022")
+def test_an_existing_parent_directory_keeps_its_mode(tmp_path: Path) -> None:
+    parent = tmp_path / "shared"
+    parent.mkdir()
+    parent.chmod(0o755)
+
+    with open_sqlite(url_of(parent / "envs.db")) as adapter:
+        adapter.create_store(_plain())
+
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o755
+
+
+@pytest.mark.usefixtures("umask_022")
+def test_wal_and_shm_files_are_readable_by_the_owner_only(path: Path) -> None:
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(_plain())
+        companions = [path.with_name(f"{path.name}{suffix}") for suffix in ("-wal", "-shm")]
+
+        modes = [stat.S_IMODE(companion.stat().st_mode) for companion in companions]
+
+    assert modes == [0o600, 0o600]
+
+
+def test_migrate_creates_a_missing_directory_and_database(tmp_path: Path) -> None:
+    path = tmp_path / "missing" / "envs.db"
+
+    with open_sqlite(url_of(path), setup=SetupMode.NONE) as adapter:
+        adapter.migrate()
+
+    assert path.is_file()
+
+
+def test_tilde_database_is_created_in_the_home_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    with open_sqlite("sqlite:///~/envs/envs.db") as adapter:
+        adapter.create_store(_plain())
+
+    assert (tmp_path / "envs" / "envs.db").is_file()
+
+
+def test_a_database_created_after_open_is_used(path: Path) -> None:
+    with open_sqlite(url_of(path)) as reader:
+        assert reader.list_stores() == []
+        with open_sqlite(url_of(path)) as writer:
+            writer.create_store(_plain())
+
+        assert reader.read_store("base") == _plain()
+
+
+def test_operations_after_close_on_a_missing_database_raise_backend_error(path: Path) -> None:
+    adapter = open_sqlite(url_of(path))
+    adapter.close()
+
+    with pytest.raises(BackendError, match="closed"):
+        adapter.list_stores()
 
 
 def test_deleted_values_do_not_stay_in_the_file(path: Path) -> None:
@@ -153,22 +317,22 @@ def test_a_missing_store_names_the_database_file(path: Path) -> None:
 
 
 @pytest.mark.parametrize("row", [_VALID_PLAIN, _VALID_SEALED], ids=["plaintext", "encrypted"])
-def test_check_constraints_accept_valid_rows(path: Path, row: tuple[object, ...]) -> None:
-    with open_sqlite(url_of(path)), raw(path) as connection:
+def test_check_constraints_accept_valid_rows(set_up_path: Path, row: tuple[object, ...]) -> None:
+    with raw(set_up_path) as connection:
         connection.execute(_INSERT, row)
 
 
 @pytest.mark.parametrize("row", _INVALID_ROWS.values(), ids=_INVALID_ROWS.keys())
-def test_check_constraints_reject_invalid_rows(path: Path, row: tuple[object, ...]) -> None:
-    with open_sqlite(url_of(path)) as adapter:
-        with raw(path) as connection, pytest.raises(sqlite3.IntegrityError):
+def test_check_constraints_reject_invalid_rows(set_up_path: Path, row: tuple[object, ...]) -> None:
+    with open_sqlite(url_of(set_up_path)) as adapter:
+        with raw(set_up_path) as connection, pytest.raises(sqlite3.IntegrityError):
             connection.execute(_INSERT, row)
 
         assert adapter.list_stores() == []
 
 
-def test_store_name_is_unique(path: Path) -> None:
-    with open_sqlite(url_of(path)), raw(path) as connection:
+def test_store_name_is_unique(set_up_path: Path) -> None:
+    with raw(set_up_path) as connection:
         connection.execute(_INSERT, _VALID_PLAIN)
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(_INSERT, _VALID_PLAIN)
@@ -226,9 +390,9 @@ def test_unknown_cipher_is_listed_without_key_mode_but_not_readable(path: Path) 
             adapter.read_store("secret")
 
 
-def test_dropped_stores_table_raises_backend_error(path: Path) -> None:
-    with open_sqlite(url_of(path)) as adapter:
-        with raw(path) as connection:
+def test_dropped_stores_table_raises_backend_error(set_up_path: Path) -> None:
+    with open_sqlite(url_of(set_up_path)) as adapter:
+        with raw(set_up_path) as connection:
             connection.execute("DROP TABLE stores")
 
         with pytest.raises(BackendError, match="no such table"):

@@ -6,7 +6,7 @@ from environment_store.adapters import files
 def test_files_reexports_the_public_names_of_its_modules() -> None:
     modules = [
         import_module(f"environment_store.adapters.files.{name}")
-        for name in ("adapter", "layout", "locking", "serializers", "url")
+        for name in ("adapter", "directories", "layout", "locking", "serializers", "url")
     ]
     expected = {name: getattr(module, name) for module in modules for name in module.__all__}
 

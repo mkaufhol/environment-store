@@ -10,6 +10,7 @@ from environment_store.adapters.files.adapter import (
     open_json,
     open_toml,
 )
+from environment_store.adapters.files.directories import make_private_directory
 from environment_store.adapters.files.layout import (
     FILE_FORMAT_VERSION,
     document_to_info,
@@ -35,6 +36,7 @@ __all__ = [
     "document_to_info",
     "document_to_record",
     "exclusive_lock",
+    "make_private_directory",
     "open_json",
     "open_toml",
     "record_to_document",

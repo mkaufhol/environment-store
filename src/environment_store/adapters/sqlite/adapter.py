@@ -4,6 +4,9 @@ Stdlib `sqlite3` only (D6, D10). The connection runs in autocommit mode and ever
 operation opens an explicit transaction, so no read transaction stays open between operations and
 an open adapter always sees what other connections committed. WAL mode lets readers work while
 one connection writes; the busy timeout makes writers queue instead of failing.
+
+A missing database file is created, with its missing parent directories (mode 0700), by the
+first write only (D43): opening and reading a missing file create nothing, they find no stores.
 """
 
 import os
@@ -13,7 +16,7 @@ from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from types import TracebackType
-from typing import Final, Self
+from typing import Final, Literal, Self, cast, overload
 
 from environment_store.adapters.sql.codec import (
     Dialect,
@@ -25,6 +28,7 @@ from environment_store.adapters.sql.codec import (
 )
 from environment_store.adapters.sql.migrations import SQLITE_MIGRATIONS, Migration, pending
 from environment_store.adapters.sql.schema import STORE_INFO_COLUMNS, STORES_COLUMNS
+from environment_store.adapters.sqlite.directories import make_private_directory
 from environment_store.adapters.sqlite.schema import set_up, transaction
 from environment_store.adapters.sqlite.url import parse_sqlite_url
 from environment_store.core.adapter import (
@@ -74,9 +78,10 @@ def open_sqlite(url: str, /, *, setup: SetupMode = SetupMode.AUTO) -> "SqliteAda
     """Open the SQLite adapter for a connection string (the `sqlite` scheme factory).
 
     Args:
-        url: `sqlite:///relative.db` or `sqlite:////absolute/path.db`.
-        setup: `AUTO` inspects the file now and creates or upgrades the schema (D11);
-            `NONE` defers that to `migrate()` or the first data operation.
+        url: `sqlite:///relative.db`, `sqlite:////absolute/path.db` or `sqlite:///~/envs.db`.
+        setup: `AUTO` inspects an existing file now and creates or upgrades the schema (D11);
+            `NONE` defers that to `migrate()` or the first data operation. A missing file is
+            set up by the first write.
 
     Returns:
         The open adapter.
@@ -103,6 +108,7 @@ class SqliteAdapter:
     _migrations: tuple[Migration, ...]
     _busy_timeout: float
     _connection: sqlite3.Connection | None
+    _closed: bool
     _ready: bool
     _lock: threading.Lock
 
@@ -114,11 +120,12 @@ class SqliteAdapter:
         migrations: Sequence[Migration] = SQLITE_MIGRATIONS,
         busy_timeout: float = BUSY_TIMEOUT_SECONDS,
     ) -> None:
-        """Connect to the database file and, with `SetupMode.AUTO`, set it up (D11, D13).
+        """Connect to an existing database file and, with `SetupMode.AUTO`, set it up (D11, D13).
 
         Args:
             path: The database file; a relative path is resolved against the working
-                directory now. A missing file is created, its directory is not.
+                directory now. A missing file is not created here but by the first write
+                (`create_store` or `migrate`), with its missing parent directories (D43).
             setup: When the schema is checked: now (`AUTO`) or lazily (`NONE`).
             migrations: The dialect's migrations; the last one is this client's schema
                 version. Tests pass their own to exercise upgrades.
@@ -142,18 +149,10 @@ class SqliteAdapter:
         self._ready = False
         self._lock = threading.Lock()
         self._connection = None
-        _create_private(self.path)
+        self._closed = False
         with self._errors():
-            # check_same_thread=False: the lock, not the creating thread, guards the connection.
-            self._connection = sqlite3.connect(
-                self.path, timeout=busy_timeout, autocommit=True, check_same_thread=False
-            )
-            # Freed pages are zeroed: a deleted or replaced plaintext value leaves no trace.
-            self._connection.execute("PRAGMA secure_delete = ON")
-            # The driver's own UTF-8 decode error quotes the whole column (secret values); with
-            # surrogateescape invalid bytes reach the codec, which reports them without a value.
-            self._connection.text_factory = _decode_text
-        if setup is SetupMode.AUTO:
+            self._connect(create=False)
+        if setup is SetupMode.AUTO and self._connection is not None:
             # On SQLite, the AUTO check is exactly migrate(): create, upgrade or use (D11).
             try:
                 self.migrate()
@@ -169,8 +168,8 @@ class SqliteAdapter:
         Returns:
             One entry per store, sorted by name in code point order.
         """
-        with self._session() as connection:
-            rows = connection.execute(_LIST).fetchall()
+        with self._session(create=False) as connection:
+            rows = [] if connection is None else connection.execute(_LIST).fetchall()
         infos = [
             row_to_info(
                 StoreInfoRow(**dict(zip(STORE_INFO_COLUMNS, row, strict=True))),
@@ -192,8 +191,10 @@ class SqliteAdapter:
         """
         check_create(record)
         row = record_to_row(record, dialect=Dialect.SQLITE)
-        with self._session() as connection:
-            inserted = connection.execute(_INSERT, row.values()).rowcount
+        with self._session(create=True) as connection:
+            inserted = (
+                cast("sqlite3.Connection", connection).execute(_INSERT, row.values()).rowcount
+            )
         if not inserted:
             message = f"store {record.name!r} already exists"
             raise StoreExistsError(message)
@@ -213,8 +214,8 @@ class SqliteAdapter:
             BackendError: The row is corrupt.
         """
         validate_store_name(name)
-        with self._session() as connection:
-            row = connection.execute(_READ, (name,)).fetchone()
+        with self._session(create=False) as connection:
+            row = None if connection is None else connection.execute(_READ, (name,)).fetchone()
         if row is None:
             raise _not_found(name, self.path)
         return row_to_record(
@@ -246,10 +247,13 @@ class SqliteAdapter:
             row.name,
             expected_revision,
         )
-        with self._session() as connection, transaction(connection, immediate=True):
-            if connection.execute(_UPDATE, parameters).rowcount:
-                return
-            exists = connection.execute(_EXISTS, (record.name,)).fetchone() is not None
+        with self._session(create=False) as connection:
+            if connection is None:
+                raise _not_found(record.name, self.path)
+            with transaction(connection, immediate=True):
+                if connection.execute(_UPDATE, parameters).rowcount:
+                    return
+                exists = connection.execute(_EXISTS, (record.name,)).fetchone() is not None
         if not exists:
             raise _not_found(record.name, self.path)
         message = (
@@ -269,13 +273,15 @@ class SqliteAdapter:
             StoreNotFoundError: The store does not exist.
         """
         validate_store_name(name)
-        with self._session() as connection:
-            deleted = connection.execute(_DELETE, (name,)).rowcount
+        with self._session(create=False) as connection:
+            deleted = 0 if connection is None else connection.execute(_DELETE, (name,)).rowcount
         if not deleted:
             raise _not_found(name, self.path)
 
     def migrate(self) -> MigrationReport:
         """Create (new or empty file) or upgrade (older schema) the schema; no-op when current.
+
+        A missing file is created, with its missing parent directories (D43).
 
         Returns:
             What was done.
@@ -286,7 +292,7 @@ class SqliteAdapter:
             BackendError: The adapter is closed or the file cannot be written.
         """
         with self._lock, self._errors():
-            return self._set_up(self._open_connection())
+            return self._set_up(self._open_connection(create=True))
 
     # --- lifecycle ---------------------------------------------------------------------------
 
@@ -294,6 +300,7 @@ class SqliteAdapter:
         """Close the connection; idempotent. The file keeps its data."""
         with self._lock:
             connection, self._connection = self._connection, None
+            self._closed = True
             if connection is not None:
                 connection.close()
 
@@ -313,11 +320,12 @@ class SqliteAdapter:
     # --- helpers -----------------------------------------------------------------------------
 
     @contextmanager
-    def _session(self) -> Generator[sqlite3.Connection]:
+    def _session(self, *, create: bool) -> Generator[sqlite3.Connection | None]:
         # Exclusive use of the open, set-up connection; driver errors become BackendError.
+        # Yields None for a missing file unless `create`: a read finds no stores.
         with self._lock, self._errors():
-            connection = self._open_connection()
-            if not self._ready:
+            connection = self._open_connection(create=create)
+            if connection is not None and not self._ready:
                 self._set_up(connection)
             yield connection
 
@@ -335,19 +343,72 @@ class SqliteAdapter:
     def _errors(self) -> Generator[None]:
         try:
             yield
-        except sqlite3.Error as err:
+        except (sqlite3.Error, OSError) as err:
+            # OSError: creating the missing directories of the file on the first write.
             message = f"SQLite database {self.path}: {err}"
             raise BackendError(message) from err
 
-    def _open_connection(self) -> sqlite3.Connection:
-        if self._connection is None:
+    @overload
+    def _open_connection(self, *, create: Literal[True]) -> sqlite3.Connection: ...
+
+    @overload
+    def _open_connection(self, *, create: bool) -> sqlite3.Connection | None: ...
+
+    def _open_connection(self, *, create: bool) -> sqlite3.Connection | None:
+        if self._closed:
             message = f"the SQLite adapter for {self.path} is closed; open a new one"
             raise BackendError(message)
+        return self._connect(create=create)
+
+    def _connect(self, *, create: bool) -> sqlite3.Connection | None:
+        # Connects once the file exists (another connection may have created it since open);
+        # with `create`, a missing file and its missing directories are created first (D43).
+        if self._connection is None:
+            if create:
+                make_private_directory(self.path.parent)
+                _create_private(self.path)
+            elif _missing(self.path):
+                return None
+            # Without `create`, mode=rw: SQLite never creates the file itself (with its default
+            # mode, 0644) when it is deleted between the check above and this connect.
+            mode = "rwc" if create else "rw"
+            try:
+                # check_same_thread=False: the lock, not the creating thread, guards the
+                # connection.
+                connection = sqlite3.connect(
+                    f"{self.path.as_uri()}?mode={mode}",
+                    timeout=self._busy_timeout,
+                    autocommit=True,
+                    check_same_thread=False,
+                    uri=True,
+                )
+            except sqlite3.OperationalError:
+                if not create and _missing(self.path):
+                    return None
+                raise
+            # Freed pages are zeroed: a deleted or replaced plaintext value leaves no trace.
+            connection.execute("PRAGMA secure_delete = ON")
+            # The driver's own UTF-8 decode error quotes the whole column (secret values); with
+            # surrogateescape invalid bytes reach the codec, which reports them without a value.
+            connection.text_factory = _decode_text
+            self._connection = connection
         return self._connection
 
 
 def _not_found(name: str, path: Path) -> StoreNotFoundError:
     return StoreNotFoundError(f"store {name!r} not found in {path}")
+
+
+def _missing(path: Path) -> bool:
+    # Only "does not exist" counts: other errors (no permission, a file as parent) are left to
+    # `sqlite3.connect` to report.
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return False
 
 
 def _create_private(path: Path) -> None:
