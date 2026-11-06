@@ -104,12 +104,41 @@ def test_variable_not_found_error_lists_all_missing_names() -> None:
     assert str(error) == "variables not found in store 'base': B, A"
 
 
+def test_variable_not_found_error_for_one_name_is_singular() -> None:
+    error = VariableNotFoundError(["A"], store="base")
+
+    assert str(error) == "variable 'A' not found in store 'base'"
+
+
 def test_variable_exists_error_lists_all_conflicting_names() -> None:
     error = VariableExistsError(("DB_HOST",), store="base")
 
     assert error.names == ("DB_HOST",)
     assert error.store == "base"
-    assert str(error) == (
-        "variables already exist in store 'base': DB_HOST; use overwrite (-o/--overwrite) to "
-        "replace them"
-    )
+    assert error.detail == "variables already exist in store 'base': DB_HOST"
+    assert error.hint == "pass overwrite=True to replace them"
+    assert str(error) == f"{error.detail}; {error.hint}"
+
+
+def test_an_error_without_hint_is_its_detail() -> None:
+    error = StoreNotFoundError("store 'x' does not exist")
+
+    assert error.detail == "store 'x' does not exist"
+    assert error.hint is None
+    assert str(error) == "store 'x' does not exist"
+
+
+def test_an_error_with_a_hint_appends_it_to_the_detail() -> None:
+    error = ValidationError("bad input", hint="pass fmt='json'")
+
+    assert error.detail == "bad input"
+    assert error.hint == "pass fmt='json'"
+    assert str(error) == "bad input; pass fmt='json'"
+
+
+def test_key_required_for_a_store_names_the_library_key_parameters() -> None:
+    error = KeyRequiredError.for_store("prod")
+
+    assert isinstance(error, KeyRequiredError)
+    assert error.detail == "store 'prod' is encrypted and no key or passphrase was given"
+    assert error.hint == "pass key=... (or keys={'prod': ...} to load())"

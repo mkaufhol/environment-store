@@ -11,10 +11,13 @@ maps each category to an exit code (D24):
 | `CryptoError` | 4 |
 | `ConcurrentModificationError` | 5 |
 
-Messages never contain keys, passphrases or variable values.
+Messages never contain keys, passphrases or variable values. They name library parameters, never
+CLI flags (D47): an error whose remedy is a parameter keeps that remedy in `hint`, apart from
+`detail`, so a frontend can put its own remedy (`-o`, `--force`, `-t`, `-k`) in its place.
 """
 
 from collections.abc import Iterable
+from typing import Self
 
 __all__ = [
     "AlreadyEncryptedError",
@@ -47,7 +50,28 @@ __all__ = [
 
 
 class EnvironmentStoreError(Exception):
-    """Root of all Environment Store errors."""
+    """Root of all Environment Store errors.
+
+    The message is `detail`, followed by `; hint` when there is a hint.
+
+    Attributes:
+        detail: What went wrong.
+        hint: The library's remedy, e.g. `pass overwrite=True to replace them`, or `None`.
+    """
+
+    detail: str
+    hint: str | None
+
+    def __init__(self, detail: str, *, hint: str | None = None) -> None:
+        """Create the error.
+
+        Args:
+            detail: What went wrong.
+            hint: The library's remedy, naming library parameters only (D47).
+        """
+        super().__init__(detail if hint is None else f"{detail}; {hint}")
+        self.detail = detail
+        self.hint = hint
 
 
 # --- exit code 1 -------------------------------------------------------------------------------
@@ -151,7 +175,10 @@ class VariableNotFoundError(NotFoundError):
         """
         self.names = tuple(names)
         self.store = store
-        message = f"variables not found in store '{store}': {', '.join(self.names)}"
+        if len(self.names) == 1:
+            message = f"variable {self.names[0]!r} not found in store '{store}'"
+        else:
+            message = f"variables not found in store '{store}': {', '.join(self.names)}"
         super().__init__(message)
 
 
@@ -186,11 +213,8 @@ class VariableExistsError(AlreadyExistsError):
         """
         self.names = tuple(names)
         self.store = store
-        message = (
-            f"variables already exist in store '{store}': {', '.join(self.names)}; "
-            "use overwrite (-o/--overwrite) to replace them"
-        )
-        super().__init__(message)
+        detail = f"variables already exist in store '{store}': {', '.join(self.names)}"
+        super().__init__(detail, hint="pass overwrite=True to replace them")
 
 
 # --- exit code 4 -------------------------------------------------------------------------------
@@ -202,6 +226,23 @@ class CryptoError(EnvironmentStoreError):
 
 class KeyRequiredError(CryptoError):
     """The store is encrypted and no key or passphrase was given."""
+
+    @classmethod
+    def for_store(cls, store: str) -> Self:
+        """Create the error for an encrypted store that was given no secret.
+
+        `EnvironmentStore` methods and `load()` raise it with the same wording (D47).
+
+        Args:
+            store: The encrypted store.
+
+        Returns:
+            The error.
+        """
+        return cls(
+            f"store {store!r} is encrypted and no key or passphrase was given",
+            hint=f"pass key=... (or keys={{{store!r}: ...}} to load())",
+        )
 
 
 class DecryptionError(CryptoError):

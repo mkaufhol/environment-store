@@ -36,10 +36,10 @@ _KEY_PATTERN: Final[re.Pattern[str]] = re.compile(
     rf"{re.escape(KEY_FILE_PREFIX)}(?P<body>[A-Za-z0-9_-]{{43}})"
 )
 _KEY_FILE_MODE: Final[int] = 0o600
-_INVALID_KEY_MESSAGE: Final[str] = (
-    f"not a valid key file: expected one line '{KEY_FILE_PREFIX}<base64url of 32 bytes>' "
-    "(create one with keygen)"
+_INVALID_KEY_DETAIL: Final[str] = (
+    f"not a valid key file: expected one line '{KEY_FILE_PREFIX}<base64url of 32 bytes>'"
 )
+_INVALID_KEY_HINT: Final[str] = "create one with generate_key_file() or generate_key_text()"
 
 
 def generate_key() -> KeyMaterial:
@@ -81,13 +81,13 @@ def parse_key(text: str) -> KeyMaterial:
     """
     match = _KEY_PATTERN.fullmatch(text.strip())
     if match is None:
-        raise InvalidKeyFileError(_INVALID_KEY_MESSAGE)
+        raise InvalidKeyFileError(_INVALID_KEY_DETAIL, hint=_INVALID_KEY_HINT)
     body = match.group("body")
     raw = base64.urlsafe_b64decode(body + "=")
     key = KeyMaterial(key=raw)
     if format_key(key).rstrip("\n") != match.group(0):
         # Non-zero padding bits: a second spelling of the same key, refused to stay canonical.
-        raise InvalidKeyFileError(_INVALID_KEY_MESSAGE)
+        raise InvalidKeyFileError(_INVALID_KEY_DETAIL, hint=_INVALID_KEY_HINT)
     return key
 
 
@@ -123,7 +123,7 @@ def read_key_file(path: Path) -> KeyMaterial:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
         # Not chained: the decode error holds the raw file content, which may be secret.
-        raise InvalidKeyFileError(_INVALID_KEY_MESSAGE) from None
+        raise InvalidKeyFileError(_INVALID_KEY_DETAIL, hint=_INVALID_KEY_HINT) from None
     return parse_key(text)
 
 

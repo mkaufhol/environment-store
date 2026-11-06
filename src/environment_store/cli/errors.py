@@ -1,16 +1,26 @@
-"""Exit codes of the CLI and the mapping from error categories (D24, spec §6)."""
+"""Exit codes and messages of the CLI: the mapping from library errors (D24, D47, spec §6).
+
+Library errors name library parameters (`overwrite=True`, `force=True`, `fmt=`, `key=`) in their
+`hint`; the CLI shows the error's `detail` with its own option in their place (D47).
+"""
 
 from enum import IntEnum
+from typing import Final
 
 from environment_store.core.errors import (
     AlreadyExistsError,
     ConcurrentModificationError,
     CryptoError,
     EnvironmentStoreError,
+    InvalidKeyFileError,
+    KeyRequiredError,
     NotFoundError,
+    VariableExistsError,
 )
+from environment_store.formats.dotenv import DotenvValueError
+from environment_store.library.files import OutputFileExistsError
 
-__all__ = ["ExitCode", "exit_code_for"]
+__all__ = ["ExitCode", "exit_code_for", "message_for"]
 
 
 class ExitCode(IntEnum):
@@ -46,3 +56,32 @@ def exit_code_for(error: EnvironmentStoreError) -> ExitCode:
         if isinstance(error, category):
             return code
     return ExitCode.USAGE
+
+
+# Error class -> the CLI's remedy, replacing the library's hint (D47). Checked in order.
+_CLI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
+    (VariableExistsError, "use -o/--overwrite to replace them"),
+    (OutputFileExistsError, "use --force to replace it"),
+    (DotenvValueError, "export with -t json or -t toml, or use envs run instead"),
+    (InvalidKeyFileError, "create one with envs keygen"),
+    (KeyRequiredError, "pass it with -k <path> (or -k - for stdin)"),
+)
+
+
+def message_for(error: EnvironmentStoreError) -> str:
+    """Return the message the CLI prints for a library error (D47).
+
+    An error that carries a library hint and has a CLI remedy shows its detail with the CLI's
+    option instead; every other error keeps its message.
+
+    Args:
+        error: The error.
+
+    Returns:
+        The message, without the `Error: ` prefix.
+    """
+    if error.hint is not None:
+        for category, hint in _CLI_HINTS:
+            if isinstance(error, category):
+                return f"{error.detail}; {hint}"
+    return str(error)

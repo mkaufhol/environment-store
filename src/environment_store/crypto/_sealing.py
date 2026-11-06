@@ -209,8 +209,7 @@ def seal_record(  # noqa: PLR0913 - keyword-only mirror of the record fields
 
 def _key_for(name: str, meta: CipherMeta, secret: Secret | None) -> KeyMaterial:
     if secret is None:
-        message = f"store {name!r} is encrypted ({meta.mode} mode): a key or passphrase is required"
-        raise KeyRequiredError(message)
+        raise KeyRequiredError.for_store(name)
     if meta.mode is KeyMode.KEYFILE:
         if not isinstance(secret, KeyMaterial):
             message = f"store {name!r} is encrypted with a key file, but a passphrase was given"

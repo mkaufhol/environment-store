@@ -2,7 +2,8 @@
 
 - `EnvsGroup` maps every typer usage error (unknown command or option, missing argument, bad
   choice) to exit code 1 instead of click's 2, which means "not found" here (D24), and every
-  `EnvironmentStoreError` to `Error: <message>` on stderr and its category's exit code.
+  `EnvironmentStoreError` to `Error: <message>` on stderr (with the CLI's own hints, D47) and
+  its category's exit code.
 - `EnvsCommand` resolves the settings before each command's callback (PD 10). `invoke` runs
   only after the command's own arguments were parsed, so `envs <cmd> --help` never resolves
   settings. Every command is registered with `cls=EnvsCommand` (or a subclass). Its usage
@@ -19,7 +20,7 @@ from typing import TYPE_CHECKING, ClassVar, Final, cast, override
 import typer
 from typer.core import TyperCommand, TyperGroup, TyperOption
 
-from environment_store.cli.errors import ExitCode, exit_code_for
+from environment_store.cli.errors import ExitCode, exit_code_for, message_for
 from environment_store.cli.output import err, out
 from environment_store.cli.state import get_state
 from environment_store.core.errors import EnvironmentStoreError
@@ -85,7 +86,7 @@ class EnvsGroup(TyperGroup):
             error.exit_code = ExitCode.USAGE
             raise
         except EnvironmentStoreError as error:
-            err(f"Error: {error}")
+            err(f"Error: {message_for(error)}")
             raise typer.Exit(exit_code_for(error)) from error
 
 

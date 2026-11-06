@@ -55,6 +55,7 @@ def test_set_refuses_existing_variables_listing_all_and_writes_nothing(cli: CliH
     assert_exit(result, 3)
     assert "A, B" in result.stderr
     assert "-o/--overwrite" in result.stderr
+    assert "overwrite=True" not in result.stderr
     assert cli.store().variables("a") == {"A": "old", "B": "old"}
 
 

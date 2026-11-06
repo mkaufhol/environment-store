@@ -190,3 +190,13 @@ def test_create_store_with_a_missing_key_file_fails_with_four(cli_json: CliHarne
     assert_exit(result, 4)
     assert "missing.key" in result.stderr
     assert _names(cli_json) == []
+
+
+def test_create_store_with_an_invalid_key_file_names_keygen(cli: CliHarness) -> None:
+    key = cli.passphrase_file("not a key", name="bad.key")
+
+    result = cli.invoke("create-store", "secret", "-e", "-k", str(key))
+
+    assert_exit(result, 4)
+    assert "envs keygen" in result.stderr
+    assert "generate_key" not in result.stderr

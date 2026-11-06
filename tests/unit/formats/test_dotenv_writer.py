@@ -114,7 +114,7 @@ def test_dumps_refuses_values_needing_double_quotes_that_contain_a_dollar(value:
         dumps({"TOKEN": value})
 
     message = str(excinfo.value)
-    assert all(hint in message for hint in ("-t json", "-t toml", "envs run"))
+    assert all(hint in message for hint in ("fmt='json'", "fmt='toml'", "Environment.apply()"))
     assert value not in message
 
 
@@ -124,7 +124,8 @@ def test_dumps_refuses_values_containing_dollar_brace(value: str) -> None:
     with pytest.raises(ValidationError, match=r"'TOKEN'.*\$\{") as excinfo:
         dumps({"TOKEN": value})
 
-    assert all(hint in str(excinfo.value) for hint in ("-t json", "-t toml", "envs run"))
+    message = str(excinfo.value)
+    assert all(hint in message for hint in ("fmt='json'", "fmt='toml'", "Environment.apply()"))
 
 
 def test_python_dotenv_interpolates_dollar_brace_even_in_single_quotes() -> None:

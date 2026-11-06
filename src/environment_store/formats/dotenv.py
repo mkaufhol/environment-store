@@ -31,14 +31,16 @@ from typing import Final, NoReturn
 from environment_store.core.errors import ValidationError
 from environment_store.core.validation import VARIABLE_NAME_PATTERN, validate_value
 
-__all__ = ["dumps", "loads"]
+__all__ = ["DotenvValueError", "dumps", "loads"]
 
 _UNQUOTED: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_./:@%+,-]+")
 _NEEDS_DOUBLE_QUOTES: Final[frozenset[str]] = frozenset("'\n\r")
 _WRITE_ESCAPES: Final[Mapping[str, str]] = MappingProxyType(
     {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
 )
-_REFUSAL_HINT: Final[str] = "export with -t json or -t toml, or use envs run instead"
+_REFUSAL_HINT: Final[str] = (
+    "export with fmt='json' or fmt='toml', or set the variables with Environment.apply() instead"
+)
 
 # python-dotenv's grammar (dotenv/parser.py), so that both read the same files the same way.
 _MULTILINE_WHITESPACE: Final[re.Pattern[str]] = re.compile(r"\s*")
@@ -72,6 +74,30 @@ _READ_ESCAPES: Final[Mapping[str, str]] = MappingProxyType(
 )
 
 
+class DotenvValueError(ValidationError):
+    """A value cannot be written to a dotenv file that both readers read back exactly (D37).
+
+    Attributes:
+        name: The variable whose value is refused; the value is never part of the error.
+    """
+
+    name: str
+
+    def __init__(self, name: str, reason: str) -> None:
+        """Create the refusal.
+
+        Args:
+            name: The variable.
+            reason: Why the value is refused, completing "it …"; never contains the value.
+        """
+        detail = (
+            f"the value of {name!r} cannot be written to a dotenv file that python-dotenv and "
+            f"Docker Compose both read back exactly: it {reason}"
+        )
+        super().__init__(detail, hint=_REFUSAL_HINT)
+        self.name = name
+
+
 def dumps(variables: Mapping[str, str]) -> str:
     """Serialize variables as dotenv lines (D37).
 
@@ -83,9 +109,10 @@ def dumps(variables: Mapping[str, str]) -> str:
         One `KEY=VALUE` line per variable, each ending with a newline; empty for no variables.
 
     Raises:
-        ValidationError: A key is not a variable name, a value contains NUL, or a value
-            cannot be written so that python-dotenv and Docker Compose both read it back
-            exactly. Values are never echoed.
+        DotenvValueError: A value cannot be written so that python-dotenv and Docker Compose
+            both read it back exactly.
+        ValidationError: A key is not a variable name or a value contains NUL. Values are
+            never echoed.
     """
     return "".join(f"{_key(name)}={_quote(name, value)}\n" for name, value in variables.items())
 
@@ -125,11 +152,7 @@ def _single_quotable(value: str) -> bool:
 
 
 def _refuse(name: str, reason: str) -> NoReturn:
-    message = (
-        f"the value of {name!r} cannot be written to a dotenv file that python-dotenv and "
-        f"Docker Compose both read back exactly: it {reason}; {_REFUSAL_HINT}"
-    )
-    raise ValidationError(message)
+    raise DotenvValueError(name, reason)
 
 
 def loads(text: str) -> dict[str, str]:

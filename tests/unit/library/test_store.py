@@ -164,7 +164,7 @@ def test_from_settings_without_connection_is_a_configuration_error(
 ) -> None:
     settings = resolve_settings(connection=None, use_project=False, environ={}, cwd=tmp_path)
 
-    with pytest.raises(ConfigurationError, match="-c/--connection"):
+    with pytest.raises(ConfigurationError, match=r"pass connection=\.\.\."):
         EnvironmentStore.from_settings(settings, opener=opener)
     assert opener.opened == []
 

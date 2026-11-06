@@ -157,11 +157,8 @@ class Environment:
         target = Path(path)
         resolved = infer_format(target) if fmt is None else _format(fmt)
         if resolved is None:
-            message = (
-                f"cannot infer the format of '{target}' from its name: pass fmt "
-                "(dotenv, json or toml; -t in the CLI)"
-            )
-            raise ValidationError(message)
+            message = f"cannot infer the format of '{target}' from its name"
+            raise ValidationError(message, hint="pass fmt='dotenv', fmt='json' or fmt='toml'")
         write_output_file(target, self.dumps(resolved, nested=nested), force=force)
 
 

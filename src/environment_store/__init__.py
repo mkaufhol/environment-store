@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from environment_store.core.secrets import KeyMaterial, Passphrase, Secret
     from environment_store.formats.infer import Format
     from environment_store.library.environment import Environment
-    from environment_store.library.keys import generate_key_file, generate_key_text
+    from environment_store.library.keys import generate_key_file, generate_key_text, parse_key_text
     from environment_store.library.oneliner import load
     from environment_store.library.sources import KeyInput, Source
     from environment_store.library.store import EnvironmentStore
@@ -66,7 +66,10 @@ _DEFINITIONS: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
     ("environment_store.library.environment", ("Environment",)),
     ("environment_store.library.sources", ("KeyInput", "Source")),
     ("environment_store.library.oneliner", ("load",)),
-    ("environment_store.library.keys", ("generate_key_file", "generate_key_text")),
+    (
+        "environment_store.library.keys",
+        ("generate_key_file", "generate_key_text", "parse_key_text"),
+    ),
     ("environment_store.config.settings", ("CredentialsInProjectFileWarning",)),
     ("environment_store.core.secrets", ("KeyMaterial", "Passphrase", "Secret")),
     ("environment_store.core.models", ("KeyMode", "StoreInfo")),
@@ -152,6 +155,7 @@ __all__ = [
     "generate_key_file",
     "generate_key_text",
     "load",
+    "parse_key_text",
 ]
 
 

@@ -2,16 +2,17 @@
 
 It owns exactly one adapter, opened on construction (so a refused schema or a missing extra
 surfaces at once), and one `StoreService` over it. Keys are taken as `KeyInput` (PD 12): for an
-existing store a `Path` is read and interpreted by the store's mode, like the CLI's `-k`; for a
-new secret a `Path` must be a key file.
+existing store a `Path` is read and interpreted by the store's mode; for a new secret a `Path`
+must be a key file. Key text without a file is passed as `parse_key_text(text)` (D47).
 """
 
 import os
 from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from types import TracebackType
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
+from environment_store.config.project import PROJECT_FILE_NAME
 from environment_store.config.secrets import read_secret_file
 from environment_store.config.settings import ENV_CONNECTION, Settings
 from environment_store.core.adapter import Adapter, MigratableAdapter, MigrationReport, SetupMode
@@ -34,6 +35,11 @@ from environment_store.library.sources import KeyInput, Source, check_key_input
 from environment_store.service import Encryption, StoreService
 
 __all__ = ["AdapterOpener", "EnvironmentStore", "open_configured_adapter"]
+
+_MISSING_CONNECTION: Final = (
+    f"no connection configured: pass connection=..., set {ENV_CONNECTION}, or set "
+    f"'connection' in {PROJECT_FILE_NAME}"
+)
 
 type AdapterOpener = Callable[[str, SetupMode], Adapter]
 """Opens the adapter for a connection string; the test seam of `EnvironmentStore`."""
@@ -158,8 +164,10 @@ class EnvironmentStore:
         Raises:
             ConfigurationError: No connection is configured (D29).
         """
+        if settings.connection is None:
+            raise ConfigurationError(_MISSING_CONNECTION)
         return cls(
-            settings.require_connection(),
+            settings.connection,
             setup=setup,
             clock=clock,
             kdf_params_factory=kdf_params_factory,

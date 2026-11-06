@@ -11,9 +11,30 @@ from typing import Final
 
 from environment_store.core.errors import BackendError, ValidationError
 
-__all__ = ["read_input_file", "write_output_file"]
+__all__ = ["OutputFileExistsError", "read_input_file", "write_output_file"]
 
 _MODE: Final = 0o600
+
+
+class OutputFileExistsError(ValidationError):
+    """The output file exists and replacing it was not requested.
+
+    Attributes:
+        path: The output file.
+    """
+
+    path: Path
+
+    def __init__(self, path: Path) -> None:
+        """Create the error for an existing output file.
+
+        Args:
+            path: The output file.
+        """
+        super().__init__(
+            f"output file '{path}' already exists", hint="pass force=True to replace it"
+        )
+        self.path = path
 
 
 def write_output_file(path: Path, text: str, *, force: bool) -> None:
@@ -29,8 +50,8 @@ def write_output_file(path: Path, text: str, *, force: bool) -> None:
         force: Replace an existing file.
 
     Raises:
-        ValidationError: The file exists and `force` is not set, or the path holds a NUL
-            character.
+        OutputFileExistsError: The file exists and `force` is not set.
+        ValidationError: The path holds a NUL character.
         BackendError: Any other OS error; no partial or temporary file is left behind.
     """
     _check_path(path, what="output file")
@@ -52,8 +73,7 @@ def _create(path: Path, data: bytes) -> None:
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, _MODE)
     except FileExistsError as err:
-        message = f"output file '{path}' already exists; use force (--force) to replace it"
-        raise ValidationError(message) from err
+        raise OutputFileExistsError(path) from err
     except OSError as err:
         raise _write_error(path, err) from err
     _write(fd, data, path=path, partial=path)

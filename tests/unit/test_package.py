@@ -19,6 +19,7 @@ _PUBLIC: Final[dict[str, str]] = {
     "load": "environment_store.library.oneliner",
     "generate_key_file": "environment_store.library.keys",
     "generate_key_text": "environment_store.library.keys",
+    "parse_key_text": "environment_store.library.keys",
     "CredentialsInProjectFileWarning": "environment_store.config.settings",
     "KeyMaterial": "environment_store.core.secrets",
     "Passphrase": "environment_store.core.secrets",

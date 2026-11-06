@@ -19,7 +19,12 @@ from environment_store.config.settings import (
     Settings,
     resolve_settings,
 )
-from environment_store.core.errors import ConfigurationError, NotEncryptedError, ValidationError
+from environment_store.core.errors import (
+    ConfigurationError,
+    KeyRequiredError,
+    NotEncryptedError,
+    ValidationError,
+)
 from environment_store.core.secrets import Secret
 from environment_store.core.validation import validate_store_name
 from environment_store.library.environment import Environment
@@ -122,7 +127,14 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
 
     Returns:
         The loaded stores.
+
+    Raises:
+        ConfigurationError: An empty `connection`; otherwise as for `load`.
     """
+    if connection == "":
+        # Checked here: the settings layer words this for the CLI's -c option (D47).
+        message = "connection must not be empty: pass a connection string, or None to configure it"
+        raise ConfigurationError(message)
     settings = resolve_settings(
         connection=connection,
         use_project=use_project,
@@ -195,7 +207,11 @@ def _secret(
         return store.secret_for(name, key)
     path = settings.key_paths.get(name)
     if path is None:
-        return resolver.existing(name, None)
+        try:
+            return resolver.existing(name, None)
+        except KeyRequiredError as err:
+            # The resolver words this for the CLI (-k); the library names its parameters (D47).
+            raise KeyRequiredError.for_store(name) from err
     try:
         return resolver.existing(name, KeyFile(path))
     except NotEncryptedError as err:

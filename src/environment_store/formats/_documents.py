@@ -30,8 +30,8 @@ def flat_variables(document: object, *, format_name: str) -> dict[str, str]:
     for name, value in document.items():
         if isinstance(value, Mapping):
             message = (
-                f"{format_name} input has a nested object under {name!r}; nested input (e.g. a "
-                "--nested export) is refused, import a flat object of string values instead"
+                f"{format_name} input has a nested object under {name!r}; nested input (e.g. an "
+                "export with nested=True) is refused, import a flat object of string values instead"
             )
             raise ValidationError(message)
         if not isinstance(value, str):

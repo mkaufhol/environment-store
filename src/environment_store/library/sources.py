@@ -33,8 +33,8 @@ def check_key_input(key: object) -> KeyInput:
         return key
     message = (
         f"a key must be a Path, KeyMaterial or Passphrase, got {type(key).__name__}; a plain "
-        "string is refused because it could be a path or a passphrase: use Path(...) or "
-        "Passphrase(text=...)"
+        "string is refused because it could be a path or a passphrase: use Path(...), "
+        "Passphrase(text=...) or, for key text, parse_key_text(...)"
     )
     raise ValidationError(message)
 

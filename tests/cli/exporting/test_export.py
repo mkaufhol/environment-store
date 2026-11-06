@@ -128,6 +128,7 @@ def test_existing_output_file_is_refused_and_unchanged(cli_json: CliHarness) -> 
 
     assert_exit(result, 1)
     assert "--force" in result.stderr
+    assert "force=True" not in result.stderr
     assert target.read_text(encoding="utf-8") == "KEEP=1\n"
 
 
@@ -267,6 +268,7 @@ def test_dotenv_refusals_fail_with_a_hint_and_write_no_file(
 
     assert_exit(result, 1)
     assert "-t json" in result.stderr
+    assert "fmt=" not in result.stderr
     assert value not in result.stderr
     assert not (cli_json.root / ".env").exists()
 
