@@ -40,3 +40,17 @@ def test_url_maps_three_slashes_to_relative_and_four_to_absolute_paths(
 def test_url_without_a_file_path_or_with_extras_is_rejected(url: str) -> None:
     with pytest.raises(ValidationError, match=r"sqlite:///"):
         parse_sqlite_url(url)
+
+
+def test_leading_tilde_expands_to_the_home_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D43: the same path rules as json:// and toml://.
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    assert parse_sqlite_url("sqlite:///~/envs/envs.db") == tmp_path / "envs" / "envs.db"
+
+
+def test_tilde_of_an_unknown_user_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="home directory"):
+        parse_sqlite_url("sqlite:///~no-such-user-for-envstore-tests/envs.db")

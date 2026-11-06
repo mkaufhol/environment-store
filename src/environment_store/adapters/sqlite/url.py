@@ -1,4 +1,4 @@
-"""SQLite connection strings: `sqlite:///relative.db` and `sqlite:////absolute.db` (spec §3)."""
+"""SQLite connection strings: `sqlite:///relative.db`, `sqlite:////absolute.db` (spec §3, D43)."""
 
 import re
 from pathlib import Path
@@ -20,13 +20,16 @@ def parse_sqlite_url(url: str) -> Path:
 
     Args:
         url: `sqlite:///relative/path.db` or `sqlite:////absolute/path.db`; the scheme is
-            case-insensitive.
+            case-insensitive. A leading `~` (`sqlite:///~/envs.db`) expands to the home
+            directory, as for `json://` and `toml://` (D43).
 
     Returns:
-        The path as written: relative paths stay relative (to the working directory).
+        The path as written, `~` expanded: relative paths stay relative (to the working
+        directory).
 
     Raises:
-        ValidationError: The string is not a SQLite connection string with a file path.
+        ValidationError: The string is not a SQLite connection string with a file path, or
+            `~user` names no known user.
     """
     match = _URL.fullmatch(url)
     if match is None:
@@ -35,4 +38,8 @@ def parse_sqlite_url(url: str) -> Path:
             "sqlite:////absolute/path.db (no host, query or fragment)"
         )
         raise ValidationError(message)
-    return Path(match.group("path"))
+    try:
+        return Path(match.group("path")).expanduser()
+    except RuntimeError as err:
+        message = "cannot expand the home directory in the sqlite:/// connection string"
+        raise ValidationError(message) from err

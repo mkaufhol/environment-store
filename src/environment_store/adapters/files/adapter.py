@@ -25,6 +25,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Final, Self
 
+from environment_store.adapters.files.directories import make_private_directory
 from environment_store.adapters.files.layout import (
     document_to_info,
     document_to_record,
@@ -175,7 +176,7 @@ class FileAdapter:
         self._check_open()
         text = self.serializer.dumps(record_to_document(record))
         with self._os_errors(f"create store {record.name!r}"):
-            self.directory.mkdir(parents=True, exist_ok=True)
+            make_private_directory(self.directory)
             with self._lock(record.name):
                 try:
                     self._publish(text, record.name, exclusive=True)

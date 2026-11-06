@@ -148,6 +148,62 @@ def test_directory_is_created_with_parents_on_first_write(
     assert _file(directory, serializer).is_file()
 
 
+@pytest.fixture
+def umask_022() -> Iterator[None]:
+    previous = os.umask(0o022)
+    try:
+        yield
+    finally:
+        os.umask(previous)
+
+
+@pytest.mark.usefixtures("umask_022")
+def test_directories_created_on_first_write_are_private(
+    tmp_path: Path, serializer: FileSerializer
+) -> None:
+    # D43: mode 0700 for the store directory and every intermediate one, whatever the umask.
+    directory = tmp_path / "a" / "b"
+
+    with FileAdapter(directory, serializer=serializer) as adapter:
+        adapter.create_store(_plain())
+
+    modes = [stat.S_IMODE(path.stat().st_mode) for path in (directory.parent, directory)]
+    assert modes == [0o700, 0o700]
+
+
+@pytest.mark.usefixtures("umask_022")
+def test_an_existing_directory_keeps_its_mode(directory: Path, serializer: FileSerializer) -> None:
+    directory.mkdir()
+    directory.chmod(0o755)
+
+    with FileAdapter(directory, serializer=serializer) as adapter:
+        adapter.create_store(_plain())
+
+    assert stat.S_IMODE(directory.stat().st_mode) == 0o755
+
+
+@pytest.mark.usefixtures("umask_022")
+def test_lock_files_are_readable_by_the_owner_only(
+    adapter: FileAdapter, directory: Path, serializer: FileSerializer
+) -> None:
+    adapter.create_store(_plain())
+
+    lock = directory / f".base{serializer.extension}.lock"
+
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o600
+
+
+def test_tilde_directory_is_created_in_the_home_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    with open_json("json://~/envs") as adapter:
+        adapter.create_store(_plain())
+
+    assert (tmp_path / "envs" / "base.json").is_file()
+
+
 def test_one_file_per_store_named_after_the_store(
     adapter: FileAdapter, directory: Path, serializer: FileSerializer
 ) -> None:

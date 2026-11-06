@@ -78,11 +78,11 @@ def _db(tmp_path: Path) -> Path:
 # --- EMPTY ---------------------------------------------------------------------------------
 
 
-def test_new_file_is_created_with_schema_v1(tmp_path: Path) -> None:
+def test_new_file_is_created_with_schema_v1_on_the_first_write(tmp_path: Path) -> None:
     path = _db(tmp_path)
 
     with open_sqlite(url_of(path)) as adapter:
-        assert adapter.list_stores() == []
+        adapter.create_store(_record())
 
     assert tables(path) == {"meta", "stores"}
     assert meta_rows(path) == {"app": "environment-store", "schema_version": "1"}
@@ -101,19 +101,35 @@ def test_existing_file_without_tables_is_set_up(tmp_path: Path) -> None:
 def test_database_uses_wal_journal_mode(tmp_path: Path) -> None:
     path = _db(tmp_path)
 
-    with open_sqlite(url_of(path)):
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(_record())
         mode, _ = snapshot(path)
 
     assert mode == "wal"
 
 
-def test_missing_directory_is_not_created_and_raises_backend_error(tmp_path: Path) -> None:
-    path = tmp_path / "missing" / "envs.db"
+def test_parent_that_is_a_file_raises_backend_error(tmp_path: Path) -> None:
+    occupied = tmp_path / "not-a-directory"
+    occupied.write_text("", encoding="utf-8")
 
-    with pytest.raises(BackendError, match="missing"):
-        open_sqlite(url_of(path))
+    with pytest.raises(BackendError, match="not-a-directory"):
+        open_sqlite(url_of(occupied / "envs.db"))
 
-    assert not path.parent.exists()
+
+def test_directory_that_cannot_be_created_raises_backend_error_on_the_first_write(
+    tmp_path: Path,
+) -> None:
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)
+    try:
+        with (
+            open_sqlite(url_of(locked / "new" / "envs.db")) as adapter,
+            pytest.raises(BackendError, match="locked"),
+        ):
+            adapter.create_store(_record())
+    finally:
+        locked.chmod(0o700)
 
 
 # --- CURRENT -------------------------------------------------------------------------------
@@ -162,8 +178,11 @@ def test_failing_upgrade_is_rolled_back_completely(tmp_path: Path) -> None:
 def test_failing_first_setup_creates_no_tables(tmp_path: Path) -> None:
     path = _db(tmp_path)
 
-    with pytest.raises(BackendError):
-        SqliteAdapter(path, migrations=(*SQLITE_MIGRATIONS, _BROKEN_V2))
+    with (
+        SqliteAdapter(path, migrations=(*SQLITE_MIGRATIONS, _BROKEN_V2)) as adapter,
+        pytest.raises(BackendError),
+    ):
+        adapter.migrate()
 
     assert tables(path) == set()
 
@@ -292,8 +311,8 @@ def test_migrate_upgrades_an_outdated_schema(tmp_path: Path) -> None:
 
 def test_migrate_refuses_a_newer_schema(tmp_path: Path) -> None:
     path = _db(tmp_path)
-    with SqliteAdapter(path, migrations=_TWO_VERSIONS):
-        pass
+    with SqliteAdapter(path, migrations=_TWO_VERSIONS) as newer:
+        newer.migrate()
 
     with (
         open_sqlite(url_of(path), setup=SetupMode.NONE) as adapter,
@@ -334,21 +353,22 @@ def test_migrations_not_numbered_one_to_n_are_rejected(
 def _open_in_parallel(path: Path) -> list[BaseException | None]:
     barrier = threading.Barrier(_RACERS, timeout=_TIMEOUT)
 
-    def run() -> BaseException | None:
+    def run(index: int) -> BaseException | None:
         barrier.wait()
         try:
+            # A write: on a missing file it is the first one, which creates file and schema.
             with open_sqlite(url_of(path)) as adapter:
-                adapter.list_stores()
+                adapter.create_store(_record(f"racer-{index}"))
         except BackendError as err:
             return err
         return None
 
     with ThreadPoolExecutor(max_workers=_RACERS) as pool:
-        futures = [pool.submit(run) for _ in range(_RACERS)]
+        futures = [pool.submit(run, index) for index in range(_RACERS)]
         return [future.result(timeout=_TIMEOUT) for future in futures]
 
 
-def test_racing_first_opens_of_a_new_file_all_succeed_and_set_up_once(tmp_path: Path) -> None:
+def test_racing_first_writes_to_a_new_file_all_succeed_and_set_up_once(tmp_path: Path) -> None:
     path = _db(tmp_path)
 
     assert _open_in_parallel(path) == [None] * _RACERS
