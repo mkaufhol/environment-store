@@ -55,12 +55,19 @@ class StoreInfo:
         """Validate the entry.
 
         Raises:
-            ValidationError: Invalid name, revision or timestamps, or a key mode for a
+            ValidationError: Invalid name, revision or timestamps, a non-bool `encrypted`, a
+                `key_mode` that is neither a `KeyMode` nor `None`, or a key mode for a
                 plaintext store.
         """
         validate_store_name(self.name)
         _check_revision(self.revision)
         _normalise_timestamps(self)
+        if not isinstance(self.encrypted, bool):
+            message = f"store {self.name!r}: encrypted must be a bool"
+            raise ValidationError(message)
+        if self.key_mode is not None and not isinstance(self.key_mode, KeyMode):
+            message = f"store {self.name!r}: key_mode must be a KeyMode member or None"
+            raise ValidationError(message)
         if not self.encrypted and self.key_mode is not None:
             message = f"store {self.name!r}: a plaintext store has no key mode"
             raise ValidationError(message)

@@ -285,11 +285,29 @@ def test_store_info_validates_the_store_name() -> None:
         _info(name="../etc")
 
 
-def test_store_info_validates_revision_and_timestamps() -> None:
+@pytest.mark.parametrize("encrypted", ["no", 0, 1, None])
+def test_store_info_encrypted_must_be_a_bool(encrypted: object) -> None:
+    with pytest.raises(ValidationError, match="encrypted must be a bool"):
+        _info(encrypted=encrypted, key_mode=None)
+
+
+@pytest.mark.parametrize("key_mode", ["bogus", "keyfile", 1])
+def test_store_info_key_mode_must_be_a_key_mode_or_none(key_mode: object) -> None:
+    with pytest.raises(ValidationError, match="key_mode must be a KeyMode member or None"):
+        _info(key_mode=key_mode)
+
+
+def test_store_info_validates_the_revision() -> None:
     with pytest.raises(ValidationError, match="revision"):
         _info(revision=0)
+
+
+def test_store_info_timestamps_must_be_timezone_aware() -> None:
     with pytest.raises(ValidationError, match="timezone-aware"):
         _info(created_at=_T0.replace(tzinfo=None))
+
+
+def test_store_info_created_at_must_not_be_after_updated_at() -> None:
     with pytest.raises(ValidationError, match="created_at must not be after updated_at"):
         _info(created_at=_T1, updated_at=_T0)
 
@@ -445,9 +463,12 @@ def test_record_created_at_must_not_be_after_updated_at() -> None:
         _plain(created_at=_T1, updated_at=_T0)
 
 
-def test_record_validates_variables() -> None:
+def test_record_rejects_invalid_variable_names() -> None:
     with pytest.raises(ValidationError, match="invalid variable name"):
         _plain(variables={"1BAD": "x"})
+
+
+def test_record_rejects_nul_in_variable_values() -> None:
     with pytest.raises(ValidationError, match="NUL"):
         _plain(variables={"GOOD": "x\x00"})
 
@@ -495,12 +516,13 @@ def test_record_cipher_meta_must_be_cipher_meta() -> None:
         _plain(variables=None, ciphertext=b"x", cipher_meta=_KEYFILE_META.to_json())
 
 
-def test_replace_revalidates_the_record() -> None:
-    record = _plain()
+def test_replace_builds_a_record_with_the_new_field() -> None:
+    assert dataclasses.replace(_plain(), revision=2).revision == 2
 
-    assert dataclasses.replace(record, revision=2).revision == 2
+
+def test_replace_revalidates_the_record() -> None:
     with pytest.raises(ValidationError, match="revision"):
-        dataclasses.replace(record, revision=0)
+        dataclasses.replace(_plain(), revision=0)
 
 
 # --- Source ------------------------------------------------------------------------------------
