@@ -1,6 +1,6 @@
 # Environment Store V2 — Specification
 
-**Status:** Refined. All questions and proposals are decided (D1–D37). Ready for implementation planning.
+**Status:** Refined. All questions and proposals are decided (D1–D38). Ready for implementation planning.
 **Scope:** Complete rebuild. No backward compatibility with V1 (0.1.x).
 
 > **How to read this document**
@@ -355,8 +355,9 @@ supported. Local files use `json://path/to/directory` or `toml://path/to/directo
 any storage provider a one-liner; the adapters implement the actual connection.
 
 **No default** *(decided, D29)*: if no connection is configured (no `-c`, no `ENV_STORE_CONNECTION`, no
-`connection` in the project file), every command fails with a message that explains these three ways to set it. No
-data is ever written to a location the user didn't choose.
+`connection` in the project file), every command that opens a store fails with a message that explains these three ways to set it. No
+data is ever written to a location the user didn't choose. *(Amended in phase 3:)* `keygen`, `--help` and
+`--version` open no store and work without a connection.
 
 ### 5.2 `ENV_STORE_ORDERED_OVERWRITE`
 
@@ -580,7 +581,7 @@ Sets one or more variables in one store, in a single write (one revision).
 | Form | Example | Allowed for |
 |---|---|---|
 | `KEY=VALUE` pairs | `envs set -s base_conf DB_HOST=localhost DB_PORT=5432` | **Unencrypted stores only** (values on the command line end up in shell history) |
-| Stdin | `envs set -s customer_a DB_PASSWORD < secret.txt` | All stores; also the way to set multi-line values |
+| Stdin | `envs set -s customer_a DB_PASSWORD < secret.txt` | All stores; also the way to set multi-line values. One trailing newline (LF or CRLF) is stripped, as for passphrase files (D3), so `echo secret \| envs set …` stores `secret` |
 | Hidden prompt | `envs set -s customer_a DB_PASSWORD` (on a terminal) | All stores; asks twice to confirm |
 
 | Option | Type | Description |
@@ -865,7 +866,7 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D26 | 2026-11-06 | Terminology | The collection is called **store** everywhere; the storage location is the **backend**. | Q1 |
 | D27 | 2026-11-06 | Store names | `^[a-z0-9][a-z0-9_-]{0,62}$`, lowercase only. | Q2 |
 | D28 | 2026-11-06 | Values | Any UTF-8 string incl. empty and multi-line; NUL forbidden; strings only. | Q3 |
-| D29 | 2026-11-06 | Default connection | None; a missing connection is an error explaining how to set one. | Q11 |
+| D29 | 2026-11-06 | Default connection | None; a missing connection is an error explaining how to set one, for every command that opens a store (amended in phase 3: `keygen`, `--help`, `--version` need none). | Q11 |
 | D30 | 2026-11-06 | Nested dotenv separator | Double underscore: `BASE_CONF__DB_HOST`; remaining collisions are errors. | Q2 |
 | D31 | 2026-11-06 | Layering | Library is the core's facade; CLI, TUI and API each use it directly; web talks only to the API. | Q22 |
 | D32 | 2026-11-06 | API principles | Client-side decryption only; the API is another backend (`https://` adapter). Framework, endpoints and auth specified after V2.0. | Q23 |
@@ -874,3 +875,4 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D35 | 2026-11-06 | `--noinput` | Global flag for CI: never prompt; missing key → exit 4, missing confirmation → exit 1. | review |
 | D36 | 2026-11-06 | Library one-liner | `environment_store.load(*stores)` resolves config like the CLI and applies to `os.environ`. | review |
 | D37 | 2026-11-06 | dotenv quoting | Unquoted / single quotes (no `'`, no `\\`, no trailing `\`) / double quotes without `$`; refused: values needing double quotes with `$`, and any value containing `${` (python-dotenv interpolates it even in single quotes). Import never interpolates. Amended after golden tests against python-dotenv 1.2. | plan review, A4 |
+| D38 | 2026-11-06 | `set` from stdin | One trailing newline (LF or CRLF) is stripped from a value read from stdin, like D3 for passphrase files; values that must end in a newline are set with `import`. | phase 3 plan review |

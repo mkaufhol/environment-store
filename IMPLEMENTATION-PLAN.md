@@ -1138,8 +1138,8 @@ exists → 3) or the source changes during the move (`HookedAdapter` → 5); `--
   mixed or several bare keys → exit 1. `KEY=VALUE` on an encrypted store → `PlaintextNotAllowedError` (exit 1)
   with the stdin / prompt hint, checked before reading any key. One bare `KEY`: value from stdin when stdin is not a
   TTY **or** `--noinput` is set (D35), otherwise the hidden prompt asked twice; stdin claimed (so `-k -` is
-  refused); a stdin value is stored **verbatim** (bytes decoded as UTF-8, no newline stripped or translated, D28,
-  PD 25); only the hidden prompt drops the line ending of what was typed. One write, one revision; existing
+  refused); a stdin value is decoded as strict UTF-8 without newline translation and loses exactly one trailing
+  newline (LF or CRLF, D38, PD 25); the hidden prompt drops the line ending of what was typed. One write, one revision; existing
   variables without `-o` → exit 3 listing all, nothing written.
 - `rm`: one write; missing variables → exit 2 listing all, nothing written; no confirmation (PD 26).
 - `import`: `-f` omitted or `-` → stdin (claimed, read through `CliState.read_stdin`, PD 34); a file through
@@ -1155,9 +1155,10 @@ replaced by positional stores; `--source`; encrypted stores with `-k store=path`
 on a TTY, multi-line values exact; `get` missing → 2; `--json` for `ls` and `get`; `set` every form, the refusal on
 encrypted stores, stdin + `-k -` → 1, `--noinput` reads stdin, `-o`, conflict → 3 with all names; `rm` several,
 missing → 2, nothing written; `import` per format, inference, stdin default, nested JSON refused, `${X}` stored
-literally, conflicts → 3, `-o`; concurrent change → 5 (`HookedAdapter`); Hypothesis: any value (D28, incl. `\r`, `\r\n`
-and a trailing newline) piped as bytes through `set` (stdin) → `get` is identical; explicit cases `"abc\r"`,
-`"abc\n"`, a PEM block ending in a newline, `"a\r\nb"`; `import -f` of a missing file and of a directory → 1;
+literally, conflicts → 3, `-o`; concurrent change → 5 (`HookedAdapter`); Hypothesis: any value (D28, incl. `\r` and `\r\n`
+inside) piped as bytes through `set` (stdin) with one appended `\n` → `get` is identical (D38); explicit cases:
+`"abc\n"` stores `abc`, `"abc\r\n"` stores `abc`, `"abc\n\n"` stores `abc\n`, `"abc\r"` stays `abc\r`, `"a\r\nb"`
+stays; a PEM block ending in a newline round-trips exactly through `import`; `import -f` of a missing file and of a directory → 1;
 Hypothesis: `export -t F` → `import -t F` round-trips for every format (C3 may call
 `export` only through the library `Environment.dumps`, since `export` is C4's command).
 
@@ -1332,8 +1333,8 @@ Referenced in this section as *PD n*.
     (`CliState.open_store`); `keygen` opens none. Configuration is still validated for `keygen` (PD 10): "broken
     configuration" and "no connection configured" are different conditions. This departs from the literal D29
     wording ("every command fails"), whose stated purpose is that no data is written to a location the user did
-    not choose; `keygen` writes only the path it is given. **Needs a spec amendment** (D29: "every command that
-    opens a store"), recorded in SPEC-V2.md before C4 is merged; if it is declined, `keygen` calls
+    not choose; `keygen` writes only the path it is given. D29 was amended accordingly by the user (phase 3); the
+    declined alternative would have had `keygen` call
     `get_state(ctx).settings().require_connection()` first (one line in C4, one test).
 18. **Reading commands check existence before prompting and prompt once per store**, even if a store appears
     twice in the list; a wrong key is not re-prompted (exit 4).
@@ -1355,12 +1356,10 @@ Referenced in this section as *PD n*.
     the option** (`create-store`, `cp-store`, `mv-store`, `rekey`, `encrypt`), in the shared C1 `new_secret`, with
     the hint "use `envs keygen -` and `-k -` / `--new-key -`". Rationale: no implicit encryption; no secret mixed
     into a command's diagnostic output; no key file literally named `-`.
-25. **A value read from stdin by `set` is stored verbatim**: the bytes are decoded as strict UTF-8 and nothing is
-    stripped or translated, so `get(set(v)) == v` for every D28 value (spec §2.1 "Values round-trip exactly";
-    §6.8 names stdin as the way to set multi-line values such as PEM blocks, which end in a newline). Only the
-    hidden prompt drops the line ending of the typed line. The one-trailing-newline rule of D3 stays limited to
-    passphrases and key material. Consequence: `echo secret | envs set …` stores `secret\n`; the docs (phase 4)
-    show `printf '%s' secret` and `< file` for exact values.
+25. **A value read from stdin by `set` loses exactly one trailing newline** (LF or CRLF), decided by the user as
+    D38 (same rule as D3 for passphrase files): `echo secret | envs set …` stores `secret`. Bytes are decoded as
+    strict UTF-8 with no other translation, so `\r` inside values and a second trailing newline survive. Values
+    that must end in a newline are set with `import` (JSON/TOML/dotenv), which round-trips exactly (D28).
 26. **`rm` (variables) asks no confirmation;** only `rm-store` does (spec tables list `-y` only for `rm-store`).
 27. **Importing an empty document is a no-op success** (exit 0, no new revision); the service's "no variables to
     set" error is reserved for programming errors.
