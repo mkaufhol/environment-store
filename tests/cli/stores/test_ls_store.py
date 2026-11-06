@@ -81,6 +81,36 @@ def test_ls_store_with_a_relative_connection_names_the_absolute_directory(
     assert result.stderr == f"no stores in {Path.cwd() / 'typo'}\n"
 
 
+@pytest.mark.parametrize(
+    ("url", "location"),
+    [
+        ("json://~/envs/dev", "envs/dev"),
+        ("toml://~/envs/dev", "envs/dev"),
+        ("sqlite:///~/data/envs.db", "data/envs.db"),
+    ],
+)
+def test_ls_store_on_a_missing_home_location_names_it_and_creates_nothing(
+    cli_json: CliHarness,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+    location: str,
+) -> None:
+    # D42 and D43 together: the message names the path the adapter would create on its first
+    # write, and listing writes nothing.
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    result = cli_json.invoke("-c", url, "ls-store", connection=False)
+
+    assert_exit(result, 0)
+    assert result.stdout == ""
+    assert result.stderr == f"no stores in {home / location}\n"
+    assert list(home.iterdir()) == []
+    assert not (Path.cwd() / "~").exists()
+
+
 def test_ls_store_json_lists_metadata_with_utc_timestamps(cli: CliHarness) -> None:
     _arrange_three_stores(cli)
     infos = {info.name: info for info in cli.store().list_stores()}
