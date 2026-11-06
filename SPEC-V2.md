@@ -1,6 +1,6 @@
 # Environment Store V2 — Specification
 
-**Status:** Refined. All questions and proposals are decided (D1–D39). Ready for implementation planning.
+**Status:** Refined. All questions and proposals are decided (D1–D40). Ready for implementation planning.
 **Scope:** Complete rebuild. No backward compatibility with V1 (0.1.x).
 
 > **How to read this document**
@@ -49,7 +49,7 @@ docs). Where the storage location is meant, the docs say **backend**.
 
 | Item | Rule |
 |---|---|
-| Store name | `^[a-z0-9][a-z0-9_-]{0,62}$`: lowercase letters, digits, `_`, `-`. Lowercase only, because store names become file names and macOS/Windows file systems are case-insensitive. Converts unambiguously to SCREAMING_SNAKE_CASE for `--nested` (`customer-a` → `CUSTOMER_A`). |
+| Store name | `^[a-z][a-z0-9_-]{0,62}$`: lowercase letters, digits, `_`, `-`, starting with a letter *(amended, D40)*, so that the `--nested` prefix is always a valid shell variable name. Lowercase only, because store names become file names and macOS/Windows file systems are case-insensitive. Converts unambiguously to SCREAMING_SNAKE_CASE for `--nested` (`customer-a` → `CUSTOMER_A`). |
 | Value | Any UTF-8 string: empty strings and multi-line values (certificates, keys) are allowed; only NUL is forbidden, because environment variables can't hold it. Values round-trip exactly. Strings only, no typed values; JSON/TOML exports write strings. |
 
 > *(decided, D33)* variable names follow `^[A-Za-z_][A-Za-z0-9_]*$` (portable POSIX env var name) and are
@@ -869,7 +869,7 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D24 | 2026-11-06 | Exit codes | 0 success, 1 usage/validation, 2 not found, 3 exists, 4 key error, 5 concurrent modification; `run` passes through. | Q14 |
 | D25 | 2026-11-06 | Project file details | Dedicated `.envstore.toml` only (it is end-user config, so not in `pyproject.toml`); may set `stores`, `[keys]`, `ordered_overwrite` and `connection`. | Q28 |
 | D26 | 2026-11-06 | Terminology | The collection is called **store** everywhere; the storage location is the **backend**. | Q1 |
-| D27 | 2026-11-06 | Store names | `^[a-z0-9][a-z0-9_-]{0,62}$`, lowercase only. | Q2 |
+| D27 | 2026-11-06 | Store names | `^[a-z][a-z0-9_-]{0,62}$`, lowercase only (first character amended by D40). | Q2 |
 | D28 | 2026-11-06 | Values | Any UTF-8 string incl. empty and multi-line; NUL forbidden; strings only. | Q3 |
 | D29 | 2026-11-06 | Default connection | None; a missing connection is an error explaining how to set one, for every command that opens a store (amended in phase 3: `keygen`, `--help`, `--version` need none). | Q11 |
 | D30 | 2026-11-06 | Nested dotenv separator | Double underscore: `BASE_CONF__DB_HOST`; remaining collisions are errors. | Q2 |
@@ -882,3 +882,4 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D37 | 2026-11-06 | dotenv quoting | Unquoted / single quotes (no `'`, no `\\`, no trailing `\`) / double quotes without `$`; refused: values needing double quotes with `$`, and any value containing `${` (python-dotenv interpolates it even in single quotes). Import never interpolates. Amended after golden tests against python-dotenv 1.2. | plan review, A4 |
 | D38 | 2026-11-06 | `set` from stdin | One trailing newline (LF or CRLF) is stripped from a value read from stdin, like D3 for passphrase files; values that must end in a newline are set with `import`. | phase 3 plan review |
 | D39 | 2026-11-06 | Merge-order override | Last wins is the default; `--first-wins` is the only CLI override of `ordered_overwrite`; no `--last-wins` flag. §5 no longer promises a CLI option for every setting in both directions. | phase 3 audit |
+| D40 | 2026-11-06 | Store names start with a letter | Amends D27: the first character must be `a-z`, not a digit, so every nested prefix `STORE__VAR` is a valid shell / environment variable name and `export-shell` / `run --nested` / import of nested dotenv never refuse a store name. | phase 3 review |

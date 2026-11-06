@@ -1182,8 +1182,8 @@ refusals), spec §4.5, §6.11–§6.13.
   written with `write_output_file` (`0600`, PD 4): existing file without `--force` → exit 1, with `--force`
   replaced atomically; D37 refusals → exit 1 with the hint and no file written. `--force` with stdout is accepted
   and has no effect.
-- `export-shell`: `posix_exports(..., overwrite=...)`; `--nested` → `nested_flat()`; invalid shell names
-  (e.g. a store starting with a digit, nested) → exit 1.
+- `export-shell`: `posix_exports(..., overwrite=...)`; `--nested` → `nested_flat()`; invalid shell names → exit 1
+  (since D40 a store name always yields a valid nested prefix, so only non-merge sources can trigger it, if any).
 - `run` (`cls=PassthroughCommand`): no `--` or an empty command → exit 1 (PD 28). Environment = current
   environment plus the merged (or nested-flat) variables, existing variables kept unless `-o`. Then the store is
   closed, stdout / stderr flushed and `runtime.exec_process(cmd[0], cmd, env)` replaces the process (POSIX,
