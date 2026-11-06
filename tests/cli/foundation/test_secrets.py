@@ -11,8 +11,14 @@ from environment_store.cli._typer import EnvsCommand
 from environment_store.cli.app import build_app
 from environment_store.cli.options import GenerateKeyOpt, NewKeyOpt, PassphraseOpt, WriteKeyOpt
 from environment_store.cli.output import out
-from environment_store.cli.secrets import existing_secret, keep_or_discard, new_secret
+from environment_store.cli.secrets import (
+    existing_secret,
+    keep_or_discard,
+    new_secret,
+    new_secret_choice,
+)
 from environment_store.cli.state import get_state
+from environment_store.config.secrets import GenerateKeyFile, KeyFile, NewKeyFile, NewPassphrase
 from environment_store.core.errors import (
     BackendError,
     ConcurrentModificationError,
@@ -482,3 +488,41 @@ def test_without_a_new_secret_errors_pass_through(cli_json: CliHarness, app: typ
 
     assert_exit(result, 2)
     assert "kept" not in result.stderr
+
+
+# --- new_secret_choice ---------------------------------------------------------------------------
+
+
+def test_new_secret_choice_without_an_option_is_none() -> None:
+    assert new_secret_choice(key=None, generate=None, passphrase=False, key_option="-k") is None
+
+
+def test_new_secret_choice_names_the_chosen_option(tmp_path: Path) -> None:
+    key = tmp_path / "k.key"
+
+    assert new_secret_choice(
+        key=str(key), generate=None, passphrase=False, key_option="-k"
+    ) == NewKeyFile(KeyFile(key))
+    assert new_secret_choice(
+        key=None, generate=key, passphrase=False, key_option="-k"
+    ) == GenerateKeyFile(key)
+    assert (
+        new_secret_choice(key=None, generate=None, passphrase=True, key_option="-k")
+        == NewPassphrase()
+    )
+
+
+@pytest.mark.parametrize(
+    ("key", "generate", "match"),
+    [
+        ("a.key", Path("b.key"), "use only one of --new-key, --generate-key, --passphrase"),
+        (None, Path("-"), "'envs keygen -' and pass it with '--new-key -'"),
+        (None, Path(), "--generate-key needs a file path"),
+        ("", None, "the path of --new-key is empty"),
+    ],
+)
+def test_new_secret_choice_refuses_unusable_options(
+    key: str | None, generate: Path | None, match: str
+) -> None:
+    with pytest.raises(ValidationError, match=match):
+        new_secret_choice(key=key, generate=generate, passphrase=False, key_option="--new-key")

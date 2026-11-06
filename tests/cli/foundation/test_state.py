@@ -225,3 +225,24 @@ def test_repr_hides_the_connection_option_and_the_opened_store_urls(
     assert len(seen) == 1
     assert "CliState(" in seen[0]
     assert "hunter2" not in seen[0]
+
+
+def test_close_stores_closes_every_opened_store_and_forgets_them(cli_json: CliHarness) -> None:
+    # run closes all stores before exec, so no handle or lock leaks into the command (C4).
+    app = build_app()
+    other = f"json://{cli_json.root}/other"
+    seen: list[EnvironmentStore] = []
+
+    @app.command("close", cls=EnvsCommand)
+    def close(ctx: typer.Context) -> None:
+        state = get_state(ctx)
+        seen.extend((state.open_store(ctx), state.open_store(ctx, connection=other)))
+        state.close_stores()
+        assert all(store.closed for store in seen)
+        seen.append(state.open_store(ctx))
+
+    result = cli_json.invoke("close", app=app)
+
+    assert_exit(result, 0)
+    assert seen[2] is not seen[0]
+    assert seen[2].closed

@@ -3,7 +3,8 @@
 - `existing_secret`: `-k path|-` > the project file's `[keys]` (PD 5) > a prompt when
   interactive > `KeyRequiredError` (exit 4).
 - `new_secret`: exactly one of the new-key option, `--generate-key` and `--passphrase`
-  (PD 24); `--generate-key -` is refused for every command.
+  (PD 24); `--generate-key -` is refused for every command. `new_secret_choice` checks the
+  options alone, so a command can refuse them before it asks for an existing key.
 - `keep_or_discard`: wraps the writing library call and removes a generated key file after a
   failure only when the store provably does not use it (PD 33).
 """
@@ -44,7 +45,13 @@ from environment_store.core.errors import (
 from environment_store.core.secrets import Secret
 from environment_store.library.store import EnvironmentStore
 
-__all__ = ["existing_secret", "keep_or_discard", "new_secret", "resolve_existing"]
+__all__ = [
+    "existing_secret",
+    "keep_or_discard",
+    "new_secret",
+    "new_secret_choice",
+    "resolve_existing",
+]
 
 _STDIN_PATH: Final = Path("-")
 # An empty --generate-key value arrives as Path(""), which is Path(".").
@@ -140,16 +147,32 @@ def new_secret(
     Raises:
         ValidationError: More than one option, `--generate-key -` (PD 24), or an empty path.
     """
-    choice = _choice(key=key, generate=generate, passphrase=passphrase, key_option=key_option)
+    choice = new_secret_choice(
+        key=key, generate=generate, passphrase=passphrase, key_option=key_option
+    )
     if choice is None:
         return None
     purpose = f"{key_option} -" if isinstance(choice, NewKeyFile) else "--passphrase"
     return resolve_new_secret(choice, get_state(ctx).secret_input(purpose))
 
 
-def _choice(
+def new_secret_choice(
     *, key: str | None, generate: Path | None, passphrase: bool, key_option: str
 ) -> NewSecretChoice | None:
+    """Check the new-secret options and return the choice they make; nothing is read.
+
+    Args:
+        key: The existing key file option (`--new-key`, or `-k` for `create-store`).
+        generate: The `--generate-key` path.
+        passphrase: Whether `--passphrase` was given.
+        key_option: How the command calls the key file option, for messages.
+
+    Returns:
+        The choice, or `None` if no new-secret option was given.
+
+    Raises:
+        ValidationError: More than one option, `--generate-key -` (PD 24), or an empty path.
+    """
     given = sum((key is not None, generate is not None, passphrase))
     if given > 1:
         message = f"use only one of {key_option}, --generate-key, --passphrase"

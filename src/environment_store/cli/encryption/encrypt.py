@@ -10,7 +10,6 @@ from typing import Final, cast
 
 import typer
 
-from environment_store.cli.key_options import parse_key_path
 from environment_store.cli.options import (
     GenerateKeyOpt,
     NewKeyOpt,
@@ -19,7 +18,12 @@ from environment_store.cli.options import (
     WriteKeyOpt,
 )
 from environment_store.cli.output import err
-from environment_store.cli.secrets import existing_secret, keep_or_discard, new_secret
+from environment_store.cli.secrets import (
+    existing_secret,
+    keep_or_discard,
+    new_secret,
+    new_secret_choice,
+)
 from environment_store.cli.state import get_state
 from environment_store.config.secrets import NewSecret
 from environment_store.core.errors import (
@@ -33,8 +37,6 @@ from environment_store.core.validation import validate_store_name
 __all__ = ["encrypt", "rekey"]
 
 _NEW_KEY_OPTION: Final = "--new-key"
-_STDOUT_PATH: Final = Path("-")
-_NO_FILE_PATH: Final = Path()
 
 
 def rekey(  # noqa: PLR0913 - the options of spec §4.5
@@ -91,25 +93,13 @@ def encrypt(
 
 def _require_one(*, new_key: str | None, generate: Path | None, passphrase: bool) -> None:
     # Before any prompt: the old key must not be asked for when the command cannot run.
-    if new_key is None and generate is None and not passphrase:
+    choice = new_secret_choice(
+        key=new_key, generate=generate, passphrase=passphrase, key_option=_NEW_KEY_OPTION
+    )
+    if choice is None:
         message = f"give the new secret: {_NEW_KEY_OPTION}, --generate-key or --passphrase"
         raise ValidationError(message)
-    if sum((new_key is not None, generate is not None, passphrase)) > 1:
-        message = f"use only one of {_NEW_KEY_OPTION}, --generate-key, --passphrase"
-        raise ValidationError(message)
-    # new_secret refuses these too, but only after rekey has asked for the old secret. The same
-    # wording as there; the existence check is repeated (atomically) when the file is written.
-    if new_key is not None:
-        parse_key_path(new_key, option=_NEW_KEY_OPTION)
-    if generate == _STDOUT_PATH:
-        message = (
-            "--generate-key needs a file path; to print a new key use 'envs keygen -' and "
-            f"pass it with '{_NEW_KEY_OPTION} -'"
-        )
-        raise ValidationError(message)
-    if generate == _NO_FILE_PATH:
-        message = "--generate-key needs a file path"
-        raise ValidationError(message)
+    # Repeated (atomically) when the file is written; checked here before any prompt.
     if generate is not None and (generate.exists() or generate.is_symlink()):
         message = f"key file '{generate}' already exists; refusing to overwrite it"
         raise ValidationError(message)

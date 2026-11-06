@@ -113,6 +113,17 @@ class CliState:
             self._stores[key] = store
         return store
 
+    def close_stores(self) -> None:
+        """Close every store opened so far and forget them; a later `open_store` opens anew.
+
+        `run` calls it before the command replaces the process, so no SQLite handle or file
+        lock leaks into the command. Closing twice is harmless: the context closes them again.
+        """
+        stores = list(self._stores.values())
+        self._stores.clear()
+        for store in stores:
+            store.close()
+
     def interactive(self) -> bool:
         """Whether prompts are allowed: stdin is a terminal and `--noinput` is not set (D35)."""
         return not self.noinput and self.runtime.stdin_is_tty()

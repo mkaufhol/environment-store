@@ -55,7 +55,7 @@ def run(  # noqa: PLR0913 - the options of spec §6.13
     environment = load_for_reading(ctx, stores=stores, keys=keys, first_wins=first_wins)
     env = dict(state.runtime.environ())
     environment.apply(overwrite=overwrite, nested=nested, environ=env)
-    state.open_store(ctx).close()
+    state.close_stores()
     sys.stdout.flush()
     sys.stderr.flush()
     try:
