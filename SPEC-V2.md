@@ -1,6 +1,6 @@
 # Environment Store V2 — Specification
 
-**Status:** Refined. All questions and proposals are decided (D1–D36). Ready for implementation planning.
+**Status:** Refined. All questions and proposals are decided (D1–D37). Ready for implementation planning.
 **Scope:** Complete rebuild. No backward compatibility with V1 (0.1.x).
 
 > **How to read this document**
@@ -654,8 +654,11 @@ BASE_CONF__DB_HOST=localhost
 CUSTOMER_A__DB_HOST=10.0.0.5
 ```
 
-> *(decided, D33)* dotenv escaping: values are double-quoted when needed, with `\n`, `\"`, `\\` and `$` escaped,
-> compatible with python-dotenv and Docker Compose.
+> *(decided, D37, replaces the D33 wording)* dotenv quoting, compatible with python-dotenv and Docker Compose:
+> unquoted for simple values; single quotes (literal in both tools) for single-line values without `'`; double
+> quotes with `\\`, `\"`, `\n`, `\r`, `\t` escapes for values with newlines or `'` and no `$`. A value that needs
+> double quotes **and** contains `$` cannot be read back exactly by both tools and is refused with a hint to use
+> `-t json`, `-t toml` or `run`.
 
 ### 6.12 `export-shell [stores…]`
 
@@ -862,3 +865,4 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D34 | 2026-11-06 | Passphrase KDF | Argon2id instead of scrypt (`t=3, m=64 MiB, p=4`, RFC 9106); requires `cryptography` ≥ 44. | review |
 | D35 | 2026-11-06 | `--noinput` | Global flag for CI: never prompt; missing key → exit 4, missing confirmation → exit 1. | review |
 | D36 | 2026-11-06 | Library one-liner | `environment_store.load(*stores)` resolves config like the CLI and applies to `os.environ`. | review |
+| D37 | 2026-11-06 | dotenv quoting | Unquoted / single quotes / double quotes without `$`; values needing double quotes and containing `$` are refused (no escape works in both python-dotenv and Compose). | plan review |
