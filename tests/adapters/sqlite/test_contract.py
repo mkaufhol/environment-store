@@ -1,29 +1,34 @@
 from collections.abc import Callable
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
+from hypothesis import given, settings
 
-from environment_store.core.models import StoreRecord
 from tests.adapters.sqlite.backend import sqlite_backend
 from tests.contract.adapter_contract import AdapterContract, BackendFactory
-from tests.support.strategies import plain_records, sealed_records, store_names
+
+# Hypothesis fails a `@given` method that runs on instances of two classes
+# (HealthCheck.differing_executors), which happens as soon as a second AdapterContract subclass
+# runs in the same session. Until the contract suppresses that check (reported as a shared
+# issue), this class gets its own `@given` test for each of the contract's: the same body, the
+# same strategy objects and the same settings, taken from the contract test itself, so the
+# input space cannot drift from the contract's.
 
 
-def _first_revision_records() -> st.SearchStrategy[StoreRecord]:
-    return st.one_of(plain_records(revisions=st.just(1)), sealed_records(revisions=st.just(1)))
+def _contract_hypothesis_tests() -> dict[str, object]:
+    return {
+        name: member
+        for name, member in vars(AdapterContract).items()
+        if hasattr(member, "hypothesis")
+    }
 
 
-def _any_records() -> st.SearchStrategy[StoreRecord]:
-    return st.one_of(plain_records(), sealed_records())
-
-
-def _contract_body(test: object) -> Callable[..., None]:
-    # The undecorated body of a contract `@given` test, through Hypothesis' public handle
-    # (`given` is typed as returning a plain callable, so the handle is looked up dynamically).
-    body = getattr(getattr(test, "hypothesis", None), "inner_test", None)
-    assert callable(body), f"{test!r} is not a Hypothesis test"
-    return body
+def _own_given_test(test: object) -> Callable[..., None]:
+    # `inner_test` is public; the strategies (`_given_kwargs`) and the settings have no public
+    # handle (and `given` is typed as returning a plain callable, so they are looked up
+    # dynamically). Every example builds a fresh backend, so sharing the body is safe.
+    handle = getattr(test, "hypothesis")  # noqa: B009
+    own = given(**handle._given_kwargs)(handle.inner_test)
+    return settings(getattr(test, "_hypothesis_internal_use_settings"))(own)  # noqa: B009
 
 
 class TestSqliteAdapterContract(AdapterContract):
@@ -33,37 +38,21 @@ class TestSqliteAdapterContract(AdapterContract):
         base = tmp_path_factory.mktemp("sqlite-contract")
         return lambda: sqlite_backend(base)
 
-    # Hypothesis fails a `@given` method that runs on instances of two classes
-    # (HealthCheck.differing_executors), which happens as soon as a second AdapterContract
-    # subclass runs in the same session. Until the contract suite handles that, this class
-    # runs the contract's test bodies in its own `@given` tests with the contract's strategies.
 
-    @given(names=st.sets(store_names(), max_size=6))
-    def test_listing_any_names_is_sorted(
-        self, make_backend: BackendFactory, names: set[str]
-    ) -> None:
-        body = _contract_body(AdapterContract.test_listing_any_names_is_sorted)
-        body(self, make_backend, names)
-
-    @given(record=_first_revision_records())
-    def test_create_then_read_round_trips_any_record(
-        self, make_backend: BackendFactory, record: StoreRecord
-    ) -> None:
-        body = _contract_body(AdapterContract.test_create_then_read_round_trips_any_record)
-        body(self, make_backend, record)
-
-    @given(initial=_first_revision_records(), replacement=_any_records())
-    def test_write_then_read_round_trips_any_record(
-        self, make_backend: BackendFactory, initial: StoreRecord, replacement: StoreRecord
-    ) -> None:
-        body = _contract_body(AdapterContract.test_write_then_read_round_trips_any_record)
-        body(self, make_backend, initial, replacement)
+for _name, _test in _contract_hypothesis_tests().items():
+    setattr(TestSqliteAdapterContract, _name, _own_given_test(_test))
 
 
-def test_every_hypothesis_test_of_the_contract_is_wrapped() -> None:
-    contract = {
-        name for name, member in vars(AdapterContract).items() if hasattr(member, "hypothesis")
-    }
-    wrapped = {name for name in vars(TestSqliteAdapterContract) if name.startswith("test_")}
+@pytest.mark.parametrize(
+    "name",
+    sorted(_contract_hypothesis_tests()),
+)
+def test_wrapped_tests_draw_from_exactly_the_contract_strategies(name: str) -> None:
+    contract = getattr(AdapterContract, name).hypothesis
+    wrapped = vars(TestSqliteAdapterContract)[name].hypothesis
 
-    assert contract == wrapped
+    assert wrapped is not contract
+    assert wrapped.inner_test is contract.inner_test
+    assert wrapped._given_kwargs.keys() == contract._given_kwargs.keys()
+    for argument, strategy in contract._given_kwargs.items():
+        assert wrapped._given_kwargs[argument] is strategy

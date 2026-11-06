@@ -1,6 +1,7 @@
 """SQLite specifics beyond the contract: connection strings, constraints, corrupt rows, threads."""
 
 import sqlite3
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,7 +13,7 @@ from environment_store.adapters.sqlite import SqliteAdapter, open_sqlite
 from environment_store.adapters.sqlite.schema import transaction
 from environment_store.core.adapter import Adapter, MigratableAdapter
 from environment_store.core.connection import open_adapter
-from environment_store.core.errors import BackendError, UnsupportedFormatError
+from environment_store.core.errors import BackendError, UnsupportedFormatError, ValidationError
 from environment_store.core.models import Cipher, CipherMeta, KeyMode, StoreRecord
 from tests.adapters.sqlite.backend import raw, url_of
 
@@ -222,3 +223,90 @@ def test_transaction_keeps_the_error_when_sqlite_already_rolled_back(path: Path)
             _fail_in_transaction(connection, "ROLLBACK")
 
         assert not connection.in_transaction
+
+
+_STORED_VALUE: Final = "hunter2-TOP-SECRET"
+
+
+@pytest.mark.parametrize(
+    ("stored", "error"),
+    [
+        (b'{"DB_PASSWORD":"hunter2-TOP-SECRET"}\xff', "variables is not valid JSON"),
+        (b'{"DB_PASSWORD":"hunter2-TOP-SECRET\xff"}', "'DB_PASSWORD' is not valid UTF-8"),
+    ],
+    ids=["after-the-document", "inside-a-value"],
+)
+def test_invalid_utf8_in_a_row_raises_backend_error_without_the_value(
+    path: Path, stored: bytes, error: str
+) -> None:
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(
+            StoreRecord.plain(name="s", variables={"DB_PASSWORD": _STORED_VALUE}, created_at=_T0)
+        )
+        with raw(path) as connection:
+            connection.execute("UPDATE stores SET variables = CAST(? AS TEXT)", (stored,))
+
+        with pytest.raises(BackendError, match=error) as raised:
+            adapter.read_store("s")
+
+    assert "hunter2" not in "".join(traceback.format_exception(raised.value))
+
+
+# --- revisions -----------------------------------------------------------------------------
+
+_MAX_REVISION: Final = 2**63 - 1  # SQLite's largest INTEGER
+
+
+def _at_revision(revision: int) -> StoreRecord:
+    return StoreRecord.plain(
+        name="base", variables={"HOST": "localhost"}, created_at=_T0, revision=revision
+    )
+
+
+@pytest.mark.parametrize("expected", [_MAX_REVISION, _MAX_REVISION + 1, 2**64])
+def test_write_beyond_the_largest_revision_raises_validation_error(
+    path: Path, expected: int
+) -> None:
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(_plain())
+        with pytest.raises(ValidationError, match="revision"):
+            adapter.write_store(_at_revision(expected + 1), expected_revision=expected)
+
+        assert adapter.read_store("base") == _plain()
+
+
+def test_write_up_to_the_largest_revision_is_stored_as_an_integer(path: Path) -> None:
+    with open_sqlite(url_of(path)) as adapter:
+        adapter.create_store(_plain())
+        with raw(path) as connection:
+            connection.execute("UPDATE stores SET revision = ?", (_MAX_REVISION - 1,))
+
+        adapter.write_store(_at_revision(_MAX_REVISION), expected_revision=_MAX_REVISION - 1)
+
+        assert adapter.read_store("base").revision == _MAX_REVISION
+
+
+# --- failed commit -------------------------------------------------------------------------
+
+
+def test_transaction_rolls_back_when_the_commit_fails(path: Path) -> None:
+    with raw(path) as setup:
+        setup.execute("CREATE TABLE t (x INTEGER)")
+    # A rollback journal (no WAL): a reader's SHARED lock makes COMMIT fail with SQLITE_BUSY.
+    writer = sqlite3.connect(path, autocommit=True, timeout=0.05)
+    try:
+        with raw(path) as reader:
+            reader.execute("BEGIN")
+            reader.execute("SELECT count(*) FROM t").fetchone()
+            with pytest.raises(sqlite3.OperationalError, match="locked"):  # noqa: SIM117
+                with transaction(writer, immediate=True):
+                    writer.execute("INSERT INTO t VALUES (1)")
+
+            assert not writer.in_transaction
+            reader.execute("COMMIT")
+
+        with transaction(writer, immediate=True):
+            writer.execute("INSERT INTO t VALUES (2)")
+        assert writer.execute("SELECT x FROM t").fetchall() == [(2,)]
+    finally:
+        writer.close()

@@ -54,12 +54,14 @@ def transaction(connection: sqlite3.Connection, *, immediate: bool) -> Generator
     connection.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
     try:
         yield
+        # Inside the try: a failed COMMIT (e.g. SQLITE_BUSY while a reader holds a lock on a
+        # rollback-journal file) leaves the transaction open, holding the write lock.
+        connection.execute("COMMIT")
     except BaseException:
         # Some errors (e.g. a full disk) make SQLite roll back on its own.
         if connection.in_transaction:
             connection.execute("ROLLBACK")
         raise
-    connection.execute("COMMIT")
 
 
 def inspect(connection: sqlite3.Connection) -> DatabaseInspection:

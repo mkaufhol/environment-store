@@ -47,6 +47,9 @@ __all__ = ["BUSY_TIMEOUT_SECONDS", "SqliteAdapter", "open_sqlite"]
 BUSY_TIMEOUT_SECONDS: Final[float] = 30.0
 """How long a connection waits for another connection's lock before failing."""
 
+# SQLite's largest INTEGER. `revision + 1` beyond it would silently store a REAL.
+_MAX_REVISION: Final = 2**63 - 1
+
 # Literal statements with parameters only; the column lists match STORES_COLUMNS and
 # STORE_INFO_COLUMNS (checked by the tests).
 _LIST: Final = "SELECT name, encrypted, cipher_meta, revision, created_at, updated_at FROM stores"
@@ -144,6 +147,9 @@ class SqliteAdapter:
             self._connection = sqlite3.connect(
                 self.path, timeout=busy_timeout, autocommit=True, check_same_thread=False
             )
+            # The driver's own UTF-8 decode error quotes the whole column (secret values); with
+            # surrogateescape invalid bytes reach the codec, which reports them without a value.
+            self._connection.text_factory = _decode_text
         if setup is SetupMode.AUTO:
             # On SQLite, the AUTO check is exactly migrate(): create, upgrade or use (D11).
             try:
@@ -220,11 +226,18 @@ class SqliteAdapter:
             expected_revision: The revision that was read.
 
         Raises:
-            ValidationError: Invalid name or revisions.
+            ValidationError: Invalid name or revisions, or `expected_revision` is SQLite's
+                largest INTEGER (the next revision could not be stored).
             StoreNotFoundError: The store does not exist.
             ConcurrentModificationError: The stored revision differs; nothing was written.
         """
         check_write(record, expected_revision=expected_revision)
+        if expected_revision >= _MAX_REVISION:
+            message = (
+                f"store {record.name!r}: revision {expected_revision} cannot be incremented, "
+                f"SQLite stores revisions up to {_MAX_REVISION}"
+            )
+            raise ValidationError(message)
         row = record_to_row(record, dialect=Dialect.SQLITE)
         parameters = (
             row.encrypted,
@@ -338,3 +351,7 @@ class SqliteAdapter:
 
 def _not_found(name: str) -> StoreNotFoundError:
     return StoreNotFoundError(f"store {name!r} not found")
+
+
+def _decode_text(data: bytes) -> str:
+    return data.decode("utf-8", errors="surrogateescape")
