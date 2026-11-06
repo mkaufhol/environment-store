@@ -1,11 +1,26 @@
-"""Pure domain core: errors, validation, secrets, models, clock and merging.
+"""Pure domain core: errors, validation, secrets, models, clock, merging and the adapter contract.
 
 Imports nothing outside `environment_store.core` except the standard library.
 """
 
+from environment_store.core.adapter import (
+    Adapter,
+    MigratableAdapter,
+    MigrationReport,
+    SetupMode,
+    check_create,
+    check_write,
+)
 from environment_store.core.clock import (
     Clock,
     utc_now,
+)
+from environment_store.core.connection import (
+    ADAPTER_FACTORIES,
+    AdapterEntry,
+    AdapterFactory,
+    open_adapter,
+    scheme_of,
 )
 from environment_store.core.errors import (
     AlreadyEncryptedError,
@@ -70,10 +85,14 @@ from environment_store.core.validation import (
 )
 
 __all__ = [
+    "ADAPTER_FACTORIES",
     "KEY_LENGTH",
     "PAYLOAD_FORMAT_VERSION",
     "STORE_NAME_PATTERN",
     "VARIABLE_NAME_PATTERN",
+    "Adapter",
+    "AdapterEntry",
+    "AdapterFactory",
     "AlreadyEncryptedError",
     "AlreadyExistsError",
     "BackendError",
@@ -93,6 +112,8 @@ __all__ = [
     "KeyModeMismatchError",
     "KeyRequiredError",
     "MergeOrder",
+    "MigratableAdapter",
+    "MigrationReport",
     "MissingExtraError",
     "NotEncryptedError",
     "NotFoundError",
@@ -101,6 +122,7 @@ __all__ = [
     "SchemaOutdatedError",
     "SchemaTooNewError",
     "Secret",
+    "SetupMode",
     "SetupPrivilegeError",
     "Source",
     "StoreExistsError",
@@ -111,13 +133,17 @@ __all__ = [
     "ValidationError",
     "VariableExistsError",
     "VariableNotFoundError",
+    "check_create",
+    "check_write",
     "merge",
     "merge_with_sources",
     "nested",
     "nested_flat",
     "nested_flat_key",
+    "open_adapter",
     "order_from_setting",
     "parse_bool_setting",
+    "scheme_of",
     "utc_now",
     "validate_store_name",
     "validate_value",

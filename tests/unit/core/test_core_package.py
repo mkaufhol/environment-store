@@ -7,7 +7,16 @@ from environment_store import core
 # Loaded by path: `core.merge` is the re-exported function, which shadows the submodule attribute.
 _MODULES: Final[tuple[ModuleType, ...]] = tuple(
     import_module(f"environment_store.core.{name}")
-    for name in ("clock", "errors", "merge", "models", "secrets", "validation")
+    for name in (
+        "adapter",
+        "clock",
+        "connection",
+        "errors",
+        "merge",
+        "models",
+        "secrets",
+        "validation",
+    )
 )
 
 
