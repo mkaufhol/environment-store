@@ -13,6 +13,7 @@ from typing import Final
 import pytest
 
 from environment_store.adapters.sqlite import SqliteAdapter, open_sqlite
+from environment_store.adapters.sqlite import adapter as adapter_module
 from environment_store.adapters.sqlite.schema import transaction
 from environment_store.core.adapter import Adapter, MigratableAdapter, SetupMode
 from environment_store.core.connection import open_adapter
@@ -164,6 +165,62 @@ def test_opening_and_reading_a_missing_database_creates_nothing(
             adapter.delete_store("base")
 
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.fixture
+def deleted_after_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The first existence check finds the file, but it is gone when SQLite opens it."""
+    real = adapter_module._missing
+    checks: list[Path] = []
+
+    def missing(path: Path) -> bool:
+        checks.append(path)
+        return False if len(checks) == 1 else real(path)
+
+    monkeypatch.setattr(adapter_module, "_missing", missing)
+
+
+@pytest.mark.usefixtures("umask_022", "deleted_after_check")
+def test_a_read_on_a_file_deleted_mid_open_creates_nothing(path: Path) -> None:
+    # Check-then-connect race: SQLite must not create the file itself (as 0644) on a read.
+    with open_sqlite(url_of(path)) as adapter:
+        assert adapter.list_stores() == []
+        assert not path.exists()
+
+        adapter.create_store(_plain())
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_a_path_with_uri_special_characters_names_the_same_file(tmp_path: Path) -> None:
+    # The file is opened through a file: URI; spaces and percent signs must not be decoded.
+    path = tmp_path / "dir %20" / "a b%41.db"
+
+    with open_sqlite(url_of(path)) as writer:
+        writer.create_store(_plain())
+    with open_sqlite(url_of(path)) as reader:
+        assert reader.read_store("base") == _plain()
+
+    assert sorted(p.name for p in path.parent.iterdir() if p.suffix == ".db") == ["a b%41.db"]
+
+
+def test_a_directory_in_place_of_the_database_raises_backend_error(path: Path) -> None:
+    path.mkdir()
+
+    with pytest.raises(BackendError, match="unable to open"), open_sqlite(url_of(path)) as adapter:
+        adapter.list_stores()
+
+
+def test_a_write_on_a_directory_in_place_of_the_database_raises_backend_error(
+    path: Path,
+) -> None:
+    path.mkdir()
+
+    with (
+        pytest.raises(BackendError, match="unable to open"),
+        open_sqlite(url_of(path), setup=SetupMode.NONE) as adapter,
+    ):
+        adapter.create_store(_plain())
 
 
 @pytest.mark.usefixtures("umask_022")

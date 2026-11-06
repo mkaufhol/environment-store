@@ -369,10 +369,23 @@ class SqliteAdapter:
                 _create_private(self.path)
             elif _missing(self.path):
                 return None
-            # check_same_thread=False: the lock, not the creating thread, guards the connection.
-            connection = sqlite3.connect(
-                self.path, timeout=self._busy_timeout, autocommit=True, check_same_thread=False
-            )
+            # Without `create`, mode=rw: SQLite never creates the file itself (with its default
+            # mode, 0644) when it is deleted between the check above and this connect.
+            mode = "rwc" if create else "rw"
+            try:
+                # check_same_thread=False: the lock, not the creating thread, guards the
+                # connection.
+                connection = sqlite3.connect(
+                    f"{self.path.as_uri()}?mode={mode}",
+                    timeout=self._busy_timeout,
+                    autocommit=True,
+                    check_same_thread=False,
+                    uri=True,
+                )
+            except sqlite3.OperationalError:
+                if not create and _missing(self.path):
+                    return None
+                raise
             # Freed pages are zeroed: a deleted or replaced plaintext value leaves no trace.
             connection.execute("PRAGMA secure_delete = ON")
             # The driver's own UTF-8 decode error quotes the whole column (secret values); with

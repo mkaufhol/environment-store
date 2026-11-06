@@ -90,8 +90,9 @@ def test_migrate_upgrades_an_outdated_schema(cli_sqlite: CliHarness) -> None:
 
 
 def test_migrate_refuses_a_newer_schema(cli_sqlite: CliHarness) -> None:
-    with SqliteAdapter(_database(cli_sqlite), migrations=_SQLITE_NEWER):
-        pass
+    # Opening creates nothing (D43): the newer schema is written by an explicit migrate.
+    with SqliteAdapter(_database(cli_sqlite), migrations=_SQLITE_NEWER) as newer:
+        newer.migrate()
 
     result = cli_sqlite.invoke("migrate")
 
