@@ -97,6 +97,22 @@ def test_loads_refuses_invalid_names(text: str) -> None:
         loads(text)
 
 
+@pytest.mark.parametrize(
+    ("text", "line"),
+    [
+        ("KEY=-----BEGIN\nMIIsecretBASE64\n", 2),
+        ("KEY=x\nab+/cdSECRET==\n", 2),
+        ("API_KEY:sk_live_SECRET\n", 1),
+        ("sk_live_SECRET/abc\n", 1),
+    ],
+)
+def test_loads_refuses_malformed_lines_without_echoing_their_text(text: str, line: int) -> None:
+    with pytest.raises(ValidationError, match=rf"line {line}\b") as excinfo:
+        loads(text)
+
+    assert "secret" not in str(excinfo.value).lower()
+
+
 def test_loads_accepts_nested_keys_of_stores_starting_with_a_digit() -> None:
     assert loads("9LIVES__X=v") == {"9LIVES__X": "v"}
 

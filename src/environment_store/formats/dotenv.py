@@ -176,7 +176,7 @@ class _Parser:
         if name is None:
             return None
         if value is None:
-            self._fail(f"variable {name!r} has no value; expected {name}=VALUE")
+            self._fail("the statement has no value; expected NAME=VALUE (no '=' found)")
         try:
             validate_value(value, variable=name)
         except ValidationError as err:
@@ -190,7 +190,11 @@ class _Parser:
         pattern = _SINGLE_QUOTED_KEY if first == "'" else _UNQUOTED_KEY
         name = self._expect(pattern, "expected a variable name").group(1)
         if not KEY_PATTERN.fullmatch(name):
-            self._fail(f"invalid variable name {name!r}: use letters, digits and '_'")
+            # The text is not echoed: on a malformed line it is often value material, such as
+            # the continuation of an unquoted multi-line value or `KEY:secret`.
+            self._fail(
+                f"invalid variable name: use letters, digits and '_' ({KEY_PATTERN.pattern})"
+            )
         return name
 
     def _assignment(self) -> str | None:

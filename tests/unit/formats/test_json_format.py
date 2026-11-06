@@ -97,11 +97,19 @@ def test_loads_refuses_invalid_variable_names() -> None:
         loads('{"A B": "1"}')
 
 
-def test_loads_refuses_nul_and_lone_surrogates() -> None:
+def test_loads_refuses_nul_values() -> None:
     with pytest.raises(ValidationError, match="NUL"):
         loads('{"A": "x\\u0000"}')
+
+
+def test_loads_refuses_lone_surrogates() -> None:
     with pytest.raises(ValidationError, match="surrogate"):
         loads('{"A": "x\\ud800"}')
+
+
+def test_loads_refuses_integers_beyond_the_conversion_limit() -> None:
+    with pytest.raises(ValidationError, match="invalid JSON"):
+        loads('{"A": 1' + "0" * 5000 + "}")
 
 
 @given(variable_maps())

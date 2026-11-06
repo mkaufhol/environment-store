@@ -77,6 +77,19 @@ def test_loads_refuses_malformed_toml(text: str) -> None:
         loads(text)
 
 
+@pytest.mark.parametrize(
+    "text", ["A = " + "[" * 100_000 + "]" * 100_000, "A = " + "{a=" * 5000 + "1" + "}" * 5000]
+)
+def test_loads_refuses_absurdly_deep_nesting(text: str) -> None:
+    with pytest.raises(ValidationError, match="nested too deeply"):
+        loads(text)
+
+
+def test_loads_refuses_integers_beyond_the_conversion_limit() -> None:
+    with pytest.raises(ValidationError, match="invalid TOML"):
+        loads("A = 1" + "0" * 5000)
+
+
 def test_loads_refuses_invalid_variable_names() -> None:
     with pytest.raises(ValidationError, match="'A-B'"):
         loads('A-B = "1"')

@@ -65,6 +65,13 @@ def loads(text: str) -> dict[str, str]:
     except RecursionError as err:
         message = "invalid JSON input: it is nested too deeply"
         raise ValidationError(message) from err
+    except ValidationError:
+        raise
+    except ValueError as err:
+        # For example an integer beyond Python's int-string conversion limit; the builtin's
+        # message is not echoed.
+        message = "invalid JSON input: it contains a number that is too long"
+        raise ValidationError(message) from err
     return flat_variables(document, format_name="JSON")
 
 
