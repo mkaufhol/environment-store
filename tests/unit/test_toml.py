@@ -1,7 +1,7 @@
 import tomllib
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta, timezone
-from typing import cast
+from typing import Final, cast
 
 import pytest
 from hypothesis import given
@@ -11,8 +11,8 @@ from environment_store._toml import TomlValue, dumps
 
 type Typed = tuple[str, object]
 
-_INT64_MIN = -(2**63)
-_INT64_MAX = 2**63 - 1
+_INT64_MIN: Final[int] = -(2**63)
+_INT64_MAX: Final[int] = 2**63 - 1
 
 
 def _typed(value: object) -> Typed:
@@ -27,14 +27,15 @@ def _typed(value: object) -> Typed:
 
 # --- strategies -------------------------------------------------------------------------------
 
-_keys = st.text(st.characters(exclude_categories=("Cs",)), max_size=12)
-_strings = st.text(st.characters(exclude_categories=("Cs",)))
-_offsets = st.integers(min_value=-23 * 60 - 59, max_value=23 * 60 + 59).map(
-    lambda minutes: timezone(timedelta(minutes=minutes))
-)
-_datetimes = st.datetimes(
-    min_value=datetime(1000, 1, 1),  # noqa: DTZ001 - naive bounds are required by st.datetimes
-    max_value=datetime(9000, 12, 31),  # noqa: DTZ001
+_keys: st.SearchStrategy[str] = st.text(st.characters(exclude_categories=("Cs",)), max_size=12)
+_strings: st.SearchStrategy[str] = st.text(st.characters(exclude_categories=("Cs",)))
+_offsets: st.SearchStrategy[timezone] = st.integers(
+    min_value=-23 * 60 - 59, max_value=23 * 60 + 59
+).map(lambda minutes: timezone(timedelta(minutes=minutes)))
+# One day of margin at both ends: offsets stay below 24 hours, so every instant has a UTC form.
+_datetimes: st.SearchStrategy[datetime] = st.datetimes(
+    min_value=datetime(1, 1, 2),  # noqa: DTZ001 - naive bounds are required by st.datetimes
+    max_value=datetime(9999, 12, 30, 23, 59, 59, 999999),  # noqa: DTZ001
     timezones=st.one_of(st.just(UTC), _offsets),
 )
 _scalars: st.SearchStrategy[TomlValue] = st.one_of(
@@ -48,7 +49,7 @@ _values: st.SearchStrategy[TomlValue] = st.recursive(
     lambda children: st.dictionaries(_keys, children, max_size=4),
     max_leaves=20,
 )
-_documents = st.dictionaries(_keys, _values, max_size=6)
+_documents: st.SearchStrategy[dict[str, TomlValue]] = st.dictionaries(_keys, _values, max_size=6)
 
 
 # --- property ---------------------------------------------------------------------------------
@@ -200,6 +201,20 @@ def test_dumps_keeps_microseconds_of_datetimes() -> None:
     value = datetime(2026, 11, 6, 10, 0, 0, 123456, tzinfo=UTC)
 
     assert dumps({"k": value}) == "k = 2026-11-06T10:00:00.123456Z\n"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        datetime(1, 1, 1, tzinfo=timezone(timedelta(hours=1))),
+        datetime(9999, 12, 31, 23, tzinfo=timezone(timedelta(hours=-2))),
+    ],
+)
+def test_dumps_rejects_datetimes_without_a_utc_equivalent(value: datetime) -> None:
+    with pytest.raises(ValueError, match="UTC") as excinfo:
+        dumps({"k": value})
+
+    assert isinstance(excinfo.value.__cause__, OverflowError)
 
 
 def test_dumps_rejects_naive_datetimes() -> None:

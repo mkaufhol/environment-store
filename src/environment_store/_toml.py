@@ -11,27 +11,31 @@ in UTC.
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from types import MappingProxyType
+from typing import Final
 
 __all__ = ["TomlScalar", "TomlValue", "dumps"]
 
 type TomlScalar = str | int | bool | datetime
 type TomlValue = TomlScalar | Mapping[str, TomlValue]
 
-_BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
-_INT64_MIN = -(2**63)
-_INT64_MAX = 2**63 - 1
-_FIRST_PRINTABLE = 0x20
-_DELETE = 0x7F
-_SURROGATES = range(0xD800, 0xE000)
-_SHORT_ESCAPES = {
-    "\b": "\\b",
-    "\t": "\\t",
-    "\n": "\\n",
-    "\f": "\\f",
-    "\r": "\\r",
-    '"': '\\"',
-    "\\": "\\\\",
-}
+_BARE_KEY: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_-]+")
+_INT64_MIN: Final[int] = -(2**63)
+_INT64_MAX: Final[int] = 2**63 - 1
+_FIRST_PRINTABLE: Final[int] = 0x20
+_DELETE: Final[int] = 0x7F
+_SURROGATES: Final[range] = range(0xD800, 0xE000)
+_SHORT_ESCAPES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "\b": "\\b",
+        "\t": "\\t",
+        "\n": "\\n",
+        "\f": "\\f",
+        "\r": "\\r",
+        '"': '\\"',
+        "\\": "\\\\",
+    }
+)
 
 
 def dumps(document: Mapping[str, TomlValue]) -> str:
@@ -46,8 +50,9 @@ def dumps(document: Mapping[str, TomlValue]) -> str:
 
     Raises:
         TypeError: A value has a type outside the supported subset.
-        ValueError: A value cannot be represented in TOML (naive datetime, integer outside 64 bits,
-            string with a lone surrogate).
+        ValueError: A value cannot be represented in TOML (naive datetime, datetime whose UTC
+            equivalent falls outside years 1 to 9999, integer outside 64 bits, string with a lone
+            surrogate).
     """
     scalars = [
         _key_value(key, value) for key, value in document.items() if not isinstance(value, Mapping)
@@ -118,7 +123,12 @@ def _datetime(value: datetime) -> str:
         message = "TOML datetimes must be timezone-aware"
         raise ValueError(message)
     # TOML offsets have minute precision only; UTC keeps the instant exact.
-    return value.astimezone(UTC).isoformat().removesuffix("+00:00") + "Z"
+    try:
+        utc = value.astimezone(UTC)
+    except OverflowError as err:
+        message = f"datetime {value.isoformat()} has no UTC equivalent within years 1 to 9999"
+        raise ValueError(message) from err
+    return utc.isoformat().removesuffix("+00:00") + "Z"
 
 
 def _inline_table(table: Mapping[str, TomlValue]) -> str:
