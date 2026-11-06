@@ -97,6 +97,7 @@ def test_module_imports_only_from_lower_layers(module: str, path: Path) -> None:
         ("environment_store.core", ("crypto", "service", "adapters", "formats")),
         ("environment_store.crypto", ("service", "adapters", "formats")),
         ("environment_store.service", ("adapters", "formats")),
+        ("environment_store.adapters.sql", ("crypto", "service", "formats")),
     ],
 )
 def test_layer_loads_no_higher_layer_in_a_fresh_interpreter(
