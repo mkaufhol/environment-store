@@ -1,0 +1,11 @@
+format = 1
+encrypted = true
+revision = 2
+created_at = 2026-11-06T10:00:00Z
+updated_at = 2026-11-06T12:30:00.250000Z
+payload = "//////8="
+
+[cipher]
+name = "aes256gcm"
+mode = "passphrase"
+kdf = { name = "argon2id", t = 3, m = 65536, p = 4, salt = "AAECAwQFBgcICQoLDA0ODw==" }
