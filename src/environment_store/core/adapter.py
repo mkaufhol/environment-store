@@ -11,7 +11,7 @@ from types import TracebackType
 from typing import Protocol, Self, runtime_checkable
 
 from environment_store.core.errors import ValidationError
-from environment_store.core.models import StoreInfo, StoreRecord
+from environment_store.core.models import MAX_REVISION, StoreInfo, StoreRecord
 from environment_store.core.validation import validate_store_name
 
 __all__ = [
@@ -203,11 +203,18 @@ def check_write(record: StoreRecord, *, expected_revision: int) -> None:
         expected_revision: The revision that was read.
 
     Raises:
-        ValidationError: The name is invalid, `expected_revision` is not an integer >= 1, or the
-            record's revision is not `expected_revision + 1` (D7).
+        ValidationError: The name is invalid, `expected_revision` is not an integer >= 1 or is
+            `MAX_REVISION` or larger (it cannot be incremented), or the record's revision is not
+            `expected_revision + 1` (D7).
     """
     validate_store_name(record.name)
     _check_version(expected_revision, "expected_revision")
+    if expected_revision >= MAX_REVISION:
+        message = (
+            f"store {record.name!r}: expected_revision {expected_revision} cannot be incremented, "
+            f"revisions go up to {MAX_REVISION}"
+        )
+        raise ValidationError(message)
     if record.revision != expected_revision + 1:
         message = (
             f"store {record.name!r}: the written record must have revision "

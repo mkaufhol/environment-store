@@ -60,6 +60,7 @@ from environment_store.core.merge import (
     parse_bool_setting,
 )
 from environment_store.core.models import (
+    MAX_REVISION,
     PAYLOAD_FORMAT_VERSION,
     Cipher,
     CipherMeta,
@@ -87,6 +88,7 @@ from environment_store.core.validation import (
 __all__ = [
     "ADAPTER_FACTORIES",
     "KEY_LENGTH",
+    "MAX_REVISION",
     "PAYLOAD_FORMAT_VERSION",
     "STORE_NAME_PATTERN",
     "VARIABLE_NAME_PATTERN",

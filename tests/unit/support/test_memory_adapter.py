@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from typing import override
 
 import pytest
 
@@ -10,6 +11,7 @@ from tests.support.memory_adapter import MemoryAdapter, MemoryBackend
 class TestMemoryAdapterContract(AdapterContract):
     @pytest.fixture(scope="class")
     @classmethod
+    @override
     def make_backend(cls) -> BackendFactory:
         return lambda: nullcontext(MemoryBackend())
 

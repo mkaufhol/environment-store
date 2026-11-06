@@ -9,7 +9,14 @@ from typing import Final
 
 from hypothesis import strategies as st
 
-from environment_store.core.models import Cipher, CipherMeta, KdfParams, KeyMode, StoreRecord
+from environment_store.core.models import (
+    MAX_REVISION,
+    Cipher,
+    CipherMeta,
+    KdfParams,
+    KeyMode,
+    StoreRecord,
+)
 from environment_store.core.validation import STORE_NAME_PATTERN, VARIABLE_NAME_PATTERN
 
 __all__ = [
@@ -27,8 +34,6 @@ __all__ = [
     "variable_names",
 ]
 
-MAX_REVISION: Final[int] = 2**31 - 1
-"""Largest revision every backend can hold (PostgreSQL `INTEGER`)."""
 
 _DANGEROUS_STORE_NAMES: Final[tuple[str, ...]] = (
     "",

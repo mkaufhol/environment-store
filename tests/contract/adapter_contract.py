@@ -29,7 +29,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from typing import Final, Protocol
 
 import pytest
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from environment_store.core.adapter import Adapter, SetupMode
@@ -40,7 +40,14 @@ from environment_store.core.errors import (
     StoreNotFoundError,
     ValidationError,
 )
-from environment_store.core.models import Cipher, CipherMeta, KdfParams, KeyMode, StoreRecord
+from environment_store.core.models import (
+    MAX_REVISION,
+    Cipher,
+    CipherMeta,
+    KdfParams,
+    KeyMode,
+    StoreRecord,
+)
 from tests.support.strategies import plain_records, sealed_records, store_names
 
 __all__ = ["AdapterContract", "Backend", "BackendFactory"]
@@ -59,6 +66,10 @@ type BackendFactory = Callable[[], AbstractContextManager[Backend]]
 
 _T0: Final[datetime] = datetime(2026, 11, 6, 10, 0, tzinfo=UTC)
 _T1: Final[datetime] = datetime(2026, 11, 6, 12, 30, 15, 123456, tzinfo=UTC)
+# Every adapter subclasses the contract, so one session runs each inherited `@given` test on
+# instances of several classes, which Hypothesis rejects as differing executors. That is safe here:
+# contract instances hold no state, and every example builds a fresh backend via `make_backend()`.
+_SHARED_BY_SUBCLASSES: Final = settings(suppress_health_check=[HealthCheck.differing_executors])
 _KEYFILE_META: Final[CipherMeta] = CipherMeta(cipher=Cipher.AES256GCM, mode=KeyMode.KEYFILE)
 _PASSPHRASE_META: Final[CipherMeta] = CipherMeta(
     cipher=Cipher.AES256GCM,
@@ -219,6 +230,7 @@ class AdapterContract:
 
         assert [info.name for info in adapter.list_stores()] == ["base"]
 
+    @_SHARED_BY_SUBCLASSES
     @given(names=st.sets(store_names(), max_size=6))
     def test_listing_any_names_is_sorted(
         self, make_backend: BackendFactory, names: set[str]
@@ -249,6 +261,7 @@ class AdapterContract:
 
         assert adapter.read_store(record.name) == record
 
+    @_SHARED_BY_SUBCLASSES
     @given(record=_first_revision_records())
     def test_create_then_read_round_trips_any_record(
         self, make_backend: BackendFactory, record: StoreRecord
@@ -395,6 +408,7 @@ class AdapterContract:
         assert adapter.read_store("base") == rekeyed
         assert adapter.list_stores()[0].key_mode is KeyMode.PASSPHRASE
 
+    @_SHARED_BY_SUBCLASSES
     @given(initial=_first_revision_records(), replacement=_any_records())
     def test_write_then_read_round_trips_any_record(
         self, make_backend: BackendFactory, initial: StoreRecord, replacement: StoreRecord
@@ -456,6 +470,22 @@ class AdapterContract:
 
         with pytest.raises(ValidationError):
             adapter.write_store(wrong, expected_revision=expected_revision)
+
+        assert adapter.read_store("base") == original
+
+    @pytest.mark.parametrize(
+        "expected_revision",
+        [MAX_REVISION, 2**63 - 1, 2**64],
+        ids=["largest", "int64-max", "beyond-int64"],
+    )
+    def test_write_beyond_the_largest_revision_raises_and_writes_nothing(
+        self, adapter: Adapter, expected_revision: int
+    ) -> None:
+        original = _plain()
+        adapter.create_store(original)
+
+        with pytest.raises(ValidationError, match="cannot be incremented"):
+            adapter.write_store(_plain(revision=MAX_REVISION), expected_revision=expected_revision)
 
         assert adapter.read_store("base") == original
 

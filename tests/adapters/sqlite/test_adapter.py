@@ -13,8 +13,8 @@ from environment_store.adapters.sqlite import SqliteAdapter, open_sqlite
 from environment_store.adapters.sqlite.schema import transaction
 from environment_store.core.adapter import Adapter, MigratableAdapter
 from environment_store.core.connection import open_adapter
-from environment_store.core.errors import BackendError, UnsupportedFormatError, ValidationError
-from environment_store.core.models import Cipher, CipherMeta, KeyMode, StoreRecord
+from environment_store.core.errors import BackendError, UnsupportedFormatError
+from environment_store.core.models import MAX_REVISION, Cipher, CipherMeta, KeyMode, StoreRecord
 from tests.adapters.sqlite.backend import raw, url_of
 
 _T0: Final[datetime] = datetime(2026, 11, 6, 10, 0, tzinfo=UTC)
@@ -254,8 +254,6 @@ def test_invalid_utf8_in_a_row_raises_backend_error_without_the_value(
 
 # --- revisions -----------------------------------------------------------------------------
 
-_MAX_REVISION: Final = 2**63 - 1  # SQLite's largest INTEGER
-
 
 def _at_revision(revision: int) -> StoreRecord:
     return StoreRecord.plain(
@@ -263,27 +261,15 @@ def _at_revision(revision: int) -> StoreRecord:
     )
 
 
-@pytest.mark.parametrize("expected", [_MAX_REVISION, _MAX_REVISION + 1, 2**64])
-def test_write_beyond_the_largest_revision_raises_validation_error(
-    path: Path, expected: int
-) -> None:
-    with open_sqlite(url_of(path)) as adapter:
-        adapter.create_store(_plain())
-        with pytest.raises(ValidationError, match="revision"):
-            adapter.write_store(_at_revision(expected + 1), expected_revision=expected)
-
-        assert adapter.read_store("base") == _plain()
-
-
 def test_write_up_to_the_largest_revision_is_stored_as_an_integer(path: Path) -> None:
     with open_sqlite(url_of(path)) as adapter:
         adapter.create_store(_plain())
         with raw(path) as connection:
-            connection.execute("UPDATE stores SET revision = ?", (_MAX_REVISION - 1,))
+            connection.execute("UPDATE stores SET revision = ?", (MAX_REVISION - 1,))
 
-        adapter.write_store(_at_revision(_MAX_REVISION), expected_revision=_MAX_REVISION - 1)
+        adapter.write_store(_at_revision(MAX_REVISION), expected_revision=MAX_REVISION - 1)
 
-        assert adapter.read_store("base").revision == _MAX_REVISION
+        assert adapter.read_store("base").revision == MAX_REVISION
 
 
 # --- failed commit -------------------------------------------------------------------------

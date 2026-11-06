@@ -16,6 +16,7 @@ from environment_store.core.secrets import Secret
 from environment_store.core.validation import validate_store_name, validate_variables
 
 __all__ = [
+    "MAX_REVISION",
     "PAYLOAD_FORMAT_VERSION",
     "Cipher",
     "CipherMeta",
@@ -25,6 +26,9 @@ __all__ = [
     "StoreInfo",
     "StoreRecord",
 ]
+
+MAX_REVISION: Final[int] = 2**31 - 1
+"""Largest revision of a store (D7): the SQL schema stores it as 32-bit `INTEGER` (spec §3.3.1)."""
 
 PAYLOAD_FORMAT_VERSION: Final[int] = 1
 """Version of the encrypted payload format; part of the associated data (D5)."""
@@ -244,8 +248,12 @@ class Source:
 
 
 def _check_revision(revision: object) -> None:
-    if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
-        message = f"revision must be an integer >= 1, got {revision!r}"
+    if (
+        isinstance(revision, bool)
+        or not isinstance(revision, int)
+        or not 1 <= revision <= MAX_REVISION
+    ):
+        message = f"revision must be an integer >= 1 and <= {MAX_REVISION}, got {revision!r}"
         raise ValidationError(message)
 
 
@@ -253,7 +261,12 @@ def _aware_utc(value: object, name: str) -> datetime:
     if not isinstance(value, datetime) or value.utcoffset() is None:
         message = f"{name} must be a timezone-aware datetime"
         raise ValidationError(message)
-    return value.astimezone(UTC)
+    try:
+        return value.astimezone(UTC)
+    except OverflowError as err:
+        # E.g. 9999-12-31T23:59:59-01:00: the instant has no UTC `datetime`.
+        message = f"{name} is out of range"
+        raise ValidationError(message) from err
 
 
 def _normalise_timestamps(model: StoreInfo | StoreRecord) -> None:

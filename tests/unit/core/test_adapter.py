@@ -13,7 +13,7 @@ from environment_store.core.adapter import (
     check_write,
 )
 from environment_store.core.errors import ValidationError
-from environment_store.core.models import StoreRecord
+from environment_store.core.models import MAX_REVISION, StoreRecord
 from tests.support.memory_adapter import MemoryAdapter, MemoryBackend
 
 _T0: Final[datetime] = datetime(2026, 11, 6, 10, 0, tzinfo=UTC)
@@ -112,6 +112,18 @@ def test_check_write_rejects_a_record_revision_other_than_expected_plus_one(
 ) -> None:
     with pytest.raises(ValidationError, match="revision"):
         check_write(_record(revision=record_revision), expected_revision=expected_revision)
+
+
+@pytest.mark.parametrize("expected_revision", [MAX_REVISION, MAX_REVISION + 1, 2**63 - 1, 2**64])
+def test_check_write_rejects_an_expected_revision_that_cannot_be_incremented(
+    expected_revision: int,
+) -> None:
+    with pytest.raises(ValidationError, match="cannot be incremented"):
+        check_write(_record(revision=MAX_REVISION), expected_revision=expected_revision)
+
+
+def test_check_write_accepts_the_largest_revision_as_the_new_one() -> None:
+    check_write(_record(revision=MAX_REVISION), expected_revision=MAX_REVISION - 1)
 
 
 @pytest.mark.parametrize("expected_revision", [0, -1, True])

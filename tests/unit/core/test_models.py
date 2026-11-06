@@ -9,6 +9,7 @@ import pytest
 
 from environment_store.core.errors import UnsupportedFormatError, ValidationError
 from environment_store.core.models import (
+    MAX_REVISION,
     PAYLOAD_FORMAT_VERSION,
     Cipher,
     CipherMeta,
@@ -342,9 +343,48 @@ def test_store_info_validates_the_revision() -> None:
         _info(revision=0)
 
 
+def test_max_revision_is_the_largest_sql_integer() -> None:
+    # The SQL schema stores the revision as a 32-bit INTEGER (spec §3.3.1), the narrowest backend.
+    assert MAX_REVISION == 2**31 - 1
+
+
+def test_store_info_and_record_accept_the_largest_revision() -> None:
+    assert _info(revision=MAX_REVISION).revision == MAX_REVISION
+    assert _plain(revision=MAX_REVISION).revision == MAX_REVISION
+
+
+@pytest.mark.parametrize("revision", [MAX_REVISION + 1, 2**63])
+def test_store_info_and_record_reject_a_revision_beyond_the_largest(revision: int) -> None:
+    with pytest.raises(
+        ValidationError, match=f"revision must be an integer >= 1 and <= {MAX_REVISION}"
+    ):
+        _info(revision=revision)
+    with pytest.raises(
+        ValidationError, match=f"revision must be an integer >= 1 and <= {MAX_REVISION}"
+    ):
+        _plain(revision=revision)
+
+
 def test_store_info_timestamps_must_be_timezone_aware() -> None:
     with pytest.raises(ValidationError, match="timezone-aware"):
         _info(created_at=_T0.replace(tzinfo=None))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("created_at", datetime(1, 1, 1, 0, 30, tzinfo=timezone(timedelta(hours=1)))),
+        ("updated_at", datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone(timedelta(hours=-1)))),
+    ],
+    ids=["before-utc-min", "after-utc-max"],
+)
+def test_timestamps_without_a_utc_equivalent_raise_validation_error(
+    field: str, value: datetime
+) -> None:
+    with pytest.raises(ValidationError, match=f"{field} is out of range"):
+        _info(**{field: value})
+    with pytest.raises(ValidationError, match=f"{field} is out of range"):
+        _plain(**{field: value})
 
 
 def test_store_info_created_at_must_not_be_after_updated_at() -> None:
