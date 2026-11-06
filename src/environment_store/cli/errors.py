@@ -1,7 +1,8 @@
 """Exit codes and messages of the CLI: the mapping from library errors (D24, D47, spec §6).
 
-Library errors name library parameters (`overwrite=True`, `force=True`, `fmt=`, `key=`) in their
-`hint`; the CLI shows the error's `detail` with its own option in their place (D47).
+Library errors name library parameters (`overwrite=True`, `force=True`, `fmt=`, `key=`,
+`nested=True`) in their `hint`; the CLI shows the error's `detail` with its own option in their
+place (D47).
 """
 
 from enum import IntEnum
@@ -17,6 +18,7 @@ from environment_store.core.errors import (
     NotFoundError,
     VariableExistsError,
 )
+from environment_store.formats import NestedInputError
 from environment_store.formats.dotenv import DotenvValueError
 from environment_store.library.files import OutputFileExistsError
 
@@ -63,6 +65,11 @@ _CLI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
     (VariableExistsError, "use -o/--overwrite to replace them"),
     (OutputFileExistsError, "use --force to replace it"),
     (DotenvValueError, "export with -t json or -t toml, or use envs run instead"),
+    (
+        NestedInputError,
+        "nested input (e.g. a --nested export) is refused, import a flat object of string values "
+        "instead",
+    ),
     (InvalidKeyFileError, "create one with envs keygen"),
     (KeyRequiredError, "pass it with -k <path> (or -k - for stdin)"),
 )

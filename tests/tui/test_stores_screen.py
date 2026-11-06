@@ -319,3 +319,23 @@ def test_escape_on_the_variables_screen_returns_to_the_stores(store: Environment
         assert isinstance(app.screen, StoresScreen)
 
     run_app(store, scenario)
+
+
+def test_invalid_key_file_notifies_with_the_tui_hint(
+    encrypted: EnvironmentStore, tmp_path: Path
+) -> None:
+    bad = tmp_path / "bad.key"
+    bad.write_text("garbage\n", encoding="utf-8")
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        await set_input(pilot, "#path", str(bad))
+        await pilot.click("#unlock")
+        await pilot.pause()
+        assert isinstance(app.screen, UnlockScreen)
+        [message] = notifications(app)
+        assert message.startswith("not a valid key file: ")
+        assert message.endswith("; create one with envs keygen")
+        assert "generate_key" not in message
+
+    run_app(encrypted, scenario)

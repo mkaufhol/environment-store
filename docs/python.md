@@ -306,7 +306,7 @@ Things to know:
   text, including the values of encrypted stores. Do not commit them; see
   [Keep secrets out of version control](#keep-secrets-out-of-version-control).
 - An existing file is not replaced unless you pass `force=True`. Without it you get
-  `ValidationError: output file '.env' already exists; use force (--force) to replace it`.
+  `ValidationError: output file '.env' already exists; pass force=True to replace it`.
 - The format is inferred from the name: `.json`, `.toml`, and names that start or end with
   `.env` (`.env`, `.env.local`, `prod.env`). Anything else needs `fmt=` (`"dotenv"`, `"json"`,
   `"toml"`, or the `Format` enum).
@@ -333,10 +333,10 @@ exactly. A value that cannot be written that way is refused, and no file is writ
 common case is a value containing `${`:
 
 ```text
-ValidationError: the value of 'TEMPLATE' cannot be written to a dotenv file that python-dotenv and Docker Compose both read back exactly: it contains '${', which python-dotenv interpolates even in single quotes; export with -t json or -t toml, or use envs run instead
+ValidationError: the value of 'TEMPLATE' cannot be written to a dotenv file that python-dotenv and Docker Compose both read back exactly: it contains '${', which python-dotenv interpolates even in single quotes; export with fmt='json' or fmt='toml', or set the variables with Environment.apply() instead
 ```
 
-From Python, use `fmt="json"` or `fmt="toml"` for such values, or apply them directly with
+So use `fmt="json"` or `fmt="toml"` for such values, or apply them directly with
 `env.apply()`.
 
 ## How do I manage stores from a script?
@@ -352,7 +352,7 @@ call fails with `VariableExistsError` and writes nothing, unless you pass `overw
 ```python
 es = EnvironmentStore("sqlite:///envs.db")
 es.set_many("base", {"DB_HOST": "x", "LOG_LEVEL": "debug"})
-# VariableExistsError: variables already exist in store 'base': DB_HOST, LOG_LEVEL; use overwrite (-o/--overwrite) to replace them
+# VariableExistsError: variables already exist in store 'base': DB_HOST, LOG_LEVEL; pass overwrite=True to replace them
 es.set_many("base", {"LOG_LEVEL": "info", "FEATURE_X": "on"}, overwrite=True)  # fine
 es.delete("base", ["FEATURE_X"])  # deletes several in one write
 print(es.variables("base"))
@@ -431,12 +431,12 @@ Every method that reads or writes variables of an encrypted store takes `key=`. 
 |---|---|
 | `Path("prod.key")` | A key file, or a passphrase file. The store decides how the file is read: a key file store expects `envstore-key-v1:...`; a passphrase store reads the file as text, with one trailing newline removed. |
 | `Passphrase(text="...")` | A passphrase you already have in memory. |
-| `KeyMaterial(key=b"...")` | A raw 32-byte key. |
+| `KeyMaterial(key=b"...")` | A raw 32-byte key, or key text (`envstore-key-v1:...`, e.g. from a secret manager) parsed with `parse_key_text(text)`. |
 
 A plain `str` is refused on purpose, because it could be a path or a passphrase:
 
 ```text
-ValidationError: a key must be a Path, KeyMaterial or Passphrase, got str; a plain string is refused because it could be a path or a passphrase: use Path(...) or Passphrase(text=...)
+ValidationError: a key must be a Path, KeyMaterial or Passphrase, got str; a plain string is refused because it could be a path or a passphrase: use Path(...), Passphrase(text=...) or, for key text, parse_key_text(...)
 ```
 
 Reading without a key, or with the wrong one:
@@ -482,6 +482,20 @@ from environment_store import generate_key_file, generate_key_text
 generate_key_file("prod.key")  # mode 0600; never overwrites an existing file
 text = generate_key_text()  # 'envstore-key-v1:...\n', e.g. for a password manager
 ```
+
+Key text from a secret manager or an environment variable needs no key file: `parse_key_text()`
+turns it into a `KeyMaterial` that works wherever a key does (`key=`, `Source(..., key=...)`,
+`load(keys={...})`):
+
+```python
+import os
+
+from environment_store import load, parse_key_text
+
+load("prod", keys={"prod": parse_key_text(os.environ["PROD_STORE_KEY"])})
+```
+
+Text that is not key text raises `InvalidKeyFileError`; the message never contains the text.
 
 The library never stores or caches keys, and `KeyMaterial`, `Passphrase` and `Source` hide them
 in `repr()` (`Passphrase(<redacted>)`, `Source(name='prod')`).
@@ -531,7 +545,7 @@ environment_store.load("customer-a", keys={"customer-a": Path("customer-a.pass")
 Without a key, CI fails with a clear error:
 
 ```text
-KeyRequiredError: store 'prod' is encrypted and no key or passphrase was given: pass it with -k <path> (or -k - for stdin)
+KeyRequiredError: store 'prod' is encrypted and no key or passphrase was given; pass key=... (or keys={'prod': ...} to load())
 ```
 
 ## Which errors should I catch?
@@ -618,6 +632,7 @@ Everything below is importable from `environment_store`. Signatures are taken fr
 | `load(*stores: str, connection: str \| None = None, keys: Mapping[str, KeyInput] \| None = None, first_wins: bool = False, overwrite: bool = False, nested: bool = False, use_project: bool = True, noinput: bool = False) -> Environment` | Resolve settings like the CLI, load the stores and apply them to `os.environ`. |
 | `generate_key_file(path: Path \| str \| os.PathLike[str]) -> None` | Write a new key file with mode `0600`; an existing path raises `ValidationError`. |
 | `generate_key_text() -> str` | Return a new key as `'envstore-key-v1:...\n'`. |
+| `parse_key_text(text: str) -> KeyMaterial` | Parse key text (`envstore-key-v1:...`, surrounding whitespace ignored) into a key without a file; invalid text raises `InvalidKeyFileError`. |
 
 ### `EnvironmentStore`
 

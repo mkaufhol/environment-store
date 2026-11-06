@@ -314,7 +314,7 @@ code 4:
 
 ```console
 $ envs --noinput -c json://envs ls prod
-Error: store 'prod' is encrypted and no key or passphrase was given: pass it with -k <path> (or -k - for stdin)
+Error: store 'prod' is encrypted and no key or passphrase was given; pass it with -k <path> (or -k - for stdin)
 ```
 
 With several stores the hint names the store: `pass it with -k staging=<path> (or -k staging=- for stdin)`.
@@ -478,7 +478,7 @@ Note that `ls` needs the key even without `-v`: the variable names are encrypted
 | no key given, no prompt possible | `store 'prod' is encrypted and no key or passphrase was given: …` | 4 |
 | wrong key or passphrase, or tampered data | `cannot decrypt store 'dev': wrong key or passphrase, or the stored data was modified` | 4 |
 | key file for a passphrase store | `store 'dev' uses a passphrase, but a key file was given` | 4 |
-| passphrase file for a key file store | `not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>' (create one with keygen)` | 4 |
+| passphrase file for a key file store | `not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen` | 4 |
 | key file missing or unreadable | `cannot read key file 'missing.key': No such file or directory` | 4 |
 | more than one key option for a new store | `use only one of -k, --generate-key, --passphrase` | 1 |
 | empty key or passphrase on stdin | `the key or passphrase on stdin is empty` | 4 |

@@ -35,8 +35,10 @@ from environment_store.core.errors import (
     VariableNotFoundError,
 )
 from environment_store.crypto.keyfile import parse_key
+from environment_store.formats import NestedInputError
 from environment_store.formats.dotenv import DotenvValueError
 from environment_store.formats.dotenv import dumps as dotenv_dumps
+from environment_store.formats.json_format import loads as json_loads
 from environment_store.library.files import OutputFileExistsError
 
 _EXPECTED: dict[type[EnvironmentStoreError], ExitCode] = {
@@ -135,6 +137,19 @@ def test_invalid_key_file_names_keygen() -> None:
     assert message.startswith(caught.value.detail)
     assert message.endswith("; create one with envs keygen")
     assert "generate_key" not in message
+
+
+def test_nested_input_refusal_names_the_nested_option() -> None:
+    with pytest.raises(NestedInputError) as caught:
+        json_loads('{"base": {"A": "1"}}')
+
+    message = message_for(caught.value)
+    assert message.startswith(caught.value.detail)
+    assert message.endswith(
+        "; nested input (e.g. a --nested export) is refused, import a flat object of string "
+        "values instead"
+    )
+    assert "nested=True" not in message
 
 
 def test_missing_key_names_the_key_option() -> None:

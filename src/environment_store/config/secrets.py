@@ -219,11 +219,8 @@ class SecretResolver:
     def _prompt(self, store: str) -> str:
         prompter = self._input.prompter
         if prompter is None:
-            message = (
-                f"store {store!r} is encrypted and no key or passphrase was given: pass it "
-                "with -k <path> (or -k - for stdin)"
-            )
-            raise KeyRequiredError(message)
+            # Library wording; the CLI puts its -k hint in place of the hint (D47).
+            raise KeyRequiredError.for_store(store)
         answer = prompter.secret(f"Key or passphrase for store {store!r}: ")
         return _check_not_empty(answer, what=f"the key or passphrase for store {store!r}")
 

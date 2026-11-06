@@ -18,7 +18,7 @@ from textual.widgets.text_area import Document
 
 from environment_store.core.errors import ValidationError
 from environment_store.core.validation import validate_value, validate_variable_name
-from environment_store.tui.messages import notify_problem
+from environment_store.tui.messages import notify_error, notify_problem
 
 __all__ = ["EditVariableScreen", "Edited", "editable"]
 
@@ -118,7 +118,7 @@ class EditVariableScreen(ModalScreen[Edited | None]):
             validate_variable_name(name)
             validate_value(value, variable=name)
         except ValidationError as error:
-            notify_problem(self.app, str(error))
+            notify_error(self.app, error)
             return
         if self._name is not None and value == self._value:
             self.dismiss(None)

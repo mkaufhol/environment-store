@@ -252,7 +252,7 @@ When a command needs a key, it looks in this order:
 
 ```console
 $ envs ls -v prod
-Error: store 'prod' is encrypted and no key or passphrase was given: pass it with -k <path> (or -k - for stdin)
+Error: store 'prod' is encrypted and no key or passphrase was given; pass it with -k <path> (or -k - for stdin)
 ```
 
 **Reading commands with several stores.** `ls`, `get`, `export`, `export-shell` and `run` bind each key to its store with `-k STORE=PATH`. Repeat `-k` for several encrypted stores. With exactly one store, plain `-k PATH` is enough:
@@ -714,7 +714,7 @@ set DB_HOST, DB_PORT, LOG_LEVEL in store 'base'
 $ envs set -s dev 'GREETING=hello world' EMPTY=
 set GREETING, EMPTY in store 'dev'
 $ envs set -s dev DEBUG=true
-Error: variables already exist in store 'dev': DEBUG; use overwrite (-o/--overwrite) to replace them
+Error: variables already exist in store 'dev': DEBUG; use -o/--overwrite to replace them
 $ envs set -s dev -o DEBUG=true
 set DEBUG in store 'dev'
 ```
@@ -810,7 +810,7 @@ Errors:
 
 ```console
 $ envs import -s app -f app.env
-Error: variables already exist in store 'app': API_URL, NAME, GREETING, MULTI, EMPTY; use overwrite (-o/--overwrite) to replace them
+Error: variables already exist in store 'app': API_URL, NAME, GREETING, MULTI, EMPTY; use -o/--overwrite to replace them
 $ envs import -s app -f nested.json
 Error: JSON input has a nested object under 'A'; nested input (e.g. a --nested export) is refused, import a flat object of string values instead
 $ envs import -s app -f num.json
@@ -907,7 +907,7 @@ exported to '.env'
 $ ls -l .env
 -rw-------  1 me  staff  64 Nov  6 17:38 .env
 $ envs export base dev -f .env
-Error: output file '.env' already exists; use force (--force) to replace it
+Error: output file '.env' already exists; use --force to replace it
 $ envs export base dev -f .env --force
 exported to '.env'
 $ envs export base dev -f config.yaml

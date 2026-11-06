@@ -138,6 +138,18 @@ def test_import_refuses_nested_json(cli_json: CliHarness) -> None:
     assert cli_json.store().variables("a") == {}
 
 
+def test_import_refusal_of_nested_input_names_the_nested_option(cli_json: CliHarness) -> None:
+    cli_json.store().create_store("a")
+
+    result = cli_json.invoke("import", "-s", "a", "-t", "json", input='{"a": {"A": "1"}}')
+
+    assert_exit(result, 1)
+    assert result.stderr.strip() == (
+        "Error: JSON input has a nested object under 'a'; nested input (e.g. a --nested "
+        "export) is refused, import a flat object of string values instead"
+    )
+
+
 def test_import_refuses_malformed_input(cli_json: CliHarness) -> None:
     cli_json.store().create_store("a")
 

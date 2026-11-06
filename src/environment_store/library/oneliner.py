@@ -21,7 +21,6 @@ from environment_store.config.settings import (
 )
 from environment_store.core.errors import (
     ConfigurationError,
-    KeyRequiredError,
     NotEncryptedError,
     ValidationError,
 )
@@ -207,11 +206,7 @@ def _secret(
         return store.secret_for(name, key)
     path = settings.key_paths.get(name)
     if path is None:
-        try:
-            return resolver.existing(name, None)
-        except KeyRequiredError as err:
-            # The resolver words this for the CLI (-k); the library names its parameters (D47).
-            raise KeyRequiredError.for_store(name) from err
+        return resolver.existing(name, None)
     try:
         return resolver.existing(name, KeyFile(path))
     except NotEncryptedError as err:

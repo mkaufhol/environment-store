@@ -82,7 +82,7 @@ Setting a variable that already exists is refused (exit code 3), so you do not o
 
 ```console
 $ envs set -s dev DEBUG=false
-Error: variables already exist in store 'dev': DEBUG; use overwrite (-o/--overwrite) to replace them
+Error: variables already exist in store 'dev': DEBUG; use -o/--overwrite to replace them
 ```
 
 Add `-o` to replace it: `envs set -s dev -o DEBUG=false`. This guide keeps `DEBUG=true`.
@@ -145,7 +145,7 @@ instead.
 
 ```console
 $ envs get DB_PASSWORD prod
-Error: store 'prod' is encrypted and no key or passphrase was given: pass it with -k <path> (or -k - for stdin)
+Error: store 'prod' is encrypted and no key or passphrase was given; pass it with -k <path> (or -k - for stdin)
 $ envs get DB_PASSWORD prod -k prod.key
 s3cr3t-pa55
 ```

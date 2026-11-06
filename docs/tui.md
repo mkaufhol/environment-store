@@ -265,7 +265,7 @@ In the Unlock dialog fill in **exactly one** of the two fields:
 - **or the passphrase**: type the passphrase itself. The field is hidden. For a `keyfile` store you can paste the
   key text here instead (the `envstore-key-v1:...` line, for example from a password manager after `envs keygen -`),
   so the key never has to be on disk. If you type a passphrase into this field for a `keyfile` store, you get
-  `not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>' (create one with keygen)`.
+  `not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen`.
 
 Then press `Enter` or click **Unlock**. The store is decrypted before the dialog closes:
 
@@ -287,8 +287,8 @@ the TUI keeps it out of your shell history, just like `envs set -s prod NAME` wi
 
 ## Errors and changes made elsewhere
 
-Problems appear as a red notification titled **Error** in the corner of the screen. It shows the same message the
-CLI would print, never a value or a key. For example, a `[keys]` entry for a plaintext store:
+Problems appear as a red notification titled **Error** in the corner of the screen. It shows the message the CLI
+would print, without remedies that only make sense on the command line (such as `-o`), and never a value or a key. For example, a `[keys]` entry for a plaintext store:
 
 ```
 [keys] in '/home/me/project/.envstore.toml' names a key for store 'dev', which is not encrypted: remove the entry

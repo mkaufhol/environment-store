@@ -275,7 +275,7 @@ two stores producing the same flat name (`customer-a` and `customer_a`), is an e
 | `store 'dev' is already encrypted: use 'envs rekey -s dev'` (1) | Use `rekey` to change the key. |
 | `store 'prod' is encrypted: values on the command line end up in the shell history ...` (1) | Use `set -s prod -k KEY NAME < file`. |
 | `Delete store 'dev'? Confirm with -y/--yes (no terminal to ask, or --noinput)` (1) | Ask the user; rerun with `-y` only after a yes. |
-| `output file '.env' already exists; use force (--force) to replace it` (1) | Ask, then add `--force`, or pick another path. |
+| `output file '.env' already exists; use --force to replace it` (1) | Ask, then add `--force`, or pick another path. |
 | `stdin can be used only once per command ...` (1) | Put the key in a file and use `-k PATH`. |
 | `this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'` | Install the named extra (`cli`, `postgres`, `tui`). |
 

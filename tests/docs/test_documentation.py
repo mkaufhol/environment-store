@@ -125,3 +125,25 @@ def test_documentation_index_links_every_guide() -> None:
     guides = {path.name for path in (_ROOT / "docs").glob("*.md") if path.name != "README.md"}
 
     assert guides <= linked
+
+
+def test_python_guide_names_every_public_name_of_the_library() -> None:
+    import environment_store  # noqa: PLC0415 - only this test needs the package's names
+
+    guide = (_ROOT / "docs" / "python.md").read_text(encoding="utf-8")
+    missing = [
+        name
+        for name in environment_store.__all__
+        if re.search(rf"\b{re.escape(name)}\b", guide) is None
+    ]
+    assert missing == []
+
+
+def test_python_guide_quotes_no_cli_flags_in_library_errors() -> None:
+    # Library errors name library parameters (D47); a quoted error with `-k` or `(--force)`
+    # would be CLI wording.
+    guide = (_ROOT / "docs" / "python.md").read_text(encoding="utf-8")
+    quoted = re.findall(r"^.*\b[A-Z][A-Za-z]*Error: .*$", guide, re.MULTILINE)
+    assert quoted
+    flags = re.compile(r"(?:^|[\s(/'\"])--?[a-z]|\benvs\b|\bkeygen\b")
+    assert [line for line in quoted if flags.search(line.split("Error: ", 1)[1])] == []

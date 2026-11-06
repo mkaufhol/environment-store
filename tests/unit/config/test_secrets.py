@@ -224,8 +224,11 @@ def test_encrypted_store_without_source_is_prompted(inspector: ServiceInspector)
 def test_encrypted_store_without_source_and_prompter_needs_a_key(
     inspector: ServiceInspector,
 ) -> None:
-    with pytest.raises(KeyRequiredError, match="-k"):
+    with pytest.raises(KeyRequiredError) as caught:
         _resolver(inspector, tty=True).existing("keyed", None)
+
+    # Library wording; the CLI puts its -k hint in place of the library's (D47).
+    assert str(caught.value) == str(KeyRequiredError.for_store("keyed"))
 
 
 @pytest.mark.parametrize(

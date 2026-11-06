@@ -18,7 +18,7 @@ from environment_store.core.errors import (
 )
 from environment_store.core.merge import MergeOrder
 from environment_store.crypto.keyfile import parse_key
-from environment_store.formats import dotenv, json_format
+from environment_store.formats import NestedInputError, dotenv, json_format
 from environment_store.library.environment import Environment
 from environment_store.library.files import OutputFileExistsError, write_output_file
 from environment_store.library.oneliner import load_with
@@ -106,6 +106,11 @@ def test_load_without_a_key_has_the_same_wording_as_the_store_methods(
         )
 
     assert str(caught.value) == str(KeyRequiredError.for_store("secret"))
+    # A traceback prints the chained errors too: none of them may name a CLI flag.
+    chained: BaseException | None = caught.value
+    while chained is not None:
+        assert _CLI_FLAG.search(str(chained)) is None, str(chained)
+        chained = chained.__cause__ or chained.__context__
 
 
 class _NoPrompts:
@@ -208,10 +213,14 @@ def test_dotenv_refusal_names_the_fmt_parameter(value: str) -> None:
 
 
 def test_nested_import_refusal_names_no_cli_flag() -> None:
-    with pytest.raises(ValidationError) as caught:
+    with pytest.raises(NestedInputError) as caught:
         json_format.loads('{"base": {"A": "1"}}')
 
-    assert "nested=True" in str(caught.value)
+    assert isinstance(caught.value, ValidationError)
+    assert caught.value.detail == "JSON input has a nested object under 'base'"
+    assert caught.value.name == "base"
+    assert caught.value.hint is not None
+    assert "nested=True" in caught.value.hint
     _assert_library_wording(caught.value)
 
 
