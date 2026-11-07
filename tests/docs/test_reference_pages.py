@@ -12,6 +12,7 @@ from typer.main import get_command
 
 from environment_store.cli._typer import EnvsGroup
 from environment_store.cli.app import app
+from environment_store.core.merge import merge
 
 _ROOT: Final = Path(__file__).parents[2]
 _PYPROJECT: Final = _ROOT / "pyproject.toml"
@@ -255,7 +256,12 @@ def test_man_page_gives_a_synopsis_for_every_command(command: str) -> None:
     assert _mentions(_command_sections()[command], f"envs {command}")
 
 
-@pytest.mark.parametrize("option", [*_option_names(None), "-h", "--help"])
+def test_documented_help_options_are_the_help_options_of_the_cli() -> None:
+    # The man page follows the merged CLI: -h is the shorthand of --help (D48).
+    assert tuple(_group().context_settings["help_option_names"]) == _HELP_OPTIONS
+
+
+@pytest.mark.parametrize("option", [*_option_names(None), *_HELP_OPTIONS])
 def test_man_page_documents_every_global_option(option: str) -> None:
     # -h is the shorthand of --help on envs and on every command (D48).
     assert _mentions(_man_sections()["GLOBAL OPTIONS"], option)
@@ -266,6 +272,42 @@ def test_man_page_documents_every_global_option(option: str) -> None:
 )
 def test_man_page_documents_only_global_options_envs_has(option: str) -> None:
     assert option in [*_option_names(None), *_HELP_OPTIONS]
+
+
+@pytest.mark.parametrize("option", _HELP_OPTIONS)
+def test_man_page_names_every_help_option_among_those_that_skip_the_connection(
+    option: str,
+) -> None:
+    # D44/D48: help, under either name, reads neither the connection nor the project file.
+    paragraph = next(
+        paragraph
+        for paragraph in _man_sections()["GLOBAL OPTIONS"].split("\n.PP")
+        if "read neither the connection" in _plain(paragraph)
+    )
+
+    assert _mentions(paragraph, option)
+
+
+def test_man_page_merge_example_shows_the_merged_output_order() -> None:
+    # D52: store load order, sorted by name within a store, a shared variable keeps its
+    # first position. The inputs are the ones the MERGE ORDER section names.
+    section = _man_sections()["MERGE ORDER"]
+    stores = [
+        ("a", {"ENV": "development", "DEBUG": "True"}),
+        ("b", {"ENV": "staging", "DB_NAME": "test"}),
+    ]
+    example = re.search(r"^\.nf\n(.*?)^\.fi$", section, re.MULTILINE | re.DOTALL)
+
+    assert example is not None
+    assert all(
+        _mentions(section, f"{name}={value}")
+        for _, variables in stores
+        for name, value in variables.items()
+    )
+    assert _mentions(section, "envs export a b")
+    assert example.group(1).splitlines() == [
+        f"{name}={value}" for name, value in merge(stores).items()
+    ]
 
 
 @pytest.mark.parametrize("code", _EXIT_CODES)
