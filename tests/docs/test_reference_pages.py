@@ -225,6 +225,15 @@ def test_man_page_names_both_executables() -> None:
     assert re.match(r"\s*envs, environment-store - \S", name)
 
 
+@pytest.mark.parametrize("section", ["DESCRIPTION", "EXAMPLES"])
+def test_man_page_install_commands_name_the_repository_until_2_0_is_on_pypi(section: str) -> None:
+    # D50: PyPI still serves 0.1, which has no envs command; the plain PyPI form must
+    # not stand alone wherever the page shows how to install or run envs.
+    text = _plain(_man_sections()[section])
+
+    assert "git+https://github.com/mkaufhol/environment-store@feature/v2" in text
+
+
 def test_man_page_documents_every_registered_command_and_no_other() -> None:
     assert sorted(_command_sections()) == _registered_commands()
 

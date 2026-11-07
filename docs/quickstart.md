@@ -177,6 +177,8 @@ DB_PASSWORD=s3cr3t-pa55  prod
 ```
 
 `DB_HOST` comes from `prod` because `prod` is listed last. Add `--first-wins` to let the first store win instead.
+The output lists `dev`'s variables first, sorted by name, then the names only `prod` adds, also sorted. A name that
+both stores define keeps its place from the first store.
 
 Note that `ls -v` and `get` print decrypted secrets in plain text. Do not run them where the output is recorded,
 such as CI logs or a shared screen.

@@ -45,6 +45,12 @@ extra, for example
 .B uv tool install \(dqenvironment-store[cli]\(dq
 or
 .BR "uvx \-\-from \(dqenvironment-store[cli]\(dq envs" .
+Version 2.0 is not on PyPI yet: there these commands install the old 0.1 line,
+which has no
+.B envs
+command.
+Until 2.0 is released, add the repository URL, as in
+.BR "uv tool install \(dqenvironment\-store[cli] @ git+https://github.com/mkaufhol/environment\-store@feature/v2\(dq" .
 .SH GLOBAL OPTIONS
 Global options come before the command name.
 .TP
@@ -822,11 +828,11 @@ envs run base_conf customer_a \-\- python app.py
 .fi
 .RE
 .PP
-Run once without installing, with uv:
+Run once without installing, with uv (until 2.0 is on PyPI, from the repository):
 .PP
 .RS
 .nf
-uvx \-\-from "environment\-store[cli]" envs ls\-store
+uvx \-\-from "environment\-store[cli] @ git+https://github.com/mkaufhol/environment\-store@feature/v2" envs ls\-store
 .fi
 .RE
 .SH SECURITY

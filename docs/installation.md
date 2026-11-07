@@ -34,7 +34,9 @@ These commands are for after the 2.0 release. Today, put the repository URL behi
 the next section. The quotes around `environment-store[...]` matter in zsh, which would otherwise treat the
 brackets as a pattern.
 
-`uvx` needs `--from` because the command is called `envs` but the package is `environment-store`.
+The package installs two executables, `environment-store` and `envs` (see [Entry points](#entry-points)).
+`uvx 'environment-store[cli]' --version` runs the long one without `--from`; `uvx` needs `--from` only to call
+the short name `envs`, because that name differs from the package name.
 
 ## Install from the repository (the only way today)
 
@@ -100,7 +102,7 @@ The core package depends only on `cryptography`. Everything else is an extra:
 |---|---|---|---|---|---|
 | *(none, core)* | Python library, encryption, the JSON, TOML and SQLite backends | `cryptography>=44` | `environment_store.load()`, `EnvironmentStore`, `json://`, `toml://`, `sqlite:///` connections | `uv add environment-store` | `pip install environment-store` |
 | `cli` | the `envs` / `environment-store` command | `typer>=0.26` | every `envs` command | `uv tool install 'environment-store[cli]'` | `pip install 'environment-store[cli]'` |
-| `postgres` | the PostgreSQL backend | `psycopg[binary]>=3.2` | `postgresql://` and `postgres://` connections, in the library and the CLI (including `envs migrate` on PostgreSQL) | `uv add 'environment-store[postgres]'`, or for the CLI `uv tool install 'environment-store[cli,postgres]'` | `pip install 'environment-store[postgres]'` |
+| `postgres` | the PostgreSQL backend | `psycopg[binary]>=3.2` | `postgresql://` and `postgres://` connections, in the library and the CLI (including `envs migrate` on PostgreSQL) | `uv add 'environment-store[postgres]'`, or for the CLI `uv tool install 'environment-store[cli,postgres]'` | `pip install 'environment-store[postgres]'`, or for the CLI `pip install 'environment-store[cli,postgres]'` |
 | `tui` | the terminal UI | `textual>=8.2` | `envs tui` (needs `cli` as well) | `uv tool install 'environment-store[cli,tui]'` | `pip install 'environment-store[cli,tui]'` |
 | `all` | all of the above | `typer`, `psycopg[binary]`, `textual` | everything | `uv tool install 'environment-store[all]'` | `pip install 'environment-store[all]'` |
 
@@ -113,12 +115,17 @@ name, so to add one, run the install again with the full list, for example
 `uv tool install 'environment-store[cli,postgres,tui]'`. With `uv add`, adding the package again with more extras
 updates the entry in `pyproject.toml`.
 
-**A missing extra** gives a clear message and exit code 1 instead of an import error. For example, with only the
-core package installed:
+**A missing extra** gives a clear message and exit code 1 instead of an import error. With only the core package
+installed, every `envs` call stops at the missing `cli` extra:
 
 ```console
 $ envs --version
 Error: this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'
+```
+
+With `cli` installed but not `postgres`, a `postgresql://` connection names the `postgres` extra:
+
+```console
 $ envs -c postgresql://localhost/app ls-store
 Error: this feature needs the optional 'postgres' dependencies: pip install 'environment-store[postgres]'
 ```
@@ -162,6 +169,11 @@ $ python -m environment_store.cli --version
 environment-store 2.0.0.dev0
 ```
 
+`python -m` needs the package in the Python you run: after `pip install` into an activated virtual environment,
+or with `uv run python -m environment_store.cli` in a uv project. After `uv tool install` the package lives in the
+tool's isolated environment, so plain `python` does not find it (`ModuleNotFoundError`); use `envs` there, or run
+`uv run --no-project --with 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2' python -m environment_store.cli --version`.
+
 There is no built-in shell completion.
 
 ## Check the installation
@@ -173,10 +185,22 @@ Usage: envs [OPTIONS] COMMAND [ARGS]...
   Keep environment variables in named, optionally encrypted stores and load
   them anywhere.
 ...
-$ python -c 'import environment_store; print(environment_store.__version__)'
-2.0.0.dev0
 ```
 
 `-h` and `--help` are the same, on `envs` and on every command.
+
+To check the library, import it from the Python that has it installed: an activated virtual environment after
+`pip install`, or your uv project after `uv add`:
+
+```console
+$ python -c 'import environment_store; print(environment_store.__version__)'
+2.0.0.dev0
+$ uv run python -c 'import environment_store; print(environment_store.__version__)'
+2.0.0.dev0
+```
+
+After `uv tool install` the library is in the tool's isolated environment, where plain `python` cannot import it.
+Without a project, use
+`uv run --no-project --with 'environment-store @ git+https://github.com/mkaufhol/environment-store@feature/v2' python -c 'import environment_store; print(environment_store.__version__)'`.
 
 Next: the [Quickstart](quickstart.md).
