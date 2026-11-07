@@ -1174,12 +1174,12 @@ Error: store 'base' is not encrypted: use 'envs encrypt -s base'
 envs tui
 ```
 
-Needs the `tui` extra. The full guide is [tui.md](tui.md). It opens a full-screen browser for your stores, using the same connection, project file and `[keys]` as every other command. In the TUI you can view, add, edit and delete variables. Creating, copying, importing, exporting and key changes stay on the command line.
+Needs the `tui` extra. The full guide is [tui.md](tui.md). It opens a full-screen browser for your stores, using the same connection, project file, `ENV_STORE_KEY_<STORE>` variables and `[keys]` as every other command. In the TUI you can view, add, edit and delete variables. Creating, copying, importing, exporting and key changes stay on the command line.
 
 | Screen | Keys |
 |---|---|
 | Stores | arrows to move, **Enter** open, **r** reload, **q** quit |
-| Unlock (for an encrypted store without a usable `[keys]` entry) | enter a key or passphrase file path, or type the passphrase; **Enter** unlock, **Esc** cancel |
+| Unlock (for an encrypted store without a usable key from `ENV_STORE_KEY_<STORE>` or `[keys]`) | enter a key or passphrase file path, or type the passphrase; **Enter** unlock, **Esc** cancel |
 | Variables (values masked as `••••••••`) | **v** show/hide values, **a** add, **e** or **Enter** edit, **d** delete (asks first), **r** reload, **Esc** back |
 | Add / Edit | **Ctrl+S** save, **Esc** cancel |
 | Confirm | **y** yes, **n** or **Esc** no |

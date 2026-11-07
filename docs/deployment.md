@@ -124,25 +124,48 @@ the text as it is ([below](#kubernetes)), or let `kubectl create secret … --fr
 
 ## Heroku
 
-Heroku cannot mount a key file into a dyno, so its config vars are the place for the key. Set the connection and
-one key variable per encrypted store:
+Heroku cannot mount a key file into a dyno, so its config vars are the place for the key. Set one key variable per
+encrypted store:
 
 ```sh
-heroku config:set ENV_STORE_CONNECTION='postgresql://…' ENV_STORE_KEY_PROD="$(cat prod.key)"
+heroku config:set ENV_STORE_KEY_PROD="$(cat prod.key)"
 ```
 
 The app needs the package with the extras it uses, for example `environment-store[cli,postgres]` in its
 dependencies (see [Installation](installation.md#optional-extras)).
 
+**The connection: use `DATABASE_URL`, do not copy it.** If the stores live in the app's Heroku Postgres database,
+take the connection from `DATABASE_URL` at run time, as the examples below do. Heroku changes that database's
+credentials during maintenance and credential rotation and updates `DATABASE_URL` for you; a copy pasted into
+`ENV_STORE_CONNECTION` goes stale then, and every dyno fails to load its stores. `envs` does not read
+`DATABASE_URL` by itself (both `postgres://` and `postgresql://` work). Set `ENV_STORE_CONNECTION` only for a
+database whose credentials do not change behind your back.
+
 **With `envs run` in the `Procfile`.** `envs` loads the stores, removes `ENV_STORE_KEY_PROD` from the environment
-and starts the server with the variables:
+and starts the command with the variables. Heroku runs each `Procfile` line with a shell, so `$DATABASE_URL` is
+expanded when the dyno starts. Wrap every process that reads the variables, the `release:` phase too:
 
 ```text
-web: envs --noinput run base prod -- gunicorn myproject.wsgi
+release: envs -c "$DATABASE_URL" --noinput run base prod -- python manage.py migrate
+web: envs -c "$DATABASE_URL" --noinput run base prod -- gunicorn myproject.wsgi
 ```
 
-**With the Python library in Django's `settings.py`.** `environment_store.load()` reads `ENV_STORE_CONNECTION`
-and `ENV_STORE_KEY_PROD` and puts the variables into `os.environ`; this needs only the `postgres` extra, not `cli`:
+One-off dynos need the same wrapper; the single quotes keep your local shell from expanding `$DATABASE_URL`:
+
+```sh
+heroku run 'envs -c "$DATABASE_URL" --noinput run base prod -- python manage.py createsuperuser'
+```
+
+The Python buildpack also runs `python manage.py collectstatic` during the build, outside any `envs run`, so a
+`settings.py` that reads `os.environ["DB_HOST"]` fails there with `KeyError`. Either set
+`heroku config:set DISABLE_COLLECTSTATIC=1` and collect the static files another way, or read the settings that
+`collectstatic` does not need with `os.environ.get()`, or use the library variant below, which loads the stores in
+every Django command.
+
+**With the Python library in Django's `settings.py`.** `environment_store.load()` reads `ENV_STORE_KEY_PROD` and
+puts the variables into `os.environ`; this needs only the `postgres` extra, not `cli`. Because `settings.py` loads
+the stores, every Django command gets them: the web process, the `release:` phase, `heroku run` and the build's
+`collectstatic`.
 
 ```python
 # myproject/settings.py
@@ -150,10 +173,15 @@ import os
 
 import environment_store
 
-environment_store.load("base", "prod", noinput=True)
-# The library leaves os.environ alone apart from the loaded variables; drop the key
-# so that subprocesses of the app do not inherit it.
-os.environ.pop("ENV_STORE_KEY_PROD", None)
+# Code that re-executes Python with a copy of os.environ (Django's runserver
+# autoreloader, `heroku local` running it) imports settings.py again. The copy has the
+# loaded variables but no longer the key, so load only once.
+if "ENV_STORE_LOADED" not in os.environ:
+    environment_store.load("base", "prod", connection=os.environ["DATABASE_URL"], noinput=True)
+    os.environ["ENV_STORE_LOADED"] = "1"
+    # The library leaves os.environ alone apart from the loaded variables; drop the key
+    # so that subprocesses of the app do not inherit it.
+    os.environ.pop("ENV_STORE_KEY_PROD", None)
 
 DATABASES = {
     "default": {
@@ -165,8 +193,15 @@ DATABASES = {
 }
 ```
 
-`noinput=True` makes a missing key raise `KeyRequiredError` instead of prompting. Variables already set as config
-vars win over the stores unless you pass `overwrite=True`.
+Without the `ENV_STORE_LOADED` guard, `manage.py runserver` works in its first process and then fails in the
+reloaded one with `KeyRequiredError`, because `load()` decrypts the stores even when their variables are already
+set. `noinput=True` makes a missing key raise `KeyRequiredError` instead of prompting. Variables already set as
+config vars win over the stores unless you pass `overwrite=True`.
+
+Run gunicorn with `--preload` (`web: gunicorn --preload myproject.wsgi`) so that the master process loads the
+stores once and its workers inherit the variables. Without it, every worker imports `settings.py` and loads the
+stores itself, also every worker that gunicorn starts later (after a timeout, `--max-requests` or a crash); that
+matters when you [rotate the key](#security-notes).
 
 ## Kubernetes
 
@@ -299,6 +334,12 @@ docker run -v "$PWD/prod.key:/run/secrets/prod.key:ro" -e ENV_STORE_CONNECTION e
 docker run -e ENV_STORE_KEY_PROD -e ENV_STORE_CONNECTION example/app
 ```
 
+`create-store --generate-key` writes the key file with mode `0600`, owned by you. On Linux a bind mount keeps that
+owner and mode, so an image that runs as a non-root user with another uid cannot read the file, and `envs` stops
+with `Error: cannot read key or passphrase file '/run/secrets/prod.key': Permission denied` (exit code 4). Run the
+container as the file's owner (`docker run --user "$(id -u)" …`, if the image works with that uid), or mount a copy
+that the container's user may read, for example one owned by a group that user belongs to, with mode `0440`.
+
 `-e NAME` without a value copies the variable from the environment of `docker run`. Never put a key into the image:
 `ENV` and `ARG` values end up in the image's history for everyone who can pull it.
 
@@ -355,7 +396,10 @@ hunter2
 
 The old key stops working at once, so update the deployment right away:
 `heroku config:set ENV_STORE_KEY_PROD="$(cat prod-2027.key)"` (which restarts the dynos), or update the Secret and
-restart the pods. Processes that are already running keep the values they loaded; processes that start between the
-`rekey` and the update fail with exit code 4. Then delete the old key file and replace it in every other place
+restart the pods. Processes that are already running keep the values they loaded. With `envs run`, processes that
+start between the `rekey` and the update fail with exit code 4. With the Python library, every new process that
+calls `load()` with the old key fails at import time with a `DecryptionError` traceback instead, and that includes
+new workers inside a dyno or pod that is already running: gunicorn without `--preload` loads the stores in each
+worker it starts, for example after a timeout or `--max-requests`. Then delete the old key file and replace it in every other place
 that holds it. A key that leaked may also have exposed the values: if so, rotate those secrets at their source
 too. See [Encryption and keys](encryption.md#rotate-a-key-envs-rekey) for passphrases and switching modes.

@@ -519,7 +519,7 @@ Delete the encrypted original afterwards with `envs rm-store dev -y` if you no l
 | `set`, `rm`, `import` | yes |
 | `cp-store`, `mv-store` | the source store's key (and optionally a new one) |
 | `encrypt` | a new one (`--new-key`, `--generate-key` or `--passphrase`; no `-k`, no `[keys]`) |
-| `tui` | yes, to open an encrypted store: from `[keys]` or the Unlock dialog (no `-k`) |
+| `tui` | yes, to open an encrypted store: from `ENV_STORE_KEY_<STORE>`, else `[keys]`, else the Unlock dialog (no `-k`) |
 | `rekey` | the old one and a new one |
 
 Note that `ls` needs the key even without `-v`: the variable names are encrypted too.
@@ -528,7 +528,7 @@ Note that `ls` needs the key even without `-v`: the variable names are encrypted
 
 | Situation | Message | Exit code |
 |---|---|---|
-| no key given, no prompt possible | `store 'prod' is encrypted and no key or passphrase was given: …` | 4 |
+| no key given, no prompt possible | `store 'prod' is encrypted and no key or passphrase was given; …` (when a command reads several stores: `…was given: …`) | 4 |
 | wrong key or passphrase, or tampered data | `cannot decrypt store 'dev': wrong key or passphrase, or the stored data was modified` | 4 |
 | key variable empty | `ENV_STORE_KEY_PROD, the key or passphrase of store 'prod', is empty` | 4 |
 | key variable of a key file store holds no key line (for example base64-encoded) | `ENV_STORE_KEY_PROD does not hold a usable key for store 'prod': not a valid key file: …` | 4 |
