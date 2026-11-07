@@ -90,6 +90,11 @@ cache-keys = [
 requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+# The contents of docs/man land at the install prefix, so the wheel installs the man page as
+# <prefix>/share/man/man1/envs.1 and `man envs` works (D49).
+data = { data = "docs/man" }
+
 [tool.ruff]
 target-version = "py313"
 line-length = 100
