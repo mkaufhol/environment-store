@@ -197,6 +197,8 @@ Key or passphrase file of the source store,
 .B \-
 for stdin.
 Default:
+.BI ENV_STORE_KEY_ STORE\fR,
+then
 .B [keys]
 in the project file, else a prompt on a terminal.
 .TP
@@ -334,6 +336,8 @@ Key or passphrase file of the store,
 .B \-
 for stdin.
 Default:
+.BI ENV_STORE_KEY_ STORE\fR,
+then
 .B [keys]
 in the project file, else a prompt on a terminal.
 .SS rm
@@ -495,6 +499,10 @@ is the command, passed on untouched.
 The exit status is the command's; on POSIX the process is replaced, so
 signals reach the command directly.
 Works in every shell, including fish and PowerShell.
+Every
+.B ENV_STORE_KEY_*
+variable is removed from the command's environment, so it never inherits
+a key.
 .TP
 .BR \-o ", " \-\-overwrite
 Store values overwrite variables already set in the environment.
@@ -541,6 +549,13 @@ The store to change (required).
 The current key or passphrase file,
 .B \-
 for stdin.
+Default:
+.BI ENV_STORE_KEY_ STORE\fR,
+then
+.B [keys]
+in the project file, else a prompt on a terminal.
+The new secret never comes from the environment or
+.BR [keys] .
 .TP
 .BR \-\-new\-key " \fIPATH\fP|\fB\-\fP"
 Encrypt with this existing key file.
@@ -740,6 +755,7 @@ e.g.
 for
 .BR customer\-a .
 One trailing newline is stripped.
+The value is the key file's content as it is, not base64\-encoded.
 Precedence:
 .B \-k
 > this variable >
@@ -776,7 +792,9 @@ expanded; paths only, never key material),
 (a connection string; a password in it causes a warning).
 Stores given on the command line replace the file's list;
 .B \-k
-on the command line overrides the file's key for that store.
+on the command line, and
+.BI ENV_STORE_KEY_ STORE\fR,
+override the file's key for that store.
 .RS
 .PP
 .nf
@@ -810,7 +828,9 @@ Not found: a store or a variable.
 Already exists.
 .TP
 .B 4
-Decryption or key error: wrong key, or a missing key in non\-interactive use.
+Decryption or key error: wrong key, a missing key in non\-interactive use,
+or an empty or invalid
+.BI ENV_STORE_KEY_ STORE\fR.
 .TP
 .B 5
 Concurrent modification: the store changed since it was read; nothing was
@@ -863,11 +883,23 @@ envs run base_conf customer_a \-\- python app.py
 .fi
 .RE
 .PP
-Run once without installing, with uv (until 2.0 is on PyPI, from the repository):
+Run once without installing, with uv
+(until 2.0 is on PyPI, from the repository):
 .PP
 .RS
 .nf
 uvx \-\-from "environment\-store[cli] @ git+https://github.com/mkaufhol/environment\-store@feature/v2" envs ls\-store
+.fi
+.RE
+Deploy with the key in the environment, for example from a Heroku config var or
+a Kubernetes Secret;
+.B run
+removes it before starting the program:
+.PP
+.RS
+.nf
+export ENV_STORE_KEY_CUSTOMER_A="$(cat a.key)"
+envs \-\-noinput run base_conf customer_a \-\- gunicorn app.wsgi
 .fi
 .RE
 .SH SECURITY

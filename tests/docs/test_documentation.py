@@ -9,6 +9,7 @@ from typer.main import get_command
 
 from environment_store.cli._typer import EnvsGroup
 from environment_store.cli.app import app
+from environment_store.core.errors import MissingExtraError
 
 _ROOT: Final = Path(__file__).parents[2]
 _CLI_GUIDE: Final = _ROOT / "docs" / "cli.md"
@@ -28,6 +29,9 @@ _MARKDOWN_LINK: Final = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)
 _HTML_LINK: Final = re.compile(r"""\b(?:href|src)=["']([^"']+)["']""")
 _EXTERNAL: Final = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 _HTML_ANCHOR: Final = re.compile(r"""<a\s+(?:name|id)=["']([^"']+)["']""")
+# A quoted MissingExtraError message, up to the end of its line or of its code span.
+_MISSING_EXTRA: Final = re.compile(r"this feature needs the optional '(\w+)' dependencies: [^`\n]*")
+_MAN_PAGE: Final = _ROOT / "docs" / "man" / "share" / "man" / "man1" / "envs.1"
 
 
 def _registered_commands() -> list[str]:
@@ -147,3 +151,11 @@ def test_python_guide_quotes_no_cli_flags_in_library_errors() -> None:
     assert quoted
     flags = re.compile(r"(?:^|[\s(/'\"])--?[a-z]|\benvs\b|\bkeygen\b")
     assert [line for line in quoted if flags.search(line.split("Error: ", 1)[1])] == []
+
+
+@pytest.mark.parametrize("document", [*_DOCUMENTS, _MAN_PAGE], ids=_document_id)
+def test_quoted_missing_extra_messages_match_the_error(document: Path) -> None:
+    text = document.read_text(encoding="utf-8").replace("\\-", "-")
+    quoted = [(match.group(0), match.group(1)) for match in _MISSING_EXTRA.finditer(text)]
+
+    assert [line for line, extra in quoted if line != str(MissingExtraError(extra))] == []

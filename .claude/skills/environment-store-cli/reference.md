@@ -17,12 +17,15 @@ global option: put it before the command, e.g. envs --noinput ls`.
 | `--version` | Print `environment-store <version>`. |
 | `-h, --help` | Help; also `envs COMMAND -h` / `envs COMMAND --help`. Reads neither the connection nor `.envstore.toml`. |
 
-Environment variables (the only two read; there are none for keys):
+Environment variables:
 
 | Variable | Values |
 |---|---|
 | `ENV_STORE_CONNECTION` | connection string; empty = unset |
 | `ENV_STORE_ORDERED_OVERWRITE` | `true` (last store wins, default) or `false` (first wins); also `1/0/yes/no`, case-insensitive |
+| `ENV_STORE_KEY_<STORE>` | key line (`envstore-key-v1:...`, not base64) or passphrase of an existing encrypted store; `<STORE>` = store name upper-cased, `-` as `_`. One trailing newline stripped. Empty/invalid -> exit 4 (message names the variable, not the value). Ignored for plain and unused stores; never a new key. Two encrypted stores of one command mapping to one set variable (`my-app`, `my_app`) -> exit 1 unless `-k` covers both. `run` removes all `ENV_STORE_KEY_*` from the child |
+
+Key precedence for an existing store: `-k` > `ENV_STORE_KEY_<STORE>` > `[keys]` > prompt (not with `--noinput`) > exit 4.
 
 Merge order precedence: `--first-wins` > `ENV_STORE_ORDERED_OVERWRITE` > `ordered_overwrite` > last wins.
 There is no `--last-wins` flag.
@@ -53,7 +56,8 @@ several stores at its first position with the winning value (`store-a`: `ENV`, `
 
 `run`: everything after the first `--` is the command, executed without a shell. The store
 variables are added to the current environment; variables already set there win unless `-o`.
-On POSIX `envs` replaces itself with the command. Options may come after the positional stores.
+On POSIX `envs` replaces itself with the command. Every `ENV_STORE_KEY_*` variable is removed
+from the command's environment. Options may come after the positional stores.
 
 Encrypted stores need their key for every reading command, including names-only `ls`.
 
@@ -89,7 +93,7 @@ Encrypted stores need their key for every reading command, including names-only 
 | `rm-store NAME` | `-y/--yes`; needs no key |
 | `cp-store SRC DST` / `mv-store SRC DST` | `--to URL` (other backend; DST may equal SRC there), `-k PATH\|-` (source key), and at most one of `--plain`, `--new-key PATH\|-`, `--generate-key PATH`, `--passphrase`. Default: same encryption and secret as the source |
 | `encrypt -s STORE` | exactly one of `--new-key PATH` (existing key file), `--generate-key PATH` (new file), `--passphrase`. Rewrites the store in place; already encrypted -> exit 1, use `rekey`. Does not touch `.envstore.toml` |
-| `rekey -s STORE` | `-k OLD`, plus exactly one of `--new-key`, `--generate-key`, `--passphrase` (can switch keyfile <-> passphrase; passphrases get a new salt) |
+| `rekey -s STORE` | `-k OLD` (else `ENV_STORE_KEY_<STORE>`, `[keys]`, prompt), plus exactly one of `--new-key`, `--generate-key`, `--passphrase` (can switch keyfile <-> passphrase; passphrases get a new salt) |
 | `keygen PATH\|-` | writes a key file (0600, never overwrites) or prints the key with `-`; reads neither the connection nor the project file |
 | `migrate` | SQL only; prints `created schema v1`, `upgraded schema from vN to vM` or `schema is up to date (v1)` |
 

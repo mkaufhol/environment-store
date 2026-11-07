@@ -39,7 +39,11 @@ _SECTIONS: Final = (
     "SEE ALSO",
 )
 _EXIT_CODES: Final = range(6)  # D24
-_ENVIRONMENT: Final = ("ENV_STORE_CONNECTION", "ENV_STORE_ORDERED_OVERWRITE")
+_ENVIRONMENT: Final = (
+    "ENV_STORE_CONNECTION",
+    "ENV_STORE_ORDERED_OVERWRITE",
+    "ENV_STORE_KEY_",
+)  # D53
 _TLDR_MAX_EXAMPLES: Final = 8
 _FONT_ESCAPE: Final = re.compile(r"\\f[BIRP]")
 _SECTION_HEADING: Final = re.compile(r'^\.SH\s+"?([^"\n]+?)"?\s*$', re.MULTILINE)

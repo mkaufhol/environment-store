@@ -133,7 +133,7 @@ Things to know:
 Install the extra first: `uv tool install 'environment-store[cli,postgres]'` for the CLI, `uv add
 'environment-store[postgres]'` for the library, or `pip install 'environment-store[cli,postgres]'`
 (see [Installation](installation.md#optional-extras)). Without it you get
-`Error: this feature needs the optional 'postgres' dependencies: pip install 'environment-store[postgres]'`.
+`Error: this feature needs the optional 'postgres' dependencies: uv add 'environment-store[postgres]' (or pip install 'environment-store[postgres]'); for the CLI tool: uv tool install 'environment-store[cli,postgres]'`.
 
 ```text
 postgresql://user@host:5432/dbname
@@ -323,7 +323,7 @@ stores, never for new ones (see [Encryption and keys](encryption.md) and [Deploy
 |---|---|---|
 | `ENV_STORE_CONNECTION` | the connection string | any connection string; empty counts as unset |
 | `ENV_STORE_ORDERED_OVERWRITE` | merge order when you read several stores | `true` (default): the last store wins. `false`: the first store wins. Also `1/0/yes/no`, any case. Empty counts as unset |
-| `ENV_STORE_KEY_<STORE>` | the key or passphrase of an existing encrypted store, e.g. `ENV_STORE_KEY_CUSTOMER_A` for `customer-a` | the key line (`envstore-key-v1:…`) or the passphrase; one trailing newline removed. `-k` wins over it, it wins over `[keys]`. Empty is an error (exit code 4) |
+| `ENV_STORE_KEY_<STORE>` | the key or passphrase of an existing encrypted store: the store name in upper case, `-` as `_`, e.g. `ENV_STORE_KEY_CUSTOMER_A` for `customer-a` | the key line (`envstore-key-v1:…`, not base64-encoded) or the passphrase; one trailing newline removed. `-k` wins over it, it wins over `[keys]`. Empty or invalid is an error (exit code 4). Ignored for plain stores and for stores the command does not use; never used for new keys; `envs run` removes it from the command's environment |
 
 A typical CI setup:
 
@@ -331,6 +331,10 @@ A typical CI setup:
 export ENV_STORE_CONNECTION='postgresql://ci:…@db.internal/app?schema=team_a'
 envs --noinput run base prod -k prod=/run/secrets/prod.key -- ./deploy.sh
 ```
+
+Where no key file can be shipped, as on Heroku, set `ENV_STORE_KEY_PROD` to the content of the key file instead and
+drop the `-k`. [Deploying with encrypted stores](deployment.md) covers Heroku, Kubernetes, containers and CI, and
+what encryption protects when the key and the connection live in the same configuration.
 
 An invalid value fails every command except `keygen` (exit code 1):
 
@@ -414,7 +418,7 @@ read it. Use `--no-project` to work around it, or fix the file.
 
 `set`, `rm`, `import`, `rekey` and `encrypt` change exactly one store, and you always name it with `-s`. They never
 pick it from the `stores` list. They all use `connection`. `set`, `rm`, `import` and `rekey` also take the store's
-current key from `[keys]`. `encrypt` does not read `[keys]` at all: you give the new key with `--new-key`,
+current key from `[keys]`, unless `-k` or `ENV_STORE_KEY_<STORE>` gives it. `encrypt` does not read `[keys]` at all: you give the new key with `--new-key`,
 `--generate-key` or `--passphrase`.
 
 ```sh
@@ -479,7 +483,8 @@ The same goes for keys: commit the `[keys]` **paths** if you like, but never the
 | Connection | `-c` / `--connection` → `ENV_STORE_CONNECTION` → `connection` in `.envstore.toml` → error |
 | Store list (reading commands) | stores named on the command line → `stores` in `.envstore.toml` → error |
 | Merge order (which value wins) | `--first-wins` → `ENV_STORE_ORDERED_OVERWRITE` → `ordered_overwrite` → last store wins |
-| Key of an encrypted store | `-k` → `[keys]` in `.envstore.toml` → hidden prompt on a terminal → error, exit code 4 |
+| Key of an existing encrypted store | `-k` → `ENV_STORE_KEY_<STORE>` → `[keys]` in `.envstore.toml` → hidden prompt on a terminal → error, exit code 4 |
+| New secret (`create-store -e`, `encrypt`, `rekey`, `cp-store` / `mv-store`) | only the command's own options (`-k`, `--new-key`, `--generate-key`, `--passphrase`); never the environment or `[keys]` |
 
 For example, with `connection = "json://envs"` in the project file, `ENV_STORE_CONNECTION=json://elsewhere` makes
 `envs` use `elsewhere`, and `-c json://other` beats both.
@@ -515,7 +520,10 @@ Error: invalid store name '1abc': use 1 to 63 lowercase letters, digits, '_' or 
 
 Why these rules? Store names become file names, and in nested mode (`--nested`) they become part of shell variable
 names: the store name is upper-cased and `-` becomes `_`, so `customer-a` plus `DB_HOST` gives
-`CUSTOMER_A__DB_HOST`. Because a store name starts with a letter, that is always a valid shell variable name.
+`CUSTOMER_A__DB_HOST`. Because a store name starts with a letter, that is always a valid shell variable name. The same
+rule names a store's key variable: `customer-a` reads its key from `ENV_STORE_KEY_CUSTOMER_A`. So `my-app` and
+`my_app` share `ENV_STORE_KEY_MY_APP`; a command that uses both while they are encrypted and the variable is set stops
+with exit code 1, unless `-k` gives both keys.
 
 Two store names that differ only in `-` versus `_` (`customer-a` and `customer_a`) are both allowed, but they
 produce the same prefix. Loading both in nested dotenv, shell or `run` output is an error as soon as both stores

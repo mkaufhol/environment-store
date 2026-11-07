@@ -45,6 +45,8 @@ Check with `envs --version` (must be `2.0.0.dev0` or later).
    `rm` has no prompt at all: it deletes immediately. `encrypt` rewrites the store in place; the
    only way back is `cp-store --plain` into a new store.
 7. **Never pass a key or passphrase literally.** Keys are files (`-k path`) or stdin (`-k -`).
+   Never write a key into `ENV_STORE_KEY_<STORE>=...` on a command line, and never print, `echo` or
+   `env`-dump `ENV_STORE_KEY_*` variables. If one is already set (deployments, CI), `envs` uses it.
 
 ## Find the connection and the stores
 
@@ -110,7 +112,10 @@ The store's mode decides how the file is read: a key file (`envstore-key-v1:...`
 stores, a UTF-8 passphrase file (one trailing newline stripped) for passphrase stores. Order of key
 sources: `-k` > `ENV_STORE_KEY_<STORE>` (store name upper-cased, `-` as `_`; existing stores only) >
 `[keys]` in the project file > prompt (never with `--noinput`) > exit 4. `envs run` strips
-`ENV_STORE_KEY_*` from the child.
+`ENV_STORE_KEY_*` from the child. The variable holds the key line or passphrase itself (not
+base64); it is ignored for plain stores and unused stores, and never supplies a new key
+(`create-store -e`, `encrypt`, `rekey --new-key`, `cp-store`/`mv-store` new-key options). To check
+whether one is set without printing it: `env | grep -o '^ENV_STORE_KEY_[A-Z0-9_]*'`.
 `ls-store` shows each store's mode: `plain`, `encrypted (keyfile)`, `encrypted (passphrase)`.
 
 Stdin can be used for **one** thing per command: either the value of `set KEY` or `-k -`, not both.
@@ -277,7 +282,7 @@ two stores producing the same flat name (`customer-a` and `customer_a`), is an e
 | 1 | usage, validation, configuration or backend error; missing confirmation under `--noinput` | Read the `Error:` line. No connection: find or ask for one. Missing confirmation: ask the user, then add `-y`. |
 | 2 | store or variable not found (a missing store is reported first) | Read the `Error:` line to tell which. Check names with `ls-store` / `ls`. Do not create the store unless the user asked. |
 | 3 | already exists | Ask before adding `-o` (variables) or choosing another store name. |
-| 4 | key problem: missing, wrong, unreadable, or wrong kind (key file vs passphrase) | Ask the user for the key file path; check the `[keys]` entry. Never guess or generate a new key for an existing store. |
+| 4 | key problem: missing, wrong, unreadable, or wrong kind (key file vs passphrase); also an empty or invalid `ENV_STORE_KEY_<STORE>` | Ask the user for the key file path; check the `[keys]` entry and whether a stale `ENV_STORE_KEY_<STORE>` is set. Never guess or generate a new key for an existing store. |
 | 5 | concurrent modification; nothing was written | Run the same command again. |
 | 126 / 127 | `run` only: command not executable / not found | Fix the command after `--`. |
 | other | `run` passes the command's own exit code through | Treat as the command's result. |
@@ -291,7 +296,9 @@ two stores producing the same flat name (`customer-a` and `customer_a`), is an e
 | `Missing option '-s' / '--store'. writing commands never take the store from the project file's 'stores'; ...` (1) | Add `-s STORE`. |
 | `no value was read from stdin (it was empty); ...` (1) | Pipe the value; for an empty value pipe a newline or use `KEY=`. |
 | `no stores given: name stores, or set 'stores' in .envstore.toml` (1) | Name the stores positionally (`ls base dev`), or check `stores` in `.envstore.toml`. |
-| `store 'prod' is encrypted and no key or passphrase was given: pass it with -k prod=<path> ...` (4) | Add `-k prod=PATH` (or `-k PATH` with one store). |
+| `store 'prod' is encrypted and no key or passphrase was given: pass it with -k prod=<path> ..., or set ENV_STORE_KEY_PROD` (4) | Add `-k prod=PATH` (or `-k PATH` with one store). Do not set the variable yourself. |
+| `ENV_STORE_KEY_PROD, the key or passphrase of store 'prod', is empty` / `ENV_STORE_KEY_PROD does not hold a usable key for store 'prod': ...` (4) | The variable in the environment is broken; tell the user. `-k PATH` overrides it for one command. |
+| `encrypted stores 'my-app', 'my_app' all take their key from ENV_STORE_KEY_MY_APP, ...` (1) | Pass `-k STORE=PATH` for both stores, or ask the user to unset the variable. |
 | `-k <path> without a store name works with exactly one store ...` (1) | Use `-k STORE=PATH` per encrypted store. |
 | `cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified` (4) | Wrong key file; ask the user. |
 | `store 'customer-a' uses a passphrase, but a key file was given: pass the passphrase file with -k ...` (4) | Point `-k` at the passphrase file. |
@@ -306,6 +313,6 @@ two stores producing the same flat name (`customer-a` and `customer_a`), is an e
 | `Delete store 'dev'? Confirm with -y/--yes (no terminal to ask, or --noinput)` (1) | Ask the user; rerun with `-y` only after a yes. |
 | `output file '.env' already exists; use --force to replace it` (1) | Ask, then add `--force`, or pick another path. |
 | `stdin can be used only once per command ...` (1) | Put the key in a file and use `-k PATH`. |
-| `this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'` | Install the named extra (`cli`, `postgres`, `tui`), after asking. With uv, reinstall with the extra added: `uv tool install 'environment-store[cli,postgres]'`; in a uv project `uv add 'environment-store[postgres]'`. |
+| `this feature needs the optional 'postgres' dependencies: uv add 'environment-store[postgres]' (or pip install 'environment-store[postgres]'); for the CLI tool: uv tool install 'environment-store[cli,postgres]'` | Install the named extra (`cli`, `postgres`, `tui`), after asking, with the command that matches the install: `uv tool install` for the `envs` tool (keep the extras it already has), `uv add` or `pip install` in a project. |
 
 `envs tui` is interactive and refused under `--noinput`; agents should not use it.

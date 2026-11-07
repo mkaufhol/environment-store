@@ -33,10 +33,10 @@ pip install 'environment-store[cli,tui]'
 Without Textual, `envs tui` stops with exit code 1 and tells you what to install:
 
 ```
-Error: this feature needs the optional 'tui' dependencies: pip install 'environment-store[tui]'
+Error: this feature needs the optional 'tui' dependencies: uv add 'environment-store[tui]' (or pip install 'environment-store[tui]'); for the CLI tool: uv tool install 'environment-store[cli,tui]'
 ```
 
-With uv, install the tool again with `tui` in the list of extras. See [Installation](installation.md#optional-extras) for every extra.
+For the `envs` tool, the last command reinstalls it with `tui` added; list any other extras it already has, too. See [Installation](installation.md#optional-extras) for every extra.
 
 ## Start the TUI
 

@@ -45,8 +45,8 @@ pip install 'environment-store[postgres]'
 [Installation](installation.md#optional-extras) explains every extra and the pip equivalents.
 
 If you open a `postgresql://` connection without the `postgres` extra, you get a
-`MissingExtraError` that tells you the `pip install` command to run; with uv, run
-`uv add 'environment-store[postgres]'` instead.
+`MissingExtraError` whose message names the command to run: `uv add 'environment-store[postgres]'`,
+or `pip install 'environment-store[postgres]'` with pip.
 
 ## Concepts in two minutes
 
@@ -182,7 +182,7 @@ print(os.environ["DB_HOST"])  # dev.example.com
 |---|---|
 | Connection | `connection=` argument, then `ENV_STORE_CONNECTION`, then `connection` in `.envstore.toml` |
 | Stores | the positional arguments, then `stores` in `.envstore.toml` |
-| Keys | `keys=` argument, then `[keys]` in `.envstore.toml`, then a hidden prompt (terminal only) |
+| Keys | `keys=` argument, then `ENV_STORE_KEY_<STORE>`, then `[keys]` in `.envstore.toml`, then a hidden prompt (terminal only) |
 | Merge order | `first_wins=True`, then `ENV_STORE_ORDERED_OVERWRITE`, then `ordered_overwrite` in `.envstore.toml`, then last wins |
 
 For the merge order setting, `true` (the default) means the last store wins and `false` means
@@ -539,11 +539,41 @@ Text that is not key text raises `InvalidKeyFileError`; the message never contai
 The library never stores or caches keys, and `KeyMaterial`, `Passphrase` and `Source` hide them
 in `repr()` (`Passphrase(<redacted>)`, `Source(name='prod')`).
 
-**The key variable.** Without an explicit key, `EnvironmentStore` methods, `load()` and
-`environment_store.load()` read an existing store's key or passphrase from `ENV_STORE_KEY_<STORE>`
-(`ENV_STORE_KEY_CUSTOMER_A` for `customer-a`), before `[keys]` and the prompt. An explicit
-`key=`, `keys=` or `Source(key=…)` wins over it, and new keys never come from it. See
-[Deployment](deployment.md).
+**The key variable.** Without an explicit key, `EnvironmentStore` methods, `es.load()` and
+`environment_store.load()` read an existing store's key or passphrase from the environment
+variable `ENV_STORE_KEY_<STORE>`: the store name in upper case with `-` turned into `_`
+(`ENV_STORE_KEY_PROD` for `prod`, `ENV_STORE_KEY_CUSTOMER_A` for `customer-a`). It holds the key
+line (`envstore-key-v1:…`) or the passphrase, as a key file or passphrase file would. This is
+meant for deployments that cannot ship a key file, such as Heroku config vars; see
+[Deploying with encrypted stores](deployment.md).
+
+| Key of an existing store, highest priority first | `EnvironmentStore` methods, `es.load()` | `environment_store.load()` |
+|---|---|---|
+| 1. explicit | `key=`, `Source(name, key=…)`, `rekey_store(old=…)` | `keys={"prod": …}` |
+| 2. environment | `ENV_STORE_KEY_<STORE>` | `ENV_STORE_KEY_<STORE>` |
+| 3. project file | — | `[keys]` in `.envstore.toml` |
+| 4. prompt | — (`KeyRequiredError`) | hidden prompt, unless `noinput=True` or no terminal |
+
+`keys=` or `key=` versus the variable: pass the key explicitly when your code already has it (a
+file path, or text from a secret manager through `parse_key_text()`); rely on the variable when
+the platform provides it. An explicit key always wins, so a `keys=` entry hides a wrong variable.
+
+- An empty or invalid value raises a key error (`KeySourceError`, `InvalidKeyFileError`, or
+  `KeyModeMismatchError` for key text in a passphrase store's variable), and a key that does not
+  fit the store raises `DecryptionError`. Messages name the variable, never its
+  value.
+- The variable of a plaintext store, and of a store that is not used, is ignored.
+- Two encrypted stores of one call that share a variable (`my-app` and `my_app`) raise
+  `ValidationError` while it is set, unless an explicit key is given for both.
+- New keys never come from it: `create_store(encrypt=True, key=…)`, `encrypt_store`, the `new=` of
+  `rekey_store` and the `encryption=` of `copy_store` / `move_store` take only what you pass.
+  `rekey_store(store, new=…)` without `old=` takes the old key from the variable.
+- `EnvironmentStore` looks the variable up in `os.environ`, or in the mapping you pass as
+  `environ=` (`EnvironmentStore(connection, environ={...})`, `from_env(environ=...)`);
+  `es.environment_secret("prod")` returns the secret it finds there, or `None`.
+- The library never removes the variable from `os.environ`. If your process starts other
+  programs, drop it after loading: `os.environ.pop("ENV_STORE_KEY_PROD", None)`. (`envs run`
+  removes every `ENV_STORE_KEY_*` variable for you.)
 
 **Prompting.** When `environment_store.load()` meets an encrypted store without a key, it asks
 for it with a hidden prompt, but only if stdin is a terminal and `noinput` is `False`. Otherwise
@@ -561,7 +591,13 @@ environment_store.load(
 ```
 
 Most CI systems can write a secret to a file and give you its path. If yours only offers the
-secret as an environment variable, turn the text into a key with `parse_secret()`, which reads it
+secret as an environment variable, name it `ENV_STORE_KEY_PROD` and leave out `keys=`:
+
+```python
+environment_store.load("base", "prod", noinput=True)  # key from ENV_STORE_KEY_PROD
+```
+
+For a secret under another name, turn the text into a key with `parse_secret()`, which reads it
 the way the store expects (key file text or passphrase):
 
 ```python
@@ -701,16 +737,17 @@ Everything below is importable from `environment_store`. Signatures are taken fr
 
 ### `EnvironmentStore`
 
-`EnvironmentStore(connection: str, *, setup: SetupMode = SetupMode.AUTO, clock=..., kdf_params_factory=None, opener=...)`
+`EnvironmentStore(connection: str, *, setup: SetupMode = SetupMode.AUTO, clock=..., kdf_params_factory=None, opener=..., environ: Mapping[str, str] | None = None)`
 
 Opens the backend immediately. Use it as a context manager or call `close()`. `clock`,
 `kdf_params_factory` and `opener` exist for testing; leave them at their defaults.
 `setup=SetupMode.NONE` skips the database check on open; the first data operation then does it.
+`environ` is where `ENV_STORE_KEY_<STORE>` is looked up; `None` means `os.environ`.
 
 | Method | Description |
 |---|---|
-| `from_env(*, environ: Mapping[str, str] \| None = None, setup=SetupMode.AUTO, ...) -> Self` (classmethod) | Open the backend in `ENV_STORE_CONNECTION` (from `environ`, default `os.environ`). |
-| `from_settings(settings, *, setup=SetupMode.AUTO, ...) -> Self` (classmethod) | Open from resolved settings; used internally by `load()` and the CLI. |
+| `from_env(*, environ: Mapping[str, str] \| None = None, setup=SetupMode.AUTO, ...) -> Self` (classmethod) | Open the backend in `ENV_STORE_CONNECTION` (from `environ`, default `os.environ`, which is also where `ENV_STORE_KEY_<STORE>` is looked up). |
+| `from_settings(settings, *, setup=SetupMode.AUTO, ..., environ=None) -> Self` (classmethod) | Open from resolved settings; used internally by `load()` and the CLI. |
 | `close() -> None` | Close the backend; safe to call twice. |
 | `closed` (property) `-> bool` | Whether `close()` was called. |
 | `list_stores() -> list[StoreInfo]` | All stores, sorted by name; needs no key. |
@@ -725,8 +762,9 @@ Opens the backend immediately. Use it as a context manager or call `close()`. `c
 | `set_many(store: str, values: Mapping[str, str], *, key: KeyInput \| None = None, overwrite: bool = False) -> None` | Set several variables in one write. |
 | `delete(store: str, names: Collection[str], *, key: KeyInput \| None = None) -> None` | Delete variables in one write. |
 | `encrypt_store(store: str, *, key: KeyInput) -> None` | Encrypt a plaintext store; there is no way back. |
-| `rekey_store(store: str, *, old: KeyInput, new: KeyInput) -> None` | Re-encrypt with a new secret. |
+| `rekey_store(store: str, *, old: KeyInput \| None = None, new: KeyInput) -> None` | Re-encrypt with a new secret; `old=None` takes the old key from `ENV_STORE_KEY_<STORE>`. |
 | `secret_for(store: str, key: KeyInput) -> Secret` | Turn a key input into the store's secret (reads a `Path`). |
+| `environment_secret(store: str) -> Secret \| None` | The store's secret from `ENV_STORE_KEY_<STORE>`, or `None` if the variable is unset or the store is plaintext. |
 | `parse_secret(store: str, text: str) -> Secret` | Interpret key file text or a passphrase by the store's key mode. |
 | `load(sources: Sequence[Source \| str], *, order: MergeOrder = MergeOrder.LAST_WINS) -> Environment` | Read stores for merging; does not touch `os.environ`. |
 | `migrate() -> MigrationReport` | Create or upgrade a SQL schema. |

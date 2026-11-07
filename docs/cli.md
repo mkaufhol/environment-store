@@ -70,7 +70,7 @@ $ envs --version
 environment-store 2.0.0.dev0
 ```
 
-`envs` and `environment-store` are the same program, and `python -m environment_store.cli` works too. If an extra is missing, the command tells you which one to install, for example `Error: this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'`. The hint names the pip command. With uv, install the tool again with the extra added, for example `uv tool install 'environment-store[cli,postgres]'` when `postgres` is missing.
+`envs` and `environment-store` are the same program, and `python -m environment_store.cli` works too. If an extra is missing, the command tells you which one to install, for example `Error: this feature needs the optional 'postgres' dependencies: uv add 'environment-store[postgres]' (or pip install 'environment-store[postgres]'); for the CLI tool: uv tool install 'environment-store[cli,postgres]'`. For the `envs` tool, use the last command: it reinstalls the tool with the extra added (list any other extras the tool already has, too).
 
 `envs -h` is short for `envs --help`, on `envs` itself and on every command (`envs export -h`). The same reference is also available as a man page and a tldr page; see [Reference pages](#reference-pages-man-and-tldr).
 
@@ -292,9 +292,10 @@ Every option that takes a key, `-k`, accepts a path to a key file or a passphras
 When a command needs a key, it looks in this order:
 
 1. `-k` on the command line.
-2. The `[keys]` table of the project file.
-3. A hidden prompt, `Key or passphrase for store 'prod': `, when you are at a terminal. At the prompt you type the key line or the passphrase itself.
-4. Otherwise the command stops with exit code 4:
+2. The environment variable `ENV_STORE_KEY_<STORE>`: the store name in upper case with `-` turned into `_` (`ENV_STORE_KEY_CUSTOMER_A` for `customer-a`), holding the key line or the passphrase itself. Only for existing stores; for deployments where no key file can be shipped (see [Deploying with encrypted stores](deployment.md)).
+3. The `[keys]` table of the project file.
+4. A hidden prompt, `Key or passphrase for store 'prod': `, when you are at a terminal. At the prompt you type the key line or the passphrase itself.
+5. Otherwise the command stops with exit code 4:
 
 ```console
 $ envs ls -v prod
@@ -330,11 +331,11 @@ Only the text before the first `=` that is a valid store name counts as a store,
 | `cp-store`, `mv-store` | the source store's key |
 | `rekey` | the old key and a new secret |
 | `encrypt` | a new secret |
-| `tui` | the key from `[keys]` in the project file, or typed in the Unlock dialog when you open an encrypted store |
+| `tui` | the key from `ENV_STORE_KEY_<STORE>` or `[keys]` in the project file, or typed in the Unlock dialog when you open an encrypted store |
 
 #### Choosing a new secret
 
-`create-store -e`, `encrypt`, `rekey`, `cp-store` and `mv-store` can set a new secret. Give exactly one of:
+`create-store -e`, `encrypt`, `rekey`, `cp-store` and `mv-store` can set a new secret. A new secret never comes from `ENV_STORE_KEY_<STORE>` or `[keys]`. Give exactly one of:
 
 | Option | Meaning |
 |---|---|
@@ -461,7 +462,7 @@ Things to know:
   ```
 
 - **Strict.** Unknown keys and invalid values are errors, for example `unknown key 'foo' (allowed: connection, keys, ordered_overwrite, stores)`.
-- **Writing commands never take the store from the file.** `set`, `rm`, `import`, `rekey` and `encrypt` always need `-s STORE`. They do use `connection` and `[keys]`.
+- **Writing commands never take the store from the file.** `set`, `rm`, `import`, `rekey` and `encrypt` always need `-s STORE`. They do use `connection` and `[keys]` (after `-k` and `ENV_STORE_KEY_<STORE>`).
 - **`--no-project`** ignores the file completely:
 
   ```console
@@ -1143,7 +1144,7 @@ envs rekey -s STORE [-k PATH|-] (--new-key PATH|- | --generate-key PATH | --pass
 | Option | Meaning |
 |---|---|
 | `-s`, `--store STORE` | The store to re-encrypt (required). |
-| `-k`, `--key PATH\|-` | The current key or passphrase file. |
+| `-k`, `--key PATH\|-` | The current key or passphrase file. Without it, the current key comes from `ENV_STORE_KEY_<STORE>`, `[keys]` or the prompt. |
 | `--new-key PATH\|-` | Switch to an existing key file. |
 | `--generate-key PATH` | Switch to a new key file written to `PATH`. |
 | `--passphrase` | Switch to a passphrase (a new salt is used every time). |
@@ -1405,6 +1406,8 @@ db.prod.internal 7
 
 The command prints the length of the password, not the password, so the value never reaches the CI log. For a passphrase store, the secret holds the passphrase; the command is the same.
 
+Or name the secret `ENV_STORE_KEY_PROD`: `envs` then reads it without `-k`, and `envs run` removes it from the environment of the command it starts. This also works with several encrypted stores, one variable each. See [Deploying with encrypted stores](deployment.md#other-containers-and-ci).
+
 GitHub Actions example:
 
 ```yaml
@@ -1443,7 +1446,7 @@ $ envs ls prod -k prod.key
 Error: cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified
 ```
 
-Then update `[keys]` in `.envstore.toml` and the CI secrets, and delete the old key file. To switch to a passphrase instead, use `--passphrase`; to switch back to a key file, use `--new-key` or `--generate-key`.
+Then update `[keys]` in `.envstore.toml`, the CI secrets and every `ENV_STORE_KEY_PROD` of your deployments ([rotation in a deployment](deployment.md#security-notes)), and delete the old key file. To switch to a passphrase instead, use `--passphrase`; to switch back to a key file, use `--new-key` or `--generate-key`.
 
 ### Encrypt an existing plain store
 

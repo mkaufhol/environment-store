@@ -334,10 +334,16 @@ DB_PASSWORD=hunter2
   is set, unless `-k` gives the key of both.
 - New keys never come from the environment (`create-store -e`, `encrypt`, `rekey --new-key`, the new-key options of
   `cp-store` / `mv-store`). The old key of `rekey` may.
-- `envs run` removes every `ENV_STORE_KEY_*` variable from the command it starts.
+- `envs run` removes every `ENV_STORE_KEY_*` variable from the command it starts. The Python library leaves
+  `os.environ` alone apart from the variables it loads, so the key variable stays in your process.
+- The key line is already plain text: put the content of the key file into the variable as it is, not
+  base64-encoded.
+- The TUI and the Python library (`EnvironmentStore` methods, `load()`) read the variable too.
 
-[Deployment](deployment.md) shows Heroku and Kubernetes setups, including the safer way of mounting the key as a
-file.
+Anyone who can read the deployment's configuration then has the key, and with access to the backend every value:
+encryption still protects the backend and its backups, but not against them. A key file mounted from a secret and
+passed with `-k` or `[keys]` keeps the key out of the process environment.
+[Deploying with encrypted stores](deployment.md) shows Heroku, Kubernetes, container and CI setups, both ways.
 
 ### The prompt, and `--noinput` for scripts and CI
 
@@ -366,6 +372,9 @@ In CI, put the key file in your CI system's secret files, or pipe it from a secr
 ```sh
 printf '%s\n' "$PROD_ENVS_KEY" | envs --noinput run base prod -k prod=- -- ./deploy.sh
 ```
+
+Or name the secret variable `ENV_STORE_KEY_PROD`, and `envs --noinput run base prod -- ./deploy.sh` needs no `-k`
+([above](#from-an-environment-variable-env_store_key_store)).
 
 ## Write secrets safely
 
@@ -432,8 +441,8 @@ the values. If the secrets were exposed in plain form, rotate them at their sour
 
 ### Rotate a key: `envs rekey`
 
-`rekey` re-encrypts a store with a new secret. It needs the old key (`-k`, `[keys]` or the prompt) and one new
-secret:
+`rekey` re-encrypts a store with a new secret. It needs the old key (`-k`, `ENV_STORE_KEY_<STORE>`, `[keys]` or the
+prompt) and one new secret, which never comes from the environment or `[keys]`:
 
 ```console
 $ envs rekey -s dev -k dev.key --generate-key dev-new.key
@@ -452,7 +461,8 @@ Error: give the new secret: --new-key, --generate-key or --passphrase
   with `-k dev.pass`.
 - A passphrase always gets a new salt.
 - The old key stops working immediately, as the `ls dev -k dev.key` line shows.
-  Update `[keys]` and every place that holds the old key (CI secrets, password manager) right after rekeying.
+  Update `[keys]` and every place that holds the old key (CI secrets, `ENV_STORE_KEY_<STORE>` in deployments,
+  password manager) right after rekeying; [Deployment](deployment.md#security-notes) shows the order.
 - `rekey` on a plain store points you to `envs encrypt`.
 
 ### Copy or move an encrypted store: `cp-store`, `mv-store`
@@ -521,6 +531,7 @@ Note that `ls` needs the key even without `-v`: the variable names are encrypted
 | no key given, no prompt possible | `store 'prod' is encrypted and no key or passphrase was given: …` | 4 |
 | wrong key or passphrase, or tampered data | `cannot decrypt store 'dev': wrong key or passphrase, or the stored data was modified` | 4 |
 | key variable empty | `ENV_STORE_KEY_PROD, the key or passphrase of store 'prod', is empty` | 4 |
+| key variable of a key file store holds no key line (for example base64-encoded) | `ENV_STORE_KEY_PROD does not hold a usable key for store 'prod': not a valid key file: …` | 4 |
 | key text in the key variable of a passphrase store | `ENV_STORE_KEY_DEV holds key text, but store 'dev' uses a passphrase` | 4 |
 | two encrypted stores share a set key variable | `encrypted stores 'my-app', 'my_app' all take their key from ENV_STORE_KEY_MY_APP, …` | 1 |
 | key file for a passphrase store | `store 'dev' uses a passphrase, but a key file was given: pass the passphrase file with -k (or -k - for stdin), or switch the store to the key file with 'envs rekey -s dev --new-key <path>'` | 4 |

@@ -115,23 +115,26 @@ name, so to add one, run the install again with the full list, for example
 `uv tool install 'environment-store[cli,postgres,tui]'`. With `uv add`, adding the package again with more extras
 updates the entry in `pyproject.toml`.
 
-**A missing extra** gives a clear message and exit code 1 instead of an import error. With only the core package
-installed, every `envs` call stops at the missing `cli` extra:
+**A missing extra** gives a clear message and exit code 1 instead of an import error. The message leads with the
+uv command for a project, names pip as the alternative, and ends with the command that installs the `envs` tool
+with the extra. With only the core package installed, every `envs` call stops at the missing `cli` extra:
 
 ```console
 $ envs --version
-Error: this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'
+Error: this feature needs the optional 'cli' dependencies: uv add 'environment-store[cli]' (or pip install 'environment-store[cli]'); for the CLI tool: uv tool install 'environment-store[cli]'
 ```
 
 With `cli` installed but not `postgres`, a `postgresql://` connection names the `postgres` extra:
 
 ```console
 $ envs -c postgresql://localhost/app ls-store
-Error: this feature needs the optional 'postgres' dependencies: pip install 'environment-store[postgres]'
+Error: this feature needs the optional 'postgres' dependencies: uv add 'environment-store[postgres]' (or pip install 'environment-store[postgres]'); for the CLI tool: uv tool install 'environment-store[cli,postgres]'
 ```
 
-The hint always names the pip command. With uv, install the tool again with the extra added
-(`uv tool install 'environment-store[cli,postgres]'`), or `uv add 'environment-store[postgres]'` in a project.
+Pick the command that matches how you installed: `uv tool install` for the `envs` tool (it always lists `cli`, since
+the tool needs it), `uv add` or `pip install` for the library in your project or virtual environment. If the tool
+already has other extras, list them too, because `uv tool install` replaces the extras (see above). Until 2.0 is on
+PyPI, append the repository URL as shown in [Install from the repository](#install-from-the-repository-the-only-way-today).
 `envs tui` without `tui` gives the same message for `'tui'`. In Python, the error is `MissingExtraError`, whose
 `extra` attribute names the missing extra (`'postgres'`).
 
