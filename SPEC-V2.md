@@ -1,6 +1,6 @@
 # Environment Store V2 — Specification
 
-**Status:** Refined. All questions and proposals are decided (D1–D53). Ready for implementation planning.
+**Status:** Refined. All questions and proposals are decided (D1–D57). Ready for implementation planning.
 **Scope:** Complete rebuild. No backward compatibility with V1 (0.1.x).
 
 > **How to read this document**
@@ -540,6 +540,7 @@ envs run -- python app.py
 | `encrypt -s <store>` | Turn a plaintext store into an encrypted one *(D4)* |
 | `migrate` | Create / upgrade the SQL schema *(D11)* |
 | `tui` | Start the TUI (needs the `tui` extra) *(D15)* |
+| `completion <shell>` | Print the shell completion script for bash, zsh or fish *(D54)* |
 
 Dropped from V1: `children`, `levels`, `delete-level` (hierarchy concepts), `export-dotenv` (merged into `export`),
 `transfer` (replaced by `cp-store` / `mv-store`). Rejected for V2: `decrypt` (D4).
@@ -761,6 +762,53 @@ Starts the TUI. Needs `environment-store[tui]`; without it, the command fails wi
 to disk. Every screen's footer lists the keys that work there (including Enter to open or edit), and dialogs show
 their own keys.
 
+**Store management** *(decided, D55)*: the stores screen can create and remove stores, like `create-store` and
+`rm-store`.
+- `a` opens a **create store** dialog: the name (validated as you type, D27/D40) and the encryption, with every option of
+  `create-store`: none; a newly generated key file at a path you choose (`--generate-key`; an existing file is never
+  overwritten, the file is `0600`); an existing key file (`-k`); a passphrase typed twice (`--passphrase`). A new
+  passphrase or generated key shows the D45 reminder that envs does not save it.
+- `d` opens a **remove store** dialog that says the store and all its variables are deleted and that this cannot be
+  undone, and only removes it after the store's name is typed exactly. Like `rm-store` it needs no key (D21).
+
+**Export** *(decided, D56)*: `x` on the stores screen exports to a file, based on `export`.
+1. Choose stores in order: each selected store gets its position number; the order is the load order (§2.2, D52).
+2. Choose the options of `export`: format (dotenv, JSON, TOML; preselected from the path's extension once a path is
+   typed, like `-t`), `--nested`, `--first-wins`.
+3. Confirm, then enter the output path. An existing file is only replaced after a confirmation (`--force`). Keys of
+   encrypted stores come from the usual sources (D53, `[keys]`) or the unlock dialog. Files are written with mode
+   `0600` (PD 4).
+
+**Path completion** *(decided, D57)*: every path input in the TUI (export path, key file paths in the create and
+unlock dialogs) suggests completions of existing files and directories as you type; `Tab` (or `→`) accepts the
+suggestion. `~` is expanded, directories end in `/`.
+
+### 6.15 `completion <shell>` *(D54)*
+
+Prints the completion script for `bash`, `zsh` or `fish` to stdout. envs never edits shell configuration files; the
+user adds one line:
+
+```bash
+eval "$(envs completion zsh)"     # ~/.zshrc
+eval "$(envs completion bash)"    # ~/.bashrc
+envs completion fish > ~/.config/fish/completions/envs.fish
+```
+
+What completes:
+- **Commands** and their options (and option values with a fixed set, e.g. `-t dotenv|json|toml`, the shell names).
+- **Stores**: existing store names wherever an existing store is expected (positional stores of `ls`, `get`,
+  `export`, `export-shell`, `run`; `-s`; the sources of `rm-store`, `cp-store`, `mv-store`; `-k store=…`), never where
+  a new name is expected (`create-store`, the `cp-store` / `mv-store` target). The backend comes from the command
+  line being completed (`-c`), `ENV_STORE_CONNECTION` or the project file, as for the command itself.
+- **Variables** of plaintext stores for `get`, `rm` and `set`. Encrypted stores never complete variable names (that
+  would need the key).
+- **Paths** for every path option or argument (`-k`, `-f`, `--new-key`, `keygen <path>`, …), by the shell's own file
+  completion.
+
+Completion never prompts, never prints to stderr, never writes or sets anything up (no file, directory or schema is
+created), and completes nothing when the backend is missing, unreachable, refused or slow (short connection
+timeout). The `completion` command, like `keygen`, reads neither the connection nor the project file (D44).
+
 ---
 
 ## 7. Extras and architecture
@@ -941,3 +989,7 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D51 | 2026-11-07 | Extras explained | The installation docs explain every extra in a table: what it adds, dependencies, which commands need it, uv and pip install commands. | usability test |
 | D52 | 2026-11-07 | Merged output order | Variables are output in store load order; within a store sorted by name; a variable shared by several stores keeps its first position and takes the merge order's value. Applies to `ls`, `export`, `export-shell`, `run` and the library. Amends PD 13. | usability test |
 | D53 | 2026-11-07 | Key from the environment | Amends D3: an existing store's key or passphrase may come from `ENV_STORE_KEY_<STORE>` (store name in SCREAMING_SNAKE_CASE). Precedence `-k`/`key=` > variable > `[keys]` > prompt; colliding names are an error; new keys never come from it; `run` strips `ENV_STORE_KEY_*` from the child. For Heroku/Kubernetes deployments. | deployment question |
+| D54 | 2026-11-07 | Shell completion | `envs completion bash\|zsh\|fish` prints the script; envs never edits dotfiles. Completes commands, options, existing store names, variable names of plaintext stores and paths; silent, read-only, no prompts, nothing when the backend is unavailable. | #43 |
+| D55 | 2026-11-07 | TUI store management | Create (all `create-store` encryption options) and remove stores in the TUI; removing needs the store's name typed exactly. | #44 |
+| D56 | 2026-11-07 | TUI export | Choose stores in order, export options (format, nested, first-wins), confirm, then the path; replacing a file needs confirmation; files `0600`. | #44 |
+| D57 | 2026-11-07 | TUI path completion | Path inputs suggest existing files and directories; `Tab`/`→` accepts; `~` expanded. | #44 |
