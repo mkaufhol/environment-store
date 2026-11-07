@@ -68,7 +68,7 @@ def test_an_empty_backend_shows_how_to_create_a_store(store: EnvironmentStore) -
     async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
         hint = app.screen.query_one("#empty", Static)
         assert hint.display
-        assert str(hint.content) == "No stores yet. Create one with envs create-store NAME"
+        assert str(hint.content) == "No stores yet. Press a to create one"
 
     run_app(store, scenario)
 

@@ -14,7 +14,14 @@ from environment_store.tui.screens.unlock import UnlockScreen
 from environment_store.tui.screens.variables import VariablesScreen
 from tests.tui.pilot import footer, run_app
 
-_STORES_KEYS = [("enter", "Open"), ("r", "Reload"), ("q", "Quit")]
+_STORES_KEYS = [
+    ("enter", "Open"),
+    ("a", "Add"),
+    ("d", "Remove"),
+    ("x", "Export"),
+    ("r", "Reload"),
+    ("q", "Quit"),
+]
 _VARIABLES_KEYS = [
     ("enter", "Edit"),
     ("v", "Show / hide values"),
@@ -73,7 +80,7 @@ def test_the_unlock_dialog_shows_its_own_keys(store: EnvironmentStore) -> None:
     async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
         await _press(pilot, "enter")
         assert isinstance(app.screen, UnlockScreen)
-        assert footer(app) == [("enter", "Unlock"), ("escape", "Cancel")]
+        assert footer(app) == [("enter", "Unlock"), ("tab", "Complete path"), ("escape", "Cancel")]
 
     run_app(store, scenario)
 

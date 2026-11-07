@@ -18,10 +18,12 @@ class FakeRunTui:
 
     calls: list[tuple[EnvironmentStore, dict[str, Path]]]
     project_files: list[Path | None]
+    ordered_overwrites: list[bool]
 
     def __init__(self) -> None:
         self.calls = []
         self.project_files = []
+        self.ordered_overwrites = []
 
     def __call__(
         self,
@@ -29,10 +31,12 @@ class FakeRunTui:
         *,
         key_paths: Mapping[str, Path],
         project_file: Path | None = None,
+        ordered_overwrite: bool = True,
     ) -> None:
         assert not store.closed
         self.calls.append((store, dict(key_paths)))
         self.project_files.append(project_file)
+        self.ordered_overwrites.append(ordered_overwrite)
 
 
 @pytest.fixture
@@ -69,6 +73,21 @@ def test_tui_passes_the_project_file_keys(cli_json: CliHarness, run_tui: FakeRun
     [(_, key_paths)] = run_tui.calls
     assert key_paths == {"a": cli_json.root / "a.key"}
     assert run_tui.project_files == [project]
+
+
+def test_tui_passes_the_configured_merge_order(cli_json: CliHarness, run_tui: FakeRunTui) -> None:
+    cli_json.project_file("ordered_overwrite = false\n")
+
+    result = cli_json.invoke("tui", stdin_tty=True, stdout_tty=True)
+
+    assert_exit(result, 0)
+    assert run_tui.ordered_overwrites == [False]
+
+
+def test_tui_merge_order_defaults_to_last_wins(cli_json: CliHarness, run_tui: FakeRunTui) -> None:
+    cli_json.invoke("tui", stdin_tty=True, stdout_tty=True)
+
+    assert run_tui.ordered_overwrites == [True]
 
 
 def test_tui_ignores_the_project_file_keys_with_no_project(

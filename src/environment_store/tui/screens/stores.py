@@ -1,6 +1,7 @@
 """`StoresScreen`: every store and whether it is encrypted; enter opens one (PD 29).
 
-`q` quits the app, here and on the variables screen; `escape` goes back from there.
+`a` creates a store and `d` removes the selected one (D55), `x` exports stores to a file
+(D56). `q` quits the app, here and on the variables screen; `escape` goes back from there.
 
 An encrypted store is opened without asking with the key from `ENV_STORE_KEY_<STORE>` (D53),
 else with the project file's key when it names one (PD 5); otherwise, or when that key does not
@@ -18,16 +19,19 @@ from textual.widgets.data_table import RowKey
 
 from environment_store.core.errors import EnvironmentStoreError
 from environment_store.core.models import StoreInfo
-from environment_store.core.names import key_variable
-from environment_store.tui.messages import message_for, notify_error, notify_problem
+from environment_store.tui.exporting import ExportFlow
+from environment_store.tui.messages import notify_done, notify_error, notify_reminder
+from environment_store.tui.screens.create import Created, CreateStoreScreen
+from environment_store.tui.screens.remove import RemoveStoreScreen
 from environment_store.tui.screens.unlock import UnlockScreen, describe_encryption
 from environment_store.tui.screens.variables import VariablesScreen
 from environment_store.tui.session import OpenedStore, StoreSession
+from environment_store.tui.unlocking import open_without_asking
 
 __all__ = ["EMPTY_HINT", "StoresScreen"]
 
-EMPTY_HINT: Final = "No stores yet. Create one with envs create-store NAME"
-"""Shown instead of an empty table: the TUI does not create stores (D31)."""
+EMPTY_HINT: Final = "No stores yet. Press a to create one"
+"""Shown instead of an empty table."""
 
 
 class _StoreTable(DataTable[Text]):
@@ -40,6 +44,9 @@ class StoresScreen(Screen[None]):
     """The list of stores, the TUI's first screen."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("a", "create", "Add"),
+        Binding("d", "remove", "Remove"),
+        Binding("x", "export", "Export"),
         Binding("r", "reload", "Reload"),
         Binding("q", "app.quit", "Quit"),  # quits the app on every screen, not only here
     ]
@@ -88,6 +95,35 @@ class StoresScreen(Screen[None]):
             for info in stores
         }
 
+    def action_create(self) -> None:
+        """Ask for a new store and create it (D55)."""
+        existing = frozenset(info.name for info in self._stores.values())
+        self.app.push_screen(CreateStoreScreen(self._session, existing=existing), self._created)
+
+    def action_remove(self) -> None:
+        """Remove the selected store after its name is typed (D55, D21)."""
+        info = self._selected()
+        if info is None:
+            return
+        name = info.name
+
+        def answered(remove: bool | None) -> None:  # noqa: FBT001 - textual passes the result positionally
+            if not remove:
+                return
+            try:
+                self._session.delete_store(name)
+            except EnvironmentStoreError as error:
+                notify_error(self.app, error)
+            else:
+                notify_done(self.app, f"removed store {name!r}")
+            self.action_reload()
+
+        self.app.push_screen(RemoveStoreScreen(name), answered)
+
+    def action_export(self) -> None:
+        """Export stores to a file (D56)."""
+        ExportFlow(self.app, self._session, list(self._stores.values())).start()
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Open the selected store."""
         self.open_store(self._stores[event.row_key])
@@ -99,7 +135,7 @@ class StoresScreen(Screen[None]):
             info: The store's listing entry.
         """
         try:
-            opened = self._open_without_asking(info)
+            opened = open_without_asking(self.app, self._session, info)
         except EnvironmentStoreError as error:  # only a plaintext store fails here
             notify_error(self.app, error)
             return
@@ -108,33 +144,20 @@ class StoresScreen(Screen[None]):
         else:
             self._show(opened)
 
-    def _open_without_asking(self, info: StoreInfo) -> OpenedStore | None:
-        name = info.name
-        if not info.encrypted:
-            return self._session.open(name)
-        # D53: the key variable comes before the project key; when set, it alone is tried.
-        try:
-            secret = self._session.environment_secret(name)
-            if secret is not None:
-                return self._session.open(name, secret)
-        except EnvironmentStoreError as error:
-            self._notify_failed(key_variable(name), error)
-            return None
-        return self._open_with_project_key(name)
+    def _created(self, created: Created | None) -> None:
+        if created is None:
+            return
+        self.action_reload()
+        notify_done(self.app, f"created store {created.name!r}")
+        if created.reminder is not None:
+            notify_reminder(self.app, created.reminder)
 
-    def _open_with_project_key(self, name: str) -> OpenedStore | None:
-        path = self._session.project_key(name)
-        if path is None:
+    def _selected(self) -> StoreInfo | None:
+        table = self.query_one(DataTable)
+        if table.row_count == 0:
             return None
-        try:
-            return self._session.open(name, self._session.secret_from_file(name, path))
-        except EnvironmentStoreError as error:
-            self._notify_failed(f"the key file '{path}' from the project file", error)
-            return None
-
-    def _notify_failed(self, source: str, error: EnvironmentStoreError) -> None:
-        # The user did not choose this key, so the message names it and where it came from.
-        notify_problem(self.app, f"unlocking with {source} failed: {message_for(error)}")
+        row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+        return self._stores[row_key]
 
     def _show(self, opened: OpenedStore | None) -> None:
         if opened is not None:

@@ -11,14 +11,20 @@ from typing import Final
 from textual.app import App
 
 from environment_store.core.errors import EnvironmentStoreError, InvalidKeyFileError
+from environment_store.formats.dotenv import DotenvValueError
+from environment_store.library.files import OutputFileExistsError
 
-__all__ = ["message_for", "notify_error", "notify_problem"]
+__all__ = ["message_for", "notify_done", "notify_error", "notify_problem", "notify_reminder"]
 
 _TITLE: Final = "Error"
+_REMINDER_TITLE: Final = "Keep your key"
+_REMINDER_SECONDS: Final = 30.0
 
 # Error class -> the TUI's remedy, replacing the library's hint (D47). Checked in order.
 _TUI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
     (InvalidKeyFileError, "create one with envs keygen"),
+    (OutputFileExistsError, "export again and confirm replacing it"),
+    (DotenvValueError, "choose the JSON or TOML format"),
 )
 
 
@@ -60,3 +66,29 @@ def notify_problem(app: App[object], message: str) -> None:
         message: What is wrong and how to fix it.
     """
     app.notify(message, title=_TITLE, severity="error", markup=False)
+
+
+def notify_done(app: App[object], message: str) -> None:
+    """Report a finished action, e.g. a created store.
+
+    Args:
+        app: The running app.
+        message: What was done.
+    """
+    app.notify(message, markup=False)
+
+
+def notify_reminder(app: App[object], message: str) -> None:
+    """Show a reminder that must not be missed, such as D45's, for longer than usual.
+
+    Args:
+        app: The running app.
+        message: The reminder.
+    """
+    app.notify(
+        message,
+        title=_REMINDER_TITLE,
+        severity="warning",
+        timeout=_REMINDER_SECONDS,
+        markup=False,
+    )
