@@ -82,8 +82,10 @@ More details:
 - A wrong key never produces garbage. It fails with exit code 4:
   `Error: cannot decrypt store 'dev': wrong key or passphrase, or the stored data was modified`.
 - The same message appears if someone tampered with the stored data. GCM authentication detects that.
-- The tool never stores, caches or remembers a key. There are no environment variables for keys, and you cannot
-  type a key directly on the command line, because it would end up in your shell history and in `ps` output.
+- The tool never stores, caches or remembers a key. You cannot type a key directly on the command line, because it
+  would end up in your shell history and in `ps` output. For deployments, an existing store's key may come from the
+  environment variable `ENV_STORE_KEY_<STORE>` ([below](#from-an-environment-variable-env_store_key_store)); then
+  anyone who can read the deployment's configuration has the key.
 - Error messages never contain values, keys or passphrases, with one exception you cause yourself: text in
   `[keys]` that is not a key-file line is treated as a path and printed in the "cannot read key or passphrase
   file" error. So never put a passphrase in `[keys]` (see [below](#in-the-project-file-keys)).
@@ -205,9 +207,10 @@ Every command that reads or writes the contents of an encrypted store needs its 
 order:
 
 1. `-k` on the command line
-2. `[keys]` in the project file `.envstore.toml`
-3. a hidden prompt, if stdin is a terminal and `--noinput` is not set
-4. otherwise the command fails with exit code 4
+2. the environment variable `ENV_STORE_KEY_<STORE>`
+3. `[keys]` in the project file `.envstore.toml`
+4. a hidden prompt, if stdin is a terminal and `--noinput` is not set
+5. otherwise the command fails with exit code 4
 
 `-k` always takes a **path**, never the key itself. The store's key mode decides how the file is read:
 
@@ -300,7 +303,8 @@ DB_PASSWORD=hunter2  prod
 - **Never put a passphrase in `[keys]`.** It is not detected: it is treated as a file name, and the error shows it
   on stderr (`Error: cannot read key or passphrase file '/…/correct horse battery staple': No such file or
   directory`). Put the passphrase in a file with mode `0600` and list the path of that file.
-- A `-k` on the command line beats the `[keys]` entry for that store.
+- A `-k` on the command line, and the store's `ENV_STORE_KEY_<STORE>` variable, beat the `[keys]` entry for that
+  store.
 - An entry for a store that is not encrypted is an error once a command loads that store, and that includes every
   write to it (`set`, `rm`, `import`):
   `names a key for store 'base', which is not encrypted: remove the entry`.
@@ -310,9 +314,34 @@ DB_PASSWORD=hunter2  prod
 
 See [Configuration](configuration.md#the-project-file-envstoretoml) for the rest of the project file.
 
+### From an environment variable: `ENV_STORE_KEY_<STORE>`
+
+On a platform where you cannot ship a key file, such as Heroku, put the key line (or the passphrase) into the
+variable `ENV_STORE_KEY_<STORE>`: the store name in upper case with `-` turned into `_`, for example
+`ENV_STORE_KEY_PROD` or `ENV_STORE_KEY_CUSTOMER_A`. One trailing newline is removed.
+
+```console
+$ export ENV_STORE_KEY_PROD="$(cat prod.key)"
+$ envs --noinput ls base prod -v
+DB_HOST=localhost
+DB_PASSWORD=hunter2
+```
+
+- `-k` beats the variable; the variable beats `[keys]` and the prompt.
+- An empty or malformed value fails with exit code 4, and the message names the variable, never its value.
+- The variable of a plain store, and of a store the command does not use, is ignored.
+- Two encrypted stores of one command that share a variable (`my-app` and `my_app`) fail with exit code 1 while it
+  is set, unless `-k` gives the key of both.
+- New keys never come from the environment (`create-store -e`, `encrypt`, `rekey --new-key`, the new-key options of
+  `cp-store` / `mv-store`). The old key of `rekey` may.
+- `envs run` removes every `ENV_STORE_KEY_*` variable from the command it starts.
+
+[Deployment](deployment.md) shows Heroku and Kubernetes setups, including the safer way of mounting the key as a
+file.
+
 ### The prompt, and `--noinput` for scripts and CI
 
-On a terminal, without `-k` or `[keys]`, `envs` asks with a hidden prompt on stderr:
+On a terminal, without `-k`, a key variable or `[keys]`, `envs` asks with a hidden prompt on stderr:
 
 ```text
 Key or passphrase for store 'prod':
@@ -327,10 +356,10 @@ code 4:
 
 ```console
 $ envs --noinput -c json://envs ls prod
-Error: store 'prod' is encrypted and no key or passphrase was given; pass it with -k <path> (or -k - for stdin)
+Error: store 'prod' is encrypted and no key or passphrase was given; pass it with -k <path> (or -k - for stdin), or set ENV_STORE_KEY_PROD
 ```
 
-With several stores the hint names the store: `pass it with -k staging=<path> (or -k staging=- for stdin)`.
+With several stores the hint names the store: `pass it with -k staging=<path> (or -k staging=- for stdin), or set ENV_STORE_KEY_STAGING`.
 
 In CI, put the key file in your CI system's secret files, or pipe it from a secret variable on stdin:
 
@@ -491,6 +520,9 @@ Note that `ls` needs the key even without `-v`: the variable names are encrypted
 |---|---|---|
 | no key given, no prompt possible | `store 'prod' is encrypted and no key or passphrase was given: …` | 4 |
 | wrong key or passphrase, or tampered data | `cannot decrypt store 'dev': wrong key or passphrase, or the stored data was modified` | 4 |
+| key variable empty | `ENV_STORE_KEY_PROD, the key or passphrase of store 'prod', is empty` | 4 |
+| key text in the key variable of a passphrase store | `ENV_STORE_KEY_DEV holds key text, but store 'dev' uses a passphrase` | 4 |
+| two encrypted stores share a set key variable | `encrypted stores 'my-app', 'my_app' all take their key from ENV_STORE_KEY_MY_APP, …` | 1 |
 | key file for a passphrase store | `store 'dev' uses a passphrase, but a key file was given: pass the passphrase file with -k (or -k - for stdin), or switch the store to the key file with 'envs rekey -s dev --new-key <path>'` | 4 |
 | passphrase file for a key file store | `not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen` | 4 |
 | key file missing or unreadable | `cannot read key or passphrase file 'missing.key': No such file or directory` | 4 |

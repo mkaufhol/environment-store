@@ -50,7 +50,7 @@ envs -c json://envs tui
 | Setting | Where it comes from |
 |---|---|
 | Connection | `-c/--connection`, else `ENV_STORE_CONNECTION`, else `connection` in `.envstore.toml` |
-| Keys for encrypted stores | the `[keys]` table in `.envstore.toml`, else the Unlock dialog |
+| Keys for encrypted stores | `ENV_STORE_KEY_<STORE>`, else the `[keys]` table in `.envstore.toml`, else the Unlock dialog |
 | Project file | `.envstore.toml` in the current directory or a parent; `--no-project` ignores it |
 
 So in a project with an `.envstore.toml` that sets `connection`, a plain `envs tui` is enough. The project file's
@@ -265,7 +265,10 @@ screen to see the change.
 
 When you open an encrypted store, the TUI looks for its key in this order:
 
-1. **The `[keys]` table of `.envstore.toml`.** If the project file names a key or passphrase file for the store, the
+1. **The variable `ENV_STORE_KEY_<STORE>`** (`ENV_STORE_KEY_CUSTOMER_A` for `customer-a`). When it is set, it alone
+   is tried; if it does not work, the TUI shows the error, naming the variable but never its value, and opens the
+   Unlock dialog. See [Deployment](deployment.md).
+2. **The `[keys]` table of `.envstore.toml`.** If the project file names a key or passphrase file for the store, the
    store opens without asking:
 
    ```toml
@@ -277,7 +280,7 @@ When you open an encrypted store, the TUI looks for its key in this order:
    customer-a = "~/.keys/customer-a.pass"
    ```
 
-2. **The Unlock dialog.** If there is no `[keys]` entry, or the entry does not work (missing file, wrong key), the
+3. **The Unlock dialog.** If there is no `[keys]` entry, or the entry does not work (missing file, wrong key), the
    TUI shows the error, naming the file it tried, and opens the Unlock dialog:
 
    ```
@@ -350,8 +353,8 @@ Press `y` to read the store again, then repeat your change. Nothing is ever over
   You can still view and delete such a variable. Change it with `envs set` or `envs import`.
 - **Interactive only.** No `--noinput`, no redirected stdin or stdout. For scripts and CI use the [CLI](cli.md) or
   the [Python library](python.md).
-- **No key in an environment variable.** Like the rest of the tool, the TUI reads keys only from `[keys]` or what you
-  type.
+- **Keys like the CLI.** The TUI takes a store's key from `ENV_STORE_KEY_<STORE>`, else from `[keys]`, else from
+  what you type.
 
 ## Starting the TUI from Python
 

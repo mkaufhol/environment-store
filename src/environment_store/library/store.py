@@ -16,12 +16,9 @@ from pathlib import Path
 from types import TracebackType
 from typing import Final, Literal, Self
 
+from environment_store.config.key_variables import check_key_variables, secret_from_environment
 from environment_store.config.project import PROJECT_FILE_NAME
-from environment_store.config.secrets import (
-    check_key_variables,
-    read_secret_file,
-    secret_from_environment,
-)
+from environment_store.config.secrets import read_secret_file
 from environment_store.config.settings import ENV_CONNECTION, Settings
 from environment_store.core.adapter import Adapter, MigratableAdapter, MigrationReport, SetupMode
 from environment_store.core.clock import Clock, utc_now
@@ -512,6 +509,7 @@ class EnvironmentStore:
         checked = [_checked_source(source) for source in sources]
         # Before any key is read: a shared key variable is ambiguous (D53).
         check_key_variables(
+            self,
             [source.name for source in checked],
             explicit={source.name for source in checked if source.key is not None},
             environ=self._environ,

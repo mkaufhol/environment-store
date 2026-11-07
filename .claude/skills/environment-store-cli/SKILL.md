@@ -108,7 +108,9 @@ together. Only `ls-store`, `rm-store` and `keygen` work without it.
 
 The store's mode decides how the file is read: a key file (`envstore-key-v1:...`) for keyfile
 stores, a UTF-8 passphrase file (one trailing newline stripped) for passphrase stores. Order of key
-sources: `-k` > `[keys]` in the project file > prompt (never with `--noinput`) > exit 4.
+sources: `-k` > `ENV_STORE_KEY_<STORE>` (store name upper-cased, `-` as `_`; existing stores only) >
+`[keys]` in the project file > prompt (never with `--noinput`) > exit 4. `envs run` strips
+`ENV_STORE_KEY_*` from the child.
 `ls-store` shows each store's mode: `plain`, `encrypted (keyfile)`, `encrypted (passphrase)`.
 
 Stdin can be used for **one** thing per command: either the value of `set KEY` or `-k -`, not both.

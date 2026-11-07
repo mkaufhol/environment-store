@@ -631,6 +631,14 @@ A key file holds one line,
 For a passphrase store the file given to
 .B \-k
 holds the passphrase; one trailing newline is stripped.
+Without
+.BR \-k ,
+an encrypted store's key comes from
+.BI ENV_STORE_KEY_ STORE\fR,
+else from
+.B [keys]
+in the project file (see
+.BR ENVIRONMENT ).
 An encrypted store without a key is asked for with a hidden prompt on a
 terminal, once per store; without a terminal, or with
 .BR \-\-noinput ,
@@ -719,8 +727,35 @@ Also accepts
 .BR yes ,
 .BR no ,
 in any case.
-.PP
-Keys are never read from environment variables.
+.TP
+.BI ENV_STORE_KEY_ STORE
+Key line or passphrase of an existing encrypted store;
+.I STORE
+is the store name in upper case with
+.B \-
+turned into
+.BR _ ,
+e.g.
+.B ENV_STORE_KEY_CUSTOMER_A
+for
+.BR customer\-a .
+One trailing newline is stripped.
+Precedence:
+.B \-k
+> this variable >
+.B [keys]
+in the project file > the prompt.
+It is ignored for plain stores and for stores the command does not use,
+and never used for new keys.
+Two encrypted stores of one command that share the variable are an error
+(exit code 1) unless
+.B \-k
+gives the key of both; an empty or invalid value is a key error (exit code 4)
+that names the variable, never its value.
+.B run
+removes every
+.B ENV_STORE_KEY_*
+variable from the command's environment.
 .SH FILES
 .TP
 .B .envstore.toml
@@ -842,8 +877,16 @@ Only the store name and metadata stay visible, so
 needs the key too.
 A ciphertext is bound to its store name.
 .PP
-Keys are never accepted as literal arguments or environment variables, and
-never stored or cached.
+Keys are never accepted as literal arguments, and never stored or cached.
+An existing store's key may come from
+.BI ENV_STORE_KEY_ STORE\fR;
+encryption then protects the backend and its backups, not against someone who
+can read the deployment's configuration.
+A key file mounted and passed with
+.B \-k
+or
+.B [keys]
+keeps the key out of the process environment.
 Pass a key file with
 .BR \-k ,
 pipe it with

@@ -17,6 +17,7 @@ against the real CLI.
 | [Python library](python.md) | load stores from Python or manage them programmatically |
 | [Configuration](configuration.md) | choose a backend, write `.envstore.toml`, use `ENV_STORE_CONNECTION` in CI |
 | [Encryption and keys](encryption.md) | encrypt a store, use key files or passphrases, rotate or remove encryption |
+| [Deployment](deployment.md) | give a deployed app its keys on Heroku or Kubernetes, as `ENV_STORE_KEY_<STORE>` or a mounted file |
 | [Terminal UI](tui.md) | browse and edit variables interactively with `envs tui` |
 | [Agent skill](../.claude/skills/environment-store-cli/SKILL.md) | let a coding agent use the `envs` CLI safely |
 
@@ -42,6 +43,7 @@ against the real CLI.
 | stop typing `-c` and `-k` every time? | [Quickstart](quickstart.md#9-save-your-settings-in-a-project-file), [Configuration](configuration.md#the-project-file-envstoretoml) |
 | use PostgreSQL? | [Installation](installation.md#optional-extras), [Configuration](configuration.md#postgresql) |
 | create or upgrade the SQL schema? | [`envs migrate`](configuration.md#upgrade-the-sql-schema-envs-migrate) |
+| deploy to Heroku or Kubernetes? | [Deployment](deployment.md) |
 | run it in CI without prompts? | [CI recipe](cli.md#ci-no-prompts-key-from-a-secret), [CLI reference](cli.md#exit-codes) (`--noinput`, exit codes) |
 
 ## Concepts in one minute

@@ -298,7 +298,7 @@ When a command needs a key, it looks in this order:
 
 ```console
 $ envs ls -v prod
-Error: store 'prod' is encrypted and no key or passphrase was given; pass it with -k <path> (or -k - for stdin)
+Error: store 'prod' is encrypted and no key or passphrase was given; pass it with -k <path> (or -k - for stdin), or set ENV_STORE_KEY_PROD
 ```
 
 **Reading commands with several stores.** `ls`, `get`, `export`, `export-shell` and `run` bind each key to its store with `-k STORE=PATH`. Repeat `-k` for several encrypted stores. With exactly one store, plain `-k PATH` is enough:
@@ -361,7 +361,7 @@ Save the key first (`envs keygen vault.key`, or in your password manager) and pi
   Error: stdin can be used only once per command: it is already used for the value of NEWVAR, so it cannot be used for -k -
   ```
 
-- **The tool never stores or caches keys.** No environment variable holds a key, and no option takes a key or passphrase literally on the command line.
+- **The tool never stores or caches keys.** No option takes a key or passphrase literally on the command line. In deployments an existing store's key may come from the environment variable `ENV_STORE_KEY_<STORE>` (see [Deployment](deployment.md)).
 - **Error messages never contain values, keys or passphrases.**
 - Wrong secrets fail with exit code 4:
 
@@ -499,8 +499,7 @@ When stdin is not a terminal (in a pipe or CI), `envs` already behaves as if `--
 |---|---|
 | `ENV_STORE_CONNECTION` | Connection string, used when `-c` is not given. Empty counts as unset. |
 | `ENV_STORE_ORDERED_OVERWRITE` | `true` (last store wins) or `false` (first store wins). Also accepts `1`/`0`/`yes`/`no`, any case. Empty counts as unset. |
-
-There are no environment variables for keys, by design.
+| `ENV_STORE_KEY_<STORE>` | Key line or passphrase of an existing encrypted store, e.g. `ENV_STORE_KEY_CUSTOMER_A` for `customer-a`. Used when `-k` is not given, before `[keys]` and the prompt. Never used for new keys; `envs run` removes these variables from the command's environment. See [Deployment](deployment.md). |
 
 An invalid value stops every command except `keygen`, which reads no settings:
 
@@ -1066,7 +1065,7 @@ envs run [STORES]... [-o] [--nested] [--first-wins] [-k STORE=PATH]... -- COMMAN
 | `--first-wins` | The first store wins instead of the last. |
 | `-k`, `--key STORE=PATH` | Key or passphrase file of a store; repeatable. |
 
-Everything after `--` is the command. It runs directly, without a shell, with the store variables **added** to the current environment. Variables that are already set win unless you pass `-o`.
+Everything after `--` is the command. It runs directly, without a shell, with the store variables **added** to the current environment. Variables that are already set win unless you pass `-o`. Every `ENV_STORE_KEY_*` variable is removed, so the command never inherits a key.
 
 ```console
 $ envs run base dev -- sh -c 'echo "$DB_HOST $DEBUG"'
@@ -1420,7 +1419,7 @@ If the key is missing, the step stops with exit code 4:
 
 ```console
 $ envs --noinput run base prod -- true
-Error: store 'prod' is encrypted and no key or passphrase was given: pass it with -k prod=<path> (or -k prod=- for stdin)
+Error: store 'prod' is encrypted and no key or passphrase was given: pass it with -k prod=<path> (or -k prod=- for stdin), or set ENV_STORE_KEY_PROD
 ```
 
 stdin can feed only one key per command. With two encrypted stores, write one key to a temporary file (with `umask 077`) and pass it with `-k store=PATH`:

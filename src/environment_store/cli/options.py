@@ -64,7 +64,8 @@ ReadKeysOpt = Annotated[
         "--key",
         metavar="STORE=PATH",
         help="Key or passphrase file of a store, '-' for stdin; repeatable. With one store, "
-        "-k PATH is enough. Default: [keys] in .envstore.toml, else a prompt on a terminal.",
+        "-k PATH is enough. Default: ENV_STORE_KEY_<STORE>, else [keys] in .envstore.toml, "
+        "else a prompt on a terminal.",
         show_default=False,
     ),
 ]
@@ -74,8 +75,8 @@ WriteKeyOpt = Annotated[
         "-k",
         "--key",
         metavar="PATH|-",
-        help="Key or passphrase file of the store, '-' for stdin. Default: [keys] in "
-        ".envstore.toml, else a prompt on a terminal.",
+        help="Key or passphrase file of the store, '-' for stdin. Default: ENV_STORE_KEY_<STORE>, "
+        "else [keys] in .envstore.toml, else a prompt on a terminal.",
         show_default=False,
     ),
 ]

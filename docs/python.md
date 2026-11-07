@@ -539,6 +539,12 @@ Text that is not key text raises `InvalidKeyFileError`; the message never contai
 The library never stores or caches keys, and `KeyMaterial`, `Passphrase` and `Source` hide them
 in `repr()` (`Passphrase(<redacted>)`, `Source(name='prod')`).
 
+**The key variable.** Without an explicit key, `EnvironmentStore` methods, `load()` and
+`environment_store.load()` read an existing store's key or passphrase from `ENV_STORE_KEY_<STORE>`
+(`ENV_STORE_KEY_CUSTOMER_A` for `customer-a`), before `[keys]` and the prompt. An explicit
+`key=`, `keys=` or `Source(key=…)` wins over it, and new keys never come from it. See
+[Deployment](deployment.md).
+
 **Prompting.** When `environment_store.load()` meets an encrypted store without a key, it asks
 for it with a hidden prompt, but only if stdin is a terminal and `noinput` is `False`. Otherwise
 it raises `KeyRequiredError`. `EnvironmentStore` methods never prompt.
@@ -584,7 +590,7 @@ environment_store.load("customer-a", keys={"customer-a": Path("customer-a.pass")
 Without a key, CI fails with a clear error:
 
 ```text
-KeyRequiredError: store 'prod' is encrypted and no key or passphrase was given; pass key=... (or keys={'prod': ...} to load())
+KeyRequiredError: store 'prod' is encrypted and no key or passphrase was given; pass key=... (or keys={'prod': ...} to load()), or set ENV_STORE_KEY_PROD
 ```
 
 ## Which errors should I catch?
@@ -599,7 +605,7 @@ The CLI and the TUI show the same `detail` with their own remedy in place of `hi
 
 | Situation | Error | `hint` |
 |---|---|---|
-| encrypted store, no key | `KeyRequiredError` | `pass key=... (or keys={'prod': ...} to load())` |
+| encrypted store, no key | `KeyRequiredError` | `pass key=... (or keys={'prod': ...} to load()), or set ENV_STORE_KEY_PROD` |
 | variables exist | `VariableExistsError` | `pass overwrite=True to replace them` |
 | `to_file()` onto an existing file | `ValidationError` | `pass force=True to replace it` |
 | `to_file()` cannot infer the format | `ValidationError` | `pass fmt='dotenv', fmt='json' or fmt='toml'` |

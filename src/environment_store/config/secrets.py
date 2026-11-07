@@ -3,26 +3,30 @@
 `SecretResolver` finds the secret of an existing store, in the order of D53: an explicit
 source (file, stdin, or a key the caller already has) > `ENV_STORE_KEY_<STORE>` > the project
 file's `[keys]` > a hidden prompt. `resolve_new_secret` produces the secret for a new
-encryption and never looks at the environment (D53). Nothing is cached or stored (D3).
+encryption and never looks at the environment (D53). The variable itself is read by
+`config.key_variables`. Nothing is cached or stored (D3).
 Messages name the source (a path, stdin or the variable), never the secret.
 """
 
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final, NoReturn, Protocol
+from typing import Final, NoReturn
 
+from environment_store.config.key_variables import (
+    StoreInspector,
+    check_key_variables,
+    check_not_empty,
+    parse_key_variable,
+)
 from environment_store.config.prompt import Prompter
 from environment_store.core.errors import (
     BackendError,
-    InvalidKeyFileError,
-    KeyModeMismatchError,
     KeyRequiredError,
     KeySourceError,
     NotEncryptedError,
     ValidationError,
 )
-from environment_store.core.models import StoreInfo
 from environment_store.core.names import key_variable
 from environment_store.core.secrets import Secret
 from environment_store.crypto.keyfile import (
@@ -44,11 +48,9 @@ __all__ = [
     "SecretInput",
     "SecretResolver",
     "StoreInspector",
-    "check_key_variables",
     "no_stdin",
     "read_secret_file",
     "resolve_new_secret",
-    "secret_from_environment",
 ]
 
 _STDIN: Final = "stdin"
@@ -73,33 +75,6 @@ class KeyStdin:
 
 type KeySource = KeyFile | KeyStdin
 """Where an explicitly given secret is read from."""
-
-
-class StoreInspector(Protocol):
-    """What the resolver needs to know about a store; implemented by `EnvironmentStore`."""
-
-    def store_info(self, name: str, /) -> StoreInfo:
-        """Return the listing entry of a store.
-
-        Args:
-            name: The store name.
-
-        Returns:
-            The entry; raises `StoreNotFoundError` for a missing store.
-        """
-        ...
-
-    def parse_secret(self, name: str, text: str, /) -> Secret:
-        """Interpret raw secret text by the store's key mode.
-
-        Args:
-            name: The store name.
-            text: The raw text.
-
-        Returns:
-            The secret.
-        """
-        ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -167,90 +142,7 @@ def _decode(data: bytes, *, what: str) -> str:
         message = f"{what} is not valid UTF-8"
         # Not chained: the decode error holds the raw secret.
         raise KeySourceError(message) from None
-    return _check_not_empty(text, what=what)
-
-
-def _check_not_empty(text: str, *, what: str) -> str:
-    # Empty after D3's stripping of exactly one trailing LF or CRLF, as passphrase_from_text.
-    stripped = text[:-2] if text.endswith("\r\n") else text.removesuffix("\n")
-    if not stripped:
-        message = f"{what} is empty"
-        raise KeySourceError(message)
-    return text
-
-
-def check_key_variables(
-    stores: Iterable[str], *, explicit: Collection[str], environ: Mapping[str, str]
-) -> None:
-    """Refuse stores of one command that share a set key variable (D53).
-
-    `my-app` and `my_app` both map to `ENV_STORE_KEY_MY_APP`, so it is unclear which store a
-    set variable is meant for. That is no problem when an explicit key is given for every
-    such store, because then the variable is not consulted; nor when it is not set.
-
-    Args:
-        stores: The stores of the command (repeats allowed).
-        explicit: The stores that have an explicit key (`-k`, `key=`, `keys=`, `Source`).
-        environ: The environment variables.
-
-    Raises:
-        ValidationError: Two or more stores map to one set variable and not all of them have
-            an explicit key; the message names the stores and the variable, never its value.
-    """
-    by_variable: dict[str, list[str]] = {}
-    for store in dict.fromkeys(stores):
-        by_variable.setdefault(key_variable(store), []).append(store)
-    for variable, names in by_variable.items():
-        if len(names) > 1 and variable in environ and not set(names) <= set(explicit):
-            listed = ", ".join(repr(name) for name in names)
-            message = (
-                f"stores {listed} all take their key from {variable}, so it is unclear which "
-                "store it is for: unset it and give each of these stores its key explicitly"
-            )
-            raise ValidationError(message)
-
-
-def secret_from_environment(
-    inspector: StoreInspector, store: str, environ: Mapping[str, str]
-) -> Secret | None:
-    """Return an existing store's secret from `ENV_STORE_KEY_<STORE>`, if it gives one (D53).
-
-    Args:
-        inspector: Reads the store's metadata (only when the variable is set).
-        store: The store name.
-        environ: The environment variables.
-
-    Returns:
-        The secret, or `None` when the variable is not set or the store is plaintext (a
-        variable for a plaintext store is ignored: environments are shared).
-
-    Raises:
-        StoreNotFoundError: The variable is set and the store does not exist.
-        KeySourceError: The variable is set but empty, or not valid UTF-8.
-        InvalidKeyFileError: A `keyfile` store and the value is not key text.
-        KeyModeMismatchError: A `passphrase` store and the value is key text.
-    """
-    text = environ.get(key_variable(store))
-    if text is None or not inspector.store_info(store).encrypted:
-        return None
-    return _parse_variable(inspector, store, text)
-
-
-def _parse_variable(inspector: StoreInspector, store: str, text: str) -> Secret:
-    variable = key_variable(store)
-    try:
-        text.encode("utf-8")
-    except UnicodeEncodeError:
-        message = f"{variable} is not valid UTF-8"
-        # Not chained: the encode error holds the whole value.
-        raise KeySourceError(message) from None
-    _check_not_empty(text, what=f"{variable}, the key or passphrase of store {store!r},")
-    try:
-        return inspector.parse_secret(store, text)
-    except (InvalidKeyFileError, KeyModeMismatchError) as error:
-        # The parser's message names neither the source nor the value; name the variable.
-        message = f"{variable} does not hold a usable key for store {store!r}: {error.detail}"
-        raise type(error)(message, hint=error.hint) from error
+    return check_not_empty(text, what=what)
 
 
 class SecretResolver:
@@ -304,7 +196,7 @@ class SecretResolver:
             return self._inspector.parse_secret(store, self._read(source))
         text = self._input.environ.get(key_variable(store))
         if text is not None:
-            return _parse_variable(self._inspector, store, text)
+            return parse_key_variable(self._inspector, store, text)
         if project_key is not None:
             return self._inspector.parse_secret(store, read_secret_file(project_key))
         return self._inspector.parse_secret(store, self._prompt(store))
@@ -323,13 +215,13 @@ class SecretResolver:
         return source is None and key_variable(store) in self._input.environ
 
     def check_key_variables(self, stores: Iterable[str], *, explicit: Collection[str]) -> None:
-        """`check_key_variables` with this invocation's environment.
+        """`check_key_variables` with this resolver's inspector and environment.
 
         Args:
             stores: The stores of the command.
             explicit: The stores that have an explicit key.
         """
-        check_key_variables(stores, explicit=explicit, environ=self._input.environ)
+        check_key_variables(self._inspector, stores, explicit=explicit, environ=self._input.environ)
 
     def _read(self, source: KeySource) -> str:
         if isinstance(source, KeyFile):
@@ -342,7 +234,7 @@ class SecretResolver:
             # Library wording; the CLI puts its -k hint in place of the hint (D47).
             raise KeyRequiredError.for_store(store)
         answer = prompter.secret(f"Key or passphrase for store {store!r}: ")
-        return _check_not_empty(answer, what=f"the key or passphrase for store {store!r}")
+        return check_not_empty(answer, what=f"the key or passphrase for store {store!r}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,4 +336,4 @@ def _prompt_new_passphrase(secret_input: SecretInput) -> Secret:
         )
         raise KeyRequiredError(message)
     answer = secret_input.prompter.new_secret(_NEW_QUESTION)
-    return passphrase_from_text(_check_not_empty(answer, what="the new passphrase"))
+    return passphrase_from_text(check_not_empty(answer, what="the new passphrase"))

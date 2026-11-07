@@ -316,13 +316,14 @@ After an upgrade it prints `upgraded schema from vN to vM`.
 
 ## Environment variables
 
-`envs` reads exactly two environment variables. There are deliberately **no** environment variables for keys or
-passphrases (see [Encryption and keys](encryption.md)).
+`envs` reads these environment variables. Keys and passphrases come from `ENV_STORE_KEY_<STORE>` only for existing
+stores, never for new ones (see [Encryption and keys](encryption.md) and [Deployment](deployment.md)).
 
 | Variable | Meaning | Values |
 |---|---|---|
 | `ENV_STORE_CONNECTION` | the connection string | any connection string; empty counts as unset |
 | `ENV_STORE_ORDERED_OVERWRITE` | merge order when you read several stores | `true` (default): the last store wins. `false`: the first store wins. Also `1/0/yes/no`, any case. Empty counts as unset |
+| `ENV_STORE_KEY_<STORE>` | the key or passphrase of an existing encrypted store, e.g. `ENV_STORE_KEY_CUSTOMER_A` for `customer-a` | the key line (`envstore-key-v1:…`) or the passphrase; one trailing newline removed. `-k` wins over it, it wins over `[keys]`. Empty is an error (exit code 4) |
 
 A typical CI setup:
 

@@ -229,6 +229,18 @@ def test_load_with_colliding_stores_and_a_set_variable_is_refused(make: MakeStor
 
 
 @pytest.mark.usefixtures("seeded")
+def test_load_of_plaintext_stores_of_one_variable_is_fine(make: MakeStore) -> None:
+    with make({}) as store:
+        store.create_store("a-b")
+        store.create_store("a_b")
+
+    with make({"ENV_STORE_KEY_A_B": CANARY}) as store:
+        environment = store.load(["a-b", "a_b"])
+
+    assert environment.variables() == {}
+
+
+@pytest.mark.usefixtures("seeded")
 def test_load_with_keys_for_both_colliding_stores_is_fine(make: MakeStore) -> None:
     with make({}) as store:
         store.create_store("my-app", encrypt=True, key=KEY)
@@ -318,8 +330,8 @@ def test_the_one_liner_refuses_colliding_stores(
     tmp_path: Path, opener: RecordingOpener, make: MakeStore
 ) -> None:
     with make({}) as store:
-        store.create_store("my-app")
-        store.create_store("my_app")
+        store.create_store("my-app", encrypt=True, key=KEY)
+        store.create_store("my_app", encrypt=True, key=OTHER_KEY)
 
     with pytest.raises(ValidationError, match="ENV_STORE_KEY_MY_APP"):
         _load(tmp_path, opener, "my-app", "my_app", environ={"ENV_STORE_KEY_MY_APP": "x"})

@@ -127,7 +127,8 @@ def test_key_text_for_a_passphrase_store_names_the_variable_not_k(cli_json: CliH
     result = cli_json.invoke("ls", "phrase", env={"ENV_STORE_KEY_PHRASE": generate_key_text()})
 
     assert_exit(result, 4)
-    assert "ENV_STORE_KEY_PHRASE" in result.stderr
+    assert "ENV_STORE_KEY_PHRASE holds key text" in result.stderr
+    assert "key file was given" not in result.stderr
     assert "-k" not in result.stderr
 
 
@@ -162,6 +163,42 @@ def test_colliding_stores_with_a_set_variable_exit_1_before_any_key_is_read(
     assert "'my_app'" in result.stderr
     assert "ENV_STORE_KEY_MY_APP" in result.stderr
     assert prompter.prompts == []
+
+
+def test_plaintext_stores_of_one_variable_do_not_collide(cli_json: CliHarness) -> None:
+    library = cli_json.store()
+    library.create_store("a-b")
+    library.create_store("a_b")
+
+    result = cli_json.invoke("ls", "a-b", "a_b", env={"ENV_STORE_KEY_A_B": CANARY})
+
+    assert_exit(result, 0)
+
+
+def test_an_encrypted_and_a_plaintext_store_of_one_variable_do_not_collide(
+    cli_json: CliHarness,
+) -> None:
+    library = cli_json.store()
+    library.create_store("my-app", encrypt=True, key=Passphrase(text="a"))
+    library.set("my-app", "HOST", "encrypted", key=Passphrase(text="a"))
+    library.create_store("my_app")
+    library.set("my_app", "PORT", "1")
+
+    result = cli_json.invoke(
+        "export", "my-app", "my_app", "-t", "json", env={"ENV_STORE_KEY_MY_APP": "a"}
+    )
+
+    assert_exit(result, 0)
+    assert '"HOST": "encrypted"' in result.stdout
+    assert '"PORT": "1"' in result.stdout
+
+
+@pytest.mark.parametrize("command", ["ls", "set", "import", "rekey", "cp-store"])
+def test_k_help_names_the_key_variable(cli_json: CliHarness, command: str) -> None:
+    result = cli_json.invoke(command, "-h", connection=False)
+
+    assert_exit(result, 0)
+    assert "ENV_STORE_KEY_<STORE>" in " ".join(result.stdout.split())
 
 
 def test_k_for_both_colliding_stores_avoids_the_collision(cli_json: CliHarness) -> None:

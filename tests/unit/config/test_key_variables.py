@@ -10,6 +10,7 @@ from typing import Final
 
 import pytest
 
+from environment_store.config.key_variables import check_key_variables, secret_from_environment
 from environment_store.config.secrets import (
     KeyFile,
     KeySource,
@@ -17,9 +18,7 @@ from environment_store.config.secrets import (
     NewPassphrase,
     SecretInput,
     SecretResolver,
-    check_key_variables,
     resolve_new_secret,
-    secret_from_environment,
 )
 from environment_store.core.errors import (
     InvalidKeyFileError,
@@ -185,8 +184,11 @@ def test_key_text_for_a_passphrase_store_is_a_key_mode_mismatch_naming_the_varia
     with pytest.raises(KeyModeMismatchError) as caught:
         _resolver(inspector, environ).existing("phrased", None)
 
-    assert "ENV_STORE_KEY_PHRASED" in str(caught.value)
-    assert format_key(KEY).strip() not in str(caught.value)
+    message = str(caught.value)
+    assert message == (
+        "ENV_STORE_KEY_PHRASED holds key text, but store 'phrased' uses a passphrase"
+    )
+    assert "key file" not in message
 
 
 def test_a_value_that_is_not_utf8_is_a_key_source_error(inspector: Inspector) -> None:
@@ -330,11 +332,11 @@ def test_uses_key_variable_tells_whether_the_variable_would_be_consulted(
 # --- collisions -----------------------------------------------------------------------------------
 
 
-def test_two_stores_of_one_variable_collide_when_it_is_set() -> None:
+def test_two_stores_of_one_variable_collide_when_it_is_set(inspector: Inspector) -> None:
     environ = {"ENV_STORE_KEY_MY_APP": CANARY}
 
     with pytest.raises(ValidationError) as caught:
-        check_key_variables(["my-app", "base", "my_app"], explicit=(), environ=environ)
+        check_key_variables(inspector, ["my-app", "base", "my_app"], explicit=(), environ=environ)
 
     message = str(caught.value)
     assert "'my-app'" in message
@@ -343,32 +345,36 @@ def test_two_stores_of_one_variable_collide_when_it_is_set() -> None:
     assert CANARY not in message
 
 
-def test_an_empty_variable_collides_too() -> None:
+def test_an_empty_variable_collides_too(inspector: Inspector) -> None:
     with pytest.raises(ValidationError):
-        check_key_variables(["my-app", "my_app"], explicit=(), environ={"ENV_STORE_KEY_MY_APP": ""})
+        check_key_variables(
+            inspector, ["my-app", "my_app"], explicit=(), environ={"ENV_STORE_KEY_MY_APP": ""}
+        )
 
 
-def test_explicit_keys_for_both_stores_avoid_the_collision() -> None:
+def test_explicit_keys_for_both_stores_avoid_the_collision(inspector: Inspector) -> None:
     environ = {"ENV_STORE_KEY_MY_APP": CANARY}
 
-    check_key_variables(["my-app", "my_app"], explicit=("my-app", "my_app"), environ=environ)
+    check_key_variables(
+        inspector, ["my-app", "my_app"], explicit=("my-app", "my_app"), environ=environ
+    )
 
 
-def test_an_explicit_key_for_one_store_does_not_avoid_the_collision() -> None:
+def test_an_explicit_key_for_one_store_does_not_avoid_the_collision(inspector: Inspector) -> None:
     environ = {"ENV_STORE_KEY_MY_APP": CANARY}
 
     with pytest.raises(ValidationError):
-        check_key_variables(["my-app", "my_app"], explicit=("my-app",), environ=environ)
+        check_key_variables(inspector, ["my-app", "my_app"], explicit=("my-app",), environ=environ)
 
 
-def test_an_unset_variable_never_collides() -> None:
-    check_key_variables(["my-app", "my_app"], explicit=(), environ={})
+def test_an_unset_variable_never_collides(inspector: Inspector) -> None:
+    check_key_variables(inspector, ["my-app", "my_app"], explicit=(), environ={})
 
 
-def test_a_repeated_store_does_not_collide_with_itself() -> None:
+def test_a_repeated_store_does_not_collide_with_itself(inspector: Inspector) -> None:
     environ = {"ENV_STORE_KEY_MY_APP": CANARY}
 
-    check_key_variables(["my-app", "my-app"], explicit=(), environ=environ)
+    check_key_variables(inspector, ["my-app", "my-app"], explicit=(), environ=environ)
 
 
 def test_the_resolver_checks_collisions_with_its_environment(inspector: Inspector) -> None:
@@ -377,6 +383,49 @@ def test_the_resolver_checks_collisions_with_its_environment(inspector: Inspecto
     with pytest.raises(ValidationError, match="ENV_STORE_KEY_MY_APP"):
         resolver.check_key_variables(["my-app", "my_app"], explicit=())
     resolver.check_key_variables(["my-app", "my_app"], explicit=("my-app", "my_app"))
+
+
+def test_plaintext_stores_of_one_variable_never_collide(inspector: Inspector) -> None:
+    # A plaintext store ignores the variable (D53), so it cannot be what the variable is for.
+    inspector.service.create_store("a-b")
+    inspector.service.create_store("a_b")
+
+    check_key_variables(inspector, ["a-b", "a_b"], explicit=(), environ={"ENV_STORE_KEY_A_B": "x"})
+
+
+def test_an_encrypted_and_a_plaintext_store_of_one_variable_do_not_collide(
+    inspector: Inspector,
+) -> None:
+    inspector.service.create_store("a-b", secret=KEY)
+    inspector.service.create_store("a_b")
+
+    check_key_variables(inspector, ["a-b", "a_b"], explicit=(), environ={"ENV_STORE_KEY_A_B": "x"})
+
+
+def test_a_collision_names_only_the_encrypted_stores(inspector: Inspector) -> None:
+    inspector.service.create_store("x-y-z", secret=KEY)
+    inspector.service.create_store("x_y-z")
+    inspector.service.create_store("x-y_z", secret=PASSPHRASE)
+    environ = {"ENV_STORE_KEY_X_Y_Z": CANARY}
+
+    with pytest.raises(ValidationError) as caught:
+        check_key_variables(inspector, ["x-y-z", "x_y-z", "x-y_z"], explicit=(), environ=environ)
+
+    message = str(caught.value)
+    assert message.startswith("encrypted stores 'x-y-z', 'x-y_z' all take their key from ")
+    assert "x_y-z" not in message
+    assert CANARY not in message
+
+
+def test_metadata_is_read_only_for_a_possible_collision(inspector: Inspector) -> None:
+    environ = {"ENV_STORE_KEY_MY_APP": CANARY, "ENV_STORE_KEY_KEYED": CANARY}
+
+    check_key_variables(inspector, ["keyed", "my-app", "my_app"], explicit=(), environ={})
+    check_key_variables(
+        inspector, ["keyed", "my-app", "my_app"], explicit=("my-app", "my_app"), environ=environ
+    )
+
+    assert inspector.reads == []
 
 
 # --- library helper -------------------------------------------------------------------------------
