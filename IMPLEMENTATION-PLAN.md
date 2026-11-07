@@ -721,7 +721,7 @@ class EnvironmentStore:
 class Environment:
     stores: tuple[tuple[str, Mapping[str, str]], ...] = field(repr=False)   # load order
     order: MergeOrder
-    def variables(self) -> dict[str, str]                 # merged (core.merge), sorted by name (PD 13)
+    def variables(self) -> dict[str, str]                 # merged (core.merge), store order (PD 13, D52)
     def with_sources(self) -> dict[str, tuple[str, str]]  # name → (value, winning store), sorted
     def nested(self) -> dict[str, dict[str, str]]         # store order kept, variables sorted
     def nested_flat(self) -> dict[str, str]               # D30, collision → ValidationError
@@ -1129,7 +1129,7 @@ exists → 3) or the source changes during the move (`HookedAdapter` → 5); `--
 | `rm` | `-s STORE [-k PATH\|-] KEYS...` |
 | `import` | `-s STORE [-f/--file PATH\|-] [-t/--type dotenv\|json\|toml] [-o/--overwrite] [-k PATH\|-]` |
 
-- `ls`: `load_for_reading`; names sorted (PD 13), one per line; `-v` → `NAME=display_value(value)`; `--source` adds
+- `ls`: `load_for_reading`; names in merged order (PD 13, D52), one per line; `-v` → `NAME=display_value(value)`; `--source` adds
   the winning store as a second column; `--json` → list of `{"name"[, "value"][, "store"]}` with the keys present
   only when requested (PD 23).
 - `get`: variable name validated first; raw value via `write_value` (no trailing newline unless stdout is a TTY,
@@ -1322,8 +1322,10 @@ Referenced in this section as *PD n*.
     read and interpreted by the store's mode (like `-k`); a `Path` for a new secret must be a key file; passphrases
     are passed as `Passphrase`. The public `Source(name, key=...)` follows spec §7.3; core's `Source(name, secret)`
     stays internal. Rationale: a `str` could be a path or a passphrase; guessing would be a security bug.
-13. **Variables are output sorted by name** in `ls`, `export`, `export-shell`, `Environment.variables()`; nested
-    output keeps the store load order. Rationale: deterministic, diff-friendly output.
+13. **Variable output order** *(amended by D52)*: `ls`, `export`, `export-shell`, `run` and
+    `Environment.variables()` / `with_sources()` list variables in store load order, each store's variables sorted
+    by name, a shared variable at its first position with the merge order's value; nested output keeps the store
+    load order with each store sorted. Rationale: deterministic, diff-friendly output that reads like the stores.
 14. **`Environment.apply` and the one-liner do not overwrite** variables already in `os.environ` unless
     `overwrite=True`, like `run` / `export-shell` without `-o` and python-dotenv's `load_dotenv`.
 15. **Dependency floors:** `typer>=0.26` (vendored click; the exception hierarchy `EnvsGroup` relies on) and

@@ -1,6 +1,6 @@
 # Environment Store V2 — Specification
 
-**Status:** Refined. All questions and proposals are decided (D1–D47). Ready for implementation planning.
+**Status:** Refined. All questions and proposals are decided (D1–D52). Ready for implementation planning.
 **Scope:** Complete rebuild. No backward compatibility with V1 (0.1.x).
 
 > **How to read this document**
@@ -65,6 +65,11 @@ Loading means reading one or more stores in a given order and merging them into 
 - `ordered_overwrite = true` (default): **last wins.** A variable present in several stores takes the value of the
   last store that contains it.
 - `ordered_overwrite = false`: **first wins.** A variable that is already set is not overwritten by later stores.
+- **Output order** *(D52)*: merged output lists the stores' variables in load order. Within one store they are
+  sorted by name (code point order); a variable that appears in several stores keeps the position of its **first**
+  appearance and takes the value chosen by the merge order. Example: `store-a` = `ENV`, `DEBUG`; `store-b` = `ENV`,
+  `DB_NAME`; `export store-a store-b` → `DEBUG=True`, `ENV=staging`, `DB_NAME=test`. This applies to every merged
+  output: `ls` (also `--json`), `export` (every format), `export-shell`, `run` and the library's merged results.
 - **Nested mode** (`--nested`): no merging at all. Each store keeps its own namespace (see [§6.11](#611-export-stores)).
 
 > *(decided, D33)* merging is a pure core function (`merge(stores, ordered_overwrite) -> dict[str, str]`) so that every
@@ -220,7 +225,7 @@ CREATE TABLE stores (
 
 | State found | SQLite | PostgreSQL |
 |---|---|---|
-| Missing / empty (SQLite: no file or no tables; PG: no schema or empty schema) | Create schema v1 | Create schema (if needed) and tables v1 |
+| Missing / empty (SQLite: no file or no tables; PG: no schema or empty schema) | Create schema v1; a missing file is created on the first write, reads create nothing (D43) | Create schema (if needed) and tables v1 |
 | Ours (`meta.app = environment-store`), same version | Use it | Use it |
 | Ours, older version | Upgrade automatically | Refuse; hint to run `migrate` |
 | Ours, newer version than the client | Refuse; hint to upgrade environment-store | Same |
@@ -406,6 +411,10 @@ click, rich and shellingham). The core has no CLI dependencies.
 **Further conventions** *(decided, D33, D35)*
 - Global options: `-c, --connection` (overrides `ENV_STORE_CONNECTION`), `--no-project` (ignore the project file,
   §6.0.3), `--noinput` (see below).
+- `-h` is a shorthand for `--help` on `envs` and on every command *(D48)*.
+- **Reference pages** *(D49)*: a man page `envs(1)` (also reachable as `environment-store(1)`) and a tldr page ship
+  with the project. The wheel installs the man page under `share/man/man1`, so `man envs` works wherever the
+  install prefix's man directory is on `MANPATH`. A test keeps both pages in step with the commands.
 - Output goes to stdout, diagnostics to stderr.
 - Destructive commands ask for confirmation on a TTY; `-y, --yes` skips it. Non-TTY without `--yes` fails.
 - `--json` output for `ls-store`, `ls` and `get` for scripting.
@@ -805,6 +814,10 @@ their own keys.
 > | `web` | Web interface (after V2.0, D32) | talks to `api` over HTTP |
 > | `aws` | AWS adapters (later) | `boto3` |
 > | `all` | everything | |
+>
+> **Documentation of installs** *(D50, D51)*: the docs lead with uv: `uvx` for one-off runs, `uv tool install` for the
+> CLI, `uv add` for the library; pip is shown as the alternative. Installation docs explain every extra in a table:
+> what it adds, its dependencies, which commands or features need it, and the uv and pip commands to install it.
 
 ---
 
@@ -902,3 +915,8 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D45 | 2026-11-06 | New key from stdin | When a new store key comes from stdin (`create-store -e -k -`, `encrypt -k -`, `rekey --new-key -`, `cp-store`/`mv-store --new-key -`), the CLI warns on stderr that envs does not save the key and the store is unreadable without it. | docs review |
 | D46 | 2026-11-06 | TUI command palette | Disabled: its Screenshot action could write revealed values to disk. | docs review |
 | D47 | 2026-11-06 | Library error wording | Library errors name library parameters (`overwrite=True`, `force=True`, `fmt=`, `keys=`); the CLI and TUI add their own hints (`-o`, `--force`, `-t`, `-k`). Key text (`envstore-key-v1:…`) can be passed to the library without a file. | docs review |
+| D48 | 2026-11-07 | `-h` | `-h` is a shorthand for `--help` on `envs` and every command. | usability test |
+| D49 | 2026-11-07 | Reference pages | A man page `envs(1)` / `environment-store(1)`, installed by the wheel under `share/man/man1`, and a tldr page in the tldr-pages format; a test keeps both in step with the commands. | usability test |
+| D50 | 2026-11-07 | uv first in the docs | Install and run instructions lead with uv (`uvx`, `uv tool install`, `uv add`); pip is the alternative. | usability test |
+| D51 | 2026-11-07 | Extras explained | The installation docs explain every extra in a table: what it adds, dependencies, which commands need it, uv and pip install commands. | usability test |
+| D52 | 2026-11-07 | Merged output order | Variables are output in store load order; within a store sorted by name; a variable shared by several stores keeps its first position and takes the merge order's value. Applies to `ls`, `export`, `export-shell`, `run` and the library. Amends PD 13. | usability test |
