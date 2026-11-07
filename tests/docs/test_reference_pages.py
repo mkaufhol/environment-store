@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import tomllib
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 
 import pytest
 from typer.main import get_command
@@ -43,6 +43,10 @@ _TLDR_MAX_EXAMPLES: Final = 8
 _FONT_ESCAPE: Final = re.compile(r"\\f[BIRP]")
 _SECTION_HEADING: Final = re.compile(r'^\.SH\s+"?([^"\n]+?)"?\s*$', re.MULTILINE)
 _SUBSECTION_HEADING: Final = re.compile(r'^\.SS\s+"?([^"\n]+?)"?\s*$', re.MULTILINE)
+# An option name as the page or an example writes it: -x or --long-name, not the
+# hyphen inside a word such as ls-store.
+_FLAG: Final = re.compile(r"(?<![\w-])(--?[A-Za-z][\w-]*)")
+_HELP_OPTIONS: Final = ("-h", "--help")  # D48
 
 
 def _group() -> EnvsGroup:
@@ -66,6 +70,19 @@ def _option_names(command_name: str | None) -> list[str]:
         for name in (*parameter.opts, *parameter.secondary_opts)
     ]
     return sorted(names)
+
+
+def _value_options(command_name: str | None) -> set[str]:
+    """The option names of the root group (None) or of one command that take a value."""
+    group = _group()
+    command = group if command_name is None else group.commands[command_name]
+    return {
+        name
+        for parameter in command.params
+        # Duck-typed: tests import neither click nor typer's vendored copy (plan §6.3).
+        if parameter.param_type_name == "option" and not getattr(parameter, "is_flag", False)
+        for name in parameter.opts
+    }
 
 
 def _command_options() -> list[tuple[str, str]]:
@@ -96,6 +113,32 @@ def _command_sections() -> dict[str, str]:
     return _split(_man_sections()["COMMANDS"], _SUBSECTION_HEADING)
 
 
+def _tagged_paragraph_heads(body: str) -> str:
+    """The head line of every .TP paragraph: where an option is defined."""
+    lines = body.split("\n")
+    return "\n".join(lines[index + 1] for index, line in enumerate(lines[:-1]) if line == ".TP")
+
+
+def _documented_flags(body: str, *, synopsis: bool) -> list[str]:
+    """Every option name the synopsis (text before the first .PP) or a .TP head defines.
+
+    Option names in running text, such as a reference to another command's option,
+    are not definitions and are left out.
+    """
+    defining = _tagged_paragraph_heads(body)
+    if synopsis:
+        defining = body.split("\n.PP", 1)[0] + "\n" + defining
+    return sorted(set(_FLAG.findall(_plain(defining))))
+
+
+def _documented_command_options() -> list[tuple[str, str]]:
+    return [
+        (command, option)
+        for command, body in _command_sections().items()
+        for option in _documented_flags(body, synopsis=True)
+    ]
+
+
 def _mentions(text: str, word: str) -> bool:
     return re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", _plain(text)) is not None
 
@@ -112,6 +155,43 @@ def _tldr_examples() -> list[tuple[str, str]]:
         for index, line in enumerate(lines)
         if line.startswith("- ")
     ]
+
+
+class _Invocation(NamedTuple):
+    """The words of a tldr example that name options and the subcommand."""
+
+    global_options: list[str]
+    command: str | None
+    options: list[str]
+
+
+def _option_words(words: list[str]) -> list[str]:
+    """The option names among words; an ``--option=value`` counts as ``--option``."""
+    names = [word.split("=", 1)[0] for word in words]
+    return [name for name in names if _FLAG.fullmatch(name)]
+
+
+def _tldr_invocation(example: str) -> _Invocation:
+    """The global options, the subcommand and its options of a tldr example.
+
+    The subcommand is the first word after ``envs`` that is neither a global option
+    nor the value of one. Its options are read up to a ``--`` that ends them.
+    """
+    words = example.strip("`").split()[1:]
+    global_values = _value_options(None)
+    index = 0
+    while index < len(words) and words[index].startswith("-"):
+        index += 2 if words[index] in global_values else 1
+    global_options = _option_words(words[:index])
+    if index >= len(words):
+        return _Invocation(global_options, None, [])
+    rest = words[index + 1 :]
+    options = rest[: rest.index("--")] if "--" in rest else rest
+    return _Invocation(global_options, words[index], _option_words(options))
+
+
+def _tldr_invocations() -> list[_Invocation]:
+    return [_tldr_invocation(command) for _, command in _tldr_examples()]
 
 
 def test_pyproject_installs_the_man_directory_as_wheel_data() -> None:
@@ -153,6 +233,23 @@ def test_man_page_documents_every_option_of_every_command(command: str, option: 
     assert _mentions(_command_sections()[command], option)
 
 
+@pytest.mark.parametrize(("command", "option"), _documented_command_options())
+def test_man_page_documents_only_options_the_command_has(command: str, option: str) -> None:
+    # The reverse of the test above: a removed or renamed option must not stay
+    # documented (D49).
+    assert option in [*_option_names(command), *_HELP_OPTIONS]
+
+
+def test_documented_flags_come_from_the_synopsis_and_the_tagged_paragraph_heads() -> None:
+    body = (
+        "\n.B envs x\n.RB [ \\-a ]\n.PP\nText about \\-\\-other and ls\\-store.\n"
+        '.TP\n.BR \\-b ", " \\-\\-bee\nMeans \\-\\-not\\-this.\n'
+    )
+
+    assert _documented_flags(body, synopsis=True) == ["--bee", "-a", "-b"]
+    assert _documented_flags(body, synopsis=False) == ["--bee", "-b"]
+
+
 @pytest.mark.parametrize("command", _registered_commands())
 def test_man_page_gives_a_synopsis_for_every_command(command: str) -> None:
     assert _mentions(_command_sections()[command], f"envs {command}")
@@ -162,6 +259,13 @@ def test_man_page_gives_a_synopsis_for_every_command(command: str) -> None:
 def test_man_page_documents_every_global_option(option: str) -> None:
     # -h is the shorthand of --help on envs and on every command (D48).
     assert _mentions(_man_sections()["GLOBAL OPTIONS"], option)
+
+
+@pytest.mark.parametrize(
+    "option", _documented_flags(_man_sections()["GLOBAL OPTIONS"], synopsis=False)
+)
+def test_man_page_documents_only_global_options_envs_has(option: str) -> None:
+    assert option in [*_option_names(None), *_HELP_OPTIONS]
 
 
 @pytest.mark.parametrize("code", _EXIT_CODES)
@@ -229,14 +333,60 @@ def test_tldr_examples_are_a_description_a_blank_line_and_a_backticked_envs_comm
     assert malformed == []
 
 
+@pytest.mark.parametrize(
+    ("example", "expected"),
+    [
+        ("`envs bogus-cmd {{store}} ls`", _Invocation([], "bogus-cmd", [])),
+        ("`envs lst ls-store`", _Invocation([], "lst", [])),
+        (
+            "`envs --connection json://{{dir}} -c x ls-store --json`",
+            _Invocation(["--connection", "-c"], "ls-store", ["--json"]),
+        ),
+        (
+            "`envs --noinput set -s {{store}} --file={{f}} {{KEY}}`",
+            _Invocation(["--noinput"], "set", ["-s", "--file"]),
+        ),
+        ("`envs run {{store}} -- {{command}} --flag`", _Invocation([], "run", [])),
+        ("`envs --version`", _Invocation(["--version"], None, [])),
+        ("`envs --connection`", _Invocation(["--connection"], None, [])),
+    ],
+)
+def test_tldr_invocation_reads_the_subcommand_after_global_options_and_its_options(
+    example: str, expected: _Invocation
+) -> None:
+    assert _tldr_invocation(example) == expected
+
+
 def test_tldr_examples_use_only_registered_commands() -> None:
     commands = set(_registered_commands())
-    used = [
-        next((word for word in command.strip("`").split() if word in commands), None)
-        for _, command in _tldr_examples()
+
+    used = [invocation.command for invocation in _tldr_invocations()]
+
+    assert [command for command in used if command not in commands] == []
+
+
+def test_tldr_examples_use_only_options_their_command_has() -> None:
+    unknown = [
+        (command, option)
+        for _, command, options in _tldr_invocations()
+        if command is not None
+        for option in options
+        if option not in [*_option_names(command), *_HELP_OPTIONS]
     ]
 
-    assert None not in used
+    assert unknown == []
+
+
+def test_tldr_examples_use_only_global_options_envs_has() -> None:
+    global_options = [*_option_names(None), *_HELP_OPTIONS]
+    unknown = [
+        option
+        for invocation in _tldr_invocations()
+        for option in invocation.global_options
+        if option not in global_options
+    ]
+
+    assert unknown == []
 
 
 def test_tldr_placeholders_are_balanced() -> None:
