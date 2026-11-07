@@ -29,6 +29,9 @@ _HELP: Final = (
     "Stores and keys can be saved in a project file, .envstore.toml (stores, [keys], "
     "ordered_overwrite, connection), found in the current directory or its parents."
 )
+# D48: -h is a shorthand for --help. Click passes help_option_names from the root context to
+# every command's context, so setting them here covers `envs` and every command.
+_CONTEXT_SETTINGS: Final = {"help_option_names": ["-h", "--help"]}
 
 
 def _print_version(value: bool) -> None:  # noqa: FBT001 - typer's option callback signature
@@ -104,6 +107,7 @@ def build_app() -> typer.Typer:
         rich_markup_mode=None,
         no_args_is_help=True,
         add_completion=False,
+        context_settings=_CONTEXT_SETTINGS,
     )
     app.callback()(_root)
     migrate.register(app)
