@@ -1,6 +1,6 @@
 # Environment Store V2 — Specification
 
-**Status:** Refined. All questions and proposals are decided (D1–D52). Ready for implementation planning.
+**Status:** Refined. All questions and proposals are decided (D1–D53). Ready for implementation planning.
 **Scope:** Complete rebuild. No backward compatibility with V1 (0.1.x).
 
 > **How to read this document**
@@ -301,10 +301,30 @@ third-party dependency. `pip install environment-store` always supports encrypti
 |---|---|---|
 | Key file | `-k ./a.key` | Default. For `keyfile` stores the file holds the key. For `passphrase` stores it holds the passphrase (one trailing newline is stripped). |
 | Stdin | `-k -` | Reads the key or passphrase from stdin, e.g. `op read … \| envs ls a -k -`. Only one `-k -` per command. |
+| Environment variable *(D53)* | `ENV_STORE_KEY_<STORE>` | Key text (`envstore-key-v1:…`) for `keyfile` stores, the passphrase for `passphrase` stores; one trailing newline is stripped. For deployments (Heroku config vars, Kubernetes Secrets) where no key file can be shipped. |
 | Interactive prompt | *(no `-k`)* | If a store is encrypted, no `-k` is given and stdin is a terminal, the CLI asks with a hidden prompt. Never triggered in non-interactive use. That case fails with exit code `4`. |
 
 - No literal keys as CLI arguments (they would end up in shell history and `ps`).
-- No environment variables for keys.
+- *(Amended by D53, was: no environment variables for keys.)* **Key from the environment:** an existing encrypted
+  store's key or passphrase may come from `ENV_STORE_KEY_<STORE>`, where `<STORE>` is the store name in
+  SCREAMING_SNAKE_CASE (`-` → `_`, always a valid variable name by D40), e.g. `ENV_STORE_KEY_PROD`,
+  `ENV_STORE_KEY_CUSTOMER_A`.
+  - Precedence: `-k` / library `key=` / `keys=` / `Source(key=…)` > `ENV_STORE_KEY_<STORE>` > project file `[keys]` >
+    hidden prompt (never with `--noinput`). It applies wherever an existing store's key is needed: CLI, library
+    (`EnvironmentStore` methods and `load`), the one-liner and the TUI.
+  - Two stores of one command that map to the same variable (`my-app` and `my_app`) are an error (exit `1`),
+    unless a higher-precedence source gives the key for both.
+  - A variable that is set but empty or not a valid key is a key error (exit `4`); the message names the
+    variable, never its value. A key that does not decrypt the store is the usual decryption error (exit `4`).
+  - Variables of stores that are not used are ignored. A variable for a used plaintext store is ignored too
+    (environments are shared; unlike `-k`, it was not given for this command).
+  - New keys never come from the environment: `create-store -e`, `encrypt`, `rekey --new-key` and the
+    `cp-store` / `mv-store` new-key options keep their explicit options. `rekey`'s *old* key may come from it.
+  - `run` removes every `ENV_STORE_KEY_*` variable from the child's environment, so the program never inherits
+    keys. The library does not change `os.environ` apart from what `apply` writes.
+  - The docs include a deployment guide (Heroku, Kubernetes) that also shows mounting a Secret as a file with
+    `-k` / `[keys]`, which keeps the key out of the process environment, and states that encryption protects the
+    backend and its backups, not against someone who can read the deployment's configuration.
 - The tool never stores, caches or remembers keys.
 
 ### 4.4 Which operations need the key
@@ -920,3 +940,4 @@ None. All questions from the refinement round and all drafting proposals are dec
 | D50 | 2026-11-07 | uv first in the docs | Install and run instructions lead with uv (`uvx`, `uv tool install`, `uv add`); pip is the alternative. | usability test |
 | D51 | 2026-11-07 | Extras explained | The installation docs explain every extra in a table: what it adds, dependencies, which commands need it, uv and pip install commands. | usability test |
 | D52 | 2026-11-07 | Merged output order | Variables are output in store load order; within a store sorted by name; a variable shared by several stores keeps its first position and takes the merge order's value. Applies to `ls`, `export`, `export-shell`, `run` and the library. Amends PD 13. | usability test |
+| D53 | 2026-11-07 | Key from the environment | Amends D3: an existing store's key or passphrase may come from `ENV_STORE_KEY_<STORE>` (store name in SCREAMING_SNAKE_CASE). Precedence `-k`/`key=` > variable > `[keys]` > prompt; colliding names are an error; new keys never come from it; `run` strips `ENV_STORE_KEY_*` from the child. For Heroku/Kubernetes deployments. | deployment question |

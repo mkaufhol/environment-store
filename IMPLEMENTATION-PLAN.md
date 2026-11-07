@@ -722,7 +722,7 @@ class Environment:
     stores: tuple[tuple[str, Mapping[str, str]], ...] = field(repr=False)   # load order
     order: MergeOrder
     def variables(self) -> dict[str, str]                 # merged (core.merge), store order (PD 13, D52)
-    def with_sources(self) -> dict[str, tuple[str, str]]  # name → (value, winning store), sorted
+    def with_sources(self) -> dict[str, tuple[str, str]]  # name → (value, winning store), store order (D52)
     def nested(self) -> dict[str, dict[str, str]]         # store order kept, variables sorted
     def nested_flat(self) -> dict[str, str]               # D30, collision → ValidationError
     def apply(self, *, overwrite: bool = False, nested: bool = False,
