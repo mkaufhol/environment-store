@@ -1,7 +1,9 @@
 """Merging of stores in load order (spec §2.2), nested mode (§6.11, D30) and bool settings (§5.2).
 
 Merging is a pure core function so that every frontend (library, CLI, TUI) behaves identically
-(D33). Error messages name stores and variables but never echo a value.
+(D33), including the output order (D52): the stores' variables in load order, each store's
+sorted by name in code point order, a variable shared by several stores at its first position.
+Error messages name stores and variables but never echo a value.
 """
 
 from collections.abc import Mapping, Sequence
@@ -48,11 +50,14 @@ def merge_with_sources(
         order: Which store wins for a variable present in several stores.
 
     Returns:
-        Variable name → `(value, winning store name)`, in order of first appearance.
+        Variable name → `(value, winning store name)` in output order (D52): stores in load
+        order, each store's variables sorted by name (code point order), a variable present in
+        several stores at the position of its first appearance with the value `order` chooses.
     """
     result: dict[str, tuple[str, str]] = {}
     for store, variables in stores:
-        for name, value in variables.items():
+        # D52: within one store by name; a dict keeps a key's first position on reassignment.
+        for name, value in sorted(variables.items()):
             if order is MergeOrder.LAST_WINS or name not in result:
                 result[name] = (value, store)
     return result
@@ -70,7 +75,7 @@ def merge(
         order: Which store wins for a variable present in several stores.
 
     Returns:
-        Variable name → winning value, in order of first appearance.
+        Variable name → winning value in output order (D52, see `merge_with_sources`).
     """
     return {name: value for name, (value, _) in merge_with_sources(stores, order=order).items()}
 

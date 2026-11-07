@@ -1,6 +1,8 @@
 """The result of loading stores: merge, apply to an environment, export (spec §2.2, §6.11).
 
-Variables are returned sorted by name (PD 13); nested output keeps the load order of the stores.
+Merged variables come in the core's output order (PD 13, D52): stores in load order, each
+store's variables sorted by name, a shared variable at its first position. Nested output keeps
+the load order of the stores, each store's variables sorted by name.
 """
 
 import os
@@ -51,17 +53,17 @@ class Environment:
         """Merge the stores (spec §2.2).
 
         Returns:
-            Variable name → winning value, sorted by name.
+            Variable name → winning value, in output order (D52).
         """
-        return dict(sorted(merge(self.stores, order=self.order).items()))
+        return merge(self.stores, order=self.order)
 
     def with_sources(self) -> dict[str, tuple[str, str]]:
         """Merge the stores and name the store each value comes from.
 
         Returns:
-            Variable name → `(value, winning store)`, sorted by name.
+            Variable name → `(value, winning store)`, in output order (D52).
         """
-        return dict(sorted(merge_with_sources(self.stores, order=self.order).items()))
+        return merge_with_sources(self.stores, order=self.order)
 
     def nested(self) -> dict[str, dict[str, str]]:
         """Keep each store in its own namespace (`--nested`).

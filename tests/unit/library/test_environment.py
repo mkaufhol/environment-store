@@ -29,11 +29,32 @@ def _env(
     return Environment(stores=stores, order=order)
 
 
-def test_variables_last_wins_sorted_by_name() -> None:
+STORE_A: Final = ("store-a", {"ENV": "development", "DEBUG": "True"})
+STORE_B: Final = ("store-b", {"ENV": "staging", "DB_NAME": "test"})
+
+
+def test_variables_last_wins_in_store_order_each_store_sorted() -> None:
+    # D52: base's names first, then staging's new ones; HOST keeps its first position.
     assert list(_env(BASE, STAGING).variables().items()) == [
-        ("DEBUG", "1"),
         ("HOST", "staging.example"),
         ("PORT", "5432"),
+        ("DEBUG", "1"),
+    ]
+
+
+def test_variables_follow_the_d52_example() -> None:
+    assert list(_env(STORE_A, STORE_B).variables().items()) == [
+        ("DEBUG", "True"),
+        ("ENV", "staging"),
+        ("DB_NAME", "test"),
+    ]
+
+
+def test_variables_first_wins_keep_the_d52_order_and_the_first_value() -> None:
+    assert list(_env(STORE_A, STORE_B, order=MergeOrder.FIRST_WINS).variables().items()) == [
+        ("DEBUG", "True"),
+        ("ENV", "development"),
+        ("DB_NAME", "test"),
     ]
 
 
@@ -41,12 +62,41 @@ def test_variables_first_wins_keeps_the_first_value() -> None:
     assert _env(BASE, STAGING, order=MergeOrder.FIRST_WINS).variables()["HOST"] == "localhost"
 
 
-def test_with_sources_names_the_winning_store_sorted_by_name() -> None:
+def test_with_sources_names_the_winning_store_in_store_order() -> None:
     assert list(_env(BASE, STAGING).with_sources().items()) == [
-        ("DEBUG", ("1", "staging")),
         ("HOST", ("staging.example", "staging")),
         ("PORT", ("5432", "base")),
+        ("DEBUG", ("1", "staging")),
     ]
+
+
+def test_nested_flat_keys_follow_store_order_each_store_sorted() -> None:
+    assert list(_env(STAGING, BASE).nested_flat()) == [
+        "STAGING__DEBUG",
+        "STAGING__HOST",
+        "BASE__HOST",
+        "BASE__PORT",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("fmt", "expected"),
+    [
+        ("dotenv", "DEBUG=True\nENV=staging\nDB_NAME=test\n"),
+        ("json", '{\n  "DEBUG": "True",\n  "ENV": "staging",\n  "DB_NAME": "test"\n}\n'),
+        ("toml", 'DEBUG = "True"\nENV = "staging"\nDB_NAME = "test"\n'),
+    ],
+)
+def test_dumps_keeps_the_d52_order_in_every_format(fmt: str, expected: str) -> None:
+    assert _env(STORE_A, STORE_B).dumps(fmt) == expected
+
+
+def test_apply_sets_the_variables_in_the_d52_order() -> None:
+    environ: dict[str, str] = {}
+
+    _env(STORE_A, STORE_B).apply(environ=environ)
+
+    assert list(environ) == ["DEBUG", "ENV", "DB_NAME"]
 
 
 def test_nested_keeps_store_order_and_sorts_variables() -> None:

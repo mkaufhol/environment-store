@@ -53,6 +53,9 @@ def err(text: str) -> None:
 def emit_json(data: JsonValue) -> None:
     """Write exactly one JSON document to stdout, keys sorted, with a trailing newline.
 
+    Only object keys are sorted; lists keep their order, so `ls --json` keeps the merged
+    order of the variables (D52). Exports use `formats.json_format`, which never sorts.
+
     Args:
         data: The document.
     """

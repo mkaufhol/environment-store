@@ -40,6 +40,37 @@ def test_the_winning_store_contains_the_winning_value(stores: Stores, order: Mer
         assert variables_of[store][name] == value
 
 
+def _first_appearance_order(stores: Stores) -> list[str]:
+    # D52: each store's names in code point order, a repeated name keeps its first position.
+    return list(dict.fromkeys(name for _, variables in stores for name in sorted(variables)))
+
+
+@given(_STORES, st.sampled_from(list(MergeOrder)))
+def test_merge_keys_follow_the_load_order_of_the_stores_each_sorted(
+    stores: Stores, order: MergeOrder
+) -> None:
+    assert list(merge(stores, order=order)) == _first_appearance_order(stores)
+
+
+@given(_STORES, st.sampled_from(list(MergeOrder)))
+def test_merge_with_sources_keys_follow_the_same_order_as_merge(
+    stores: Stores, order: MergeOrder
+) -> None:
+    assert list(merge_with_sources(stores, order=order)) == _first_appearance_order(stores)
+
+
+@given(_STORES)
+def test_merge_values_follow_the_merge_order_whatever_the_output_order(stores: Stores) -> None:
+    last: dict[str, str] = {}
+    first: dict[str, str] = {}
+    for _, variables in stores:
+        last.update(variables)
+        first.update({name: value for name, value in variables.items() if name not in first})
+
+    assert dict(merge(stores, order=MergeOrder.LAST_WINS)) == last
+    assert dict(merge(stores, order=MergeOrder.FIRST_WINS)) == first
+
+
 # POSIX shell variable name, written out independently of the library's own patterns (D40).
 _POSIX_SHELL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 

@@ -480,3 +480,25 @@ def test_public_load_passes_keys_and_flags(tmp_path: Path, monkeypatch: pytest.M
     assert os.environ["ENVSTORE_TEST_BASE"] == "b"
     assert os.environ["ENVSTORE_TEST_WORD"] == "w"
     assert environment.order.value == "first_wins"
+
+
+def test_load_applies_the_variables_in_the_d52_order(
+    tmp_path: Path, opener: RecordingOpener, backend: MemoryBackend
+) -> None:
+    with EnvironmentStore(
+        CONNECTION, opener=lambda _url, setup: backend.open(setup=setup)
+    ) as store:
+        store.create_store("store-a")
+        store.set_many("store-a", {"ENV": "development", "DEBUG": "True"})
+        store.create_store("store-b")
+        store.set_many("store-b", {"ENV": "staging", "DB_NAME": "test"})
+    target: dict[str, str] = {}
+
+    environment = _load(tmp_path, opener, "store-a", "store-b", target=target)
+
+    assert list(environment.variables().items()) == [
+        ("DEBUG", "True"),
+        ("ENV", "staging"),
+        ("DB_NAME", "test"),
+    ]
+    assert list(target) == ["DEBUG", "ENV", "DB_NAME"]

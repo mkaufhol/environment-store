@@ -81,6 +81,40 @@ def test_merge_treats_variable_names_case_sensitively() -> None:
     }
 
 
+# --- output order (D52) ---------------------------------------------------------------------------
+
+STORE_A: tuple[str, Mapping[str, str]] = ("store-a", {"ENV": "development", "DEBUG": "True"})
+STORE_B: tuple[str, Mapping[str, str]] = ("store-b", {"ENV": "staging", "DB_NAME": "test"})
+
+
+def test_merge_lists_stores_in_load_order_each_sorted_by_name() -> None:
+    assert list(merge([STORE_A, STORE_B]).items()) == [
+        ("DEBUG", "True"),
+        ("ENV", "staging"),
+        ("DB_NAME", "test"),
+    ]
+
+
+def test_merge_first_wins_keeps_the_first_position_and_the_first_value() -> None:
+    assert list(merge([STORE_A, STORE_B], order=MergeOrder.FIRST_WINS).items()) == [
+        ("DEBUG", "True"),
+        ("ENV", "development"),
+        ("DB_NAME", "test"),
+    ]
+
+
+def test_merge_sorts_within_a_store_by_code_point() -> None:
+    assert list(merge([("a", {"b": "1", "B": "2", "_x": "3", "A": "4"})])) == ["A", "B", "_x", "b"]
+
+
+def test_merge_with_sources_lists_stores_in_load_order_each_sorted_by_name() -> None:
+    assert list(merge_with_sources([STORE_A, STORE_B]).items()) == [
+        ("DEBUG", ("True", "store-a")),
+        ("ENV", ("staging", "store-b")),
+        ("DB_NAME", ("test", "store-b")),
+    ]
+
+
 # --- merge with sources (`ls --source`) ----------------------------------------------------------
 
 

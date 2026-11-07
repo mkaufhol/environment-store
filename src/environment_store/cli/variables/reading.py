@@ -1,7 +1,8 @@
 """`envs ls` and `envs get`: read the merged variables of stores (spec §6.6, §6.7, D16, D33).
 
 Both load through `load_for_reading` (store list, `-k`, project keys, prompts, merge order).
-Names are output sorted (PD 13); `--json` documents follow PD 23.
+Names are output in the merged order (PD 13, D52): stores in load order, each sorted by name;
+`--json` documents follow PD 23.
 """
 
 from typing import Annotated
