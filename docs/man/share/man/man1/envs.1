@@ -1,0 +1,868 @@
+.TH ENVS 1 2026-11-07 "environment-store 2.0" "User Commands"
+.\" Hand-written reference page (D49). Keep it in step with the CLI:
+.\" tests/docs/test_reference_pages.py checks commands, options and exit codes.
+.SH NAME
+envs, environment-store \- keep environment variables in named stores
+.SH SYNOPSIS
+.B envs
+.RB [ \-c
+.IR URL ]
+.RB [ \-\-no\-project ]
+.RB [ \-\-noinput ]
+.I command
+.RI [ options ]
+.RI [ arguments ]
+.br
+.B envs
+.RB [ \-h | \-\-help | \-\-version ]
+.br
+.B environment-store
+.RI ...
+.SH DESCRIPTION
+.B envs
+keeps environment variables in named
+.IR stores .
+A store maps variable names to string values and is either plaintext or
+encrypted as a whole with AES\-256\-GCM, using a random key file or a
+passphrase (Argon2id).
+Stores live in a backend chosen by a connection string: a directory of JSON
+or TOML files, an SQLite database or a PostgreSQL database.
+.PP
+Reading commands load one or more stores in a given order, merge them and
+list, print, export or run a command with the result.
+Writing commands change exactly one store, named with
+.BR \-s .
+.PP
+.B environment-store
+is the same program under its long name.
+The CLI needs the
+.B cli
+extra, the PostgreSQL backend the
+.B postgres
+extra and the TUI the
+.B tui
+extra, for example
+.B uv tool install \(dqenvironment-store[cli]\(dq
+or
+.BR "uvx \-\-from \(dqenvironment-store[cli]\(dq envs" .
+.SH GLOBAL OPTIONS
+Global options come before the command name.
+.TP
+.BI \-c " URL" "\fR, \fP\-\-connection" " URL"
+Connection string of the backend; overrides
+.B ENV_STORE_CONNECTION
+and
+.B connection
+in the project file.
+There is no default: without a connection, every command that opens a store
+fails.
+Forms:
+.BI json:// directory\fR,
+.BI toml:// directory\fR,
+.BI sqlite:/// relative.db\fR,
+.BI sqlite://// absolute/path.db
+and
+.BR postgresql://user@host:5432/db [ ?schema=\fIname\fP ].
+File and SQLite paths expand a leading
+.BR ~ .
+.TP
+.B \-\-no\-project
+Ignore the project file
+.BR .envstore.toml .
+.TP
+.B \-\-noinput
+Never prompt, even on a terminal.
+A missing key or passphrase fails with exit code 4, a missing confirmation
+(no
+.BR \-y )
+with exit code 1, and
+.B set
+reads a value only from stdin.
+Meant for CI.
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.BR \-h ", " \-\-help
+Show the help of
+.B envs
+or, after a command name, of that command, and exit.
+.PP
+.BR \-\-help ,
+.B \-\-version
+and
+.B keygen
+read neither the connection nor the project file.
+.SH COMMANDS
+.SS migrate
+.B envs migrate
+.PP
+Create or upgrade the SQL schema of an SQLite or PostgreSQL backend.
+SQLite schemas are created and upgraded automatically; on PostgreSQL an
+older schema is only upgraded by this command, which an administrator can
+also use for the first setup.
+.SS ls-store
+.B envs ls\-store
+.RB [ \-\-json ]
+.PP
+List all stores and whether they are encrypted; needs no key.
+With no stores, stdout stays empty and stderr names the resolved location.
+.TP
+.B \-\-json
+Print one JSON document.
+.SS create-store
+.B envs create\-store
+.RB [ \-e
+.RB ( \-k
+.IR PATH | \-
+.RB | " \-\-generate\-key"
+.I PATH
+.RB | " \-\-passphrase" )]
+.I NAME
+.PP
+Create a new, empty store.
+Store names match
+.B ^[a\-z][a\-z0\-9_\-]{0,62}$
+and must be unique in the backend.
+.TP
+.BR \-e ", " \-\-encrypt
+Create an encrypted store; needs exactly one of
+.BR \-k ,
+.BR \-\-generate\-key ,
+.BR \-\-passphrase .
+.TP
+.BR \-k ", " \-\-key " \fIPATH\fP|\fB\-\fP"
+Encrypt with this existing key file
+.RB ( \-
+reads it from stdin).
+.TP
+.BI \-\-generate\-key " PATH"
+Encrypt with a new key file written to
+.I PATH
+(mode 0600, never overwritten).
+.TP
+.B \-\-passphrase
+Encrypt with a passphrase: read from stdin when piped, else asked twice.
+.SS rm-store
+.B envs rm\-store
+.RB [ \-y ]
+.I NAME
+.PP
+Delete a store.
+Needs no key, also when the store is encrypted.
+Asks for confirmation on a terminal.
+.TP
+.BR \-y ", " \-\-yes
+Do not ask for confirmation; required when stdin is not a terminal.
+.SS cp-store
+.B envs cp\-store
+.RB [ \-\-to
+.IR URL ]
+.RB [ \-k
+.IR PATH | \- ]
+.RB [ \-\-plain " | " \-\-new\-key
+.IR PATH | \-
+.RB | " \-\-generate\-key"
+.I PATH
+.RB | " \-\-passphrase" ]
+.I SRC DST
+.PP
+Copy a store under a new name, optionally into another backend.
+The copy is encrypted like the source, with the same secret, unless one of
+the mutually exclusive options
+.BR \-\-plain ,
+.BR \-\-new\-key ,
+.BR \-\-generate\-key ,
+.B \-\-passphrase
+is given.
+Fails if
+.I DST
+exists.
+.TP
+.BI \-\-to " URL"
+Connection string of another backend; there
+.I DST
+may equal
+.IR SRC .
+.TP
+.BR \-k ", " \-\-key " \fIPATH\fP|\fB\-\fP"
+Key or passphrase file of the source store,
+.B \-
+for stdin.
+Default:
+.B [keys]
+in the project file, else a prompt on a terminal.
+.TP
+.B \-\-plain
+Make an unencrypted copy; this is the way to decrypt a store.
+.TP
+.BR \-\-new\-key " \fIPATH\fP|\fB\-\fP"
+Encrypt the copy with this existing key file.
+.TP
+.BI \-\-generate\-key " PATH"
+Encrypt the copy with a new key file written to
+.I PATH
+(mode 0600, never overwritten).
+.TP
+.B \-\-passphrase
+Encrypt the copy with a passphrase: read from stdin when piped, else asked
+twice.
+.SS mv-store
+.B envs mv\-store
+.RB [ \-\-to
+.IR URL ]
+.RB [ \-k
+.IR PATH | \- ]
+.RB [ \-\-plain " | " \-\-new\-key
+.IR PATH | \-
+.RB | " \-\-generate\-key"
+.I PATH
+.RB | " \-\-passphrase" ]
+.I SRC DST
+.PP
+Rename a store, or move it into another backend.
+Takes the options of
+.BR cp\-store :
+.BR \-\-to ,
+.BR \-k ", " \-\-key ,
+.BR \-\-plain ,
+.BR \-\-new\-key ,
+.BR \-\-generate\-key ,
+.BR \-\-passphrase .
+The source is deleted only after the copy is written, so a failure never
+leaves zero copies.
+Renaming an encrypted store re\-encrypts it, because the ciphertext is bound
+to the store name, and therefore needs its key.
+.SS ls
+.B envs ls
+.RB [ \-v ]
+.RB [ \-\-source ]
+.RB [ \-\-first\-wins ]
+.RB [ \-k
+.IR STORE = PATH ]...
+.RB [ \-\-json ]
+.RI [ STORE ...]
+.PP
+List the variable names of one or more stores, merged in load order (see
+.BR "MERGE ORDER" ).
+.TP
+.BR \-v ", " \-\-values
+Also show the values.
+.TP
+.B \-\-source
+Show the store each winning value comes from; also works without
+.BR \-v .
+.TP
+.B \-\-first\-wins
+The first store wins instead of the last (overrides
+.BR ENV_STORE_ORDERED_OVERWRITE ).
+.TP
+.BR \-k ", " \-\-key " \fISTORE\fP=\fIPATH\fP"
+Key or passphrase file of a store,
+.B \-
+for stdin; repeatable.
+With one store,
+.BI \-k " PATH"
+is enough.
+.TP
+.B \-\-json
+Print one JSON document.
+.SS get
+.B envs get
+.RB [ \-\-first\-wins ]
+.RB [ \-k
+.IR STORE = PATH ]...
+.RB [ \-\-json ]
+.I KEY
+.RI [ STORE ...]
+.PP
+Print the value of variable
+.IR KEY ;
+with several stores, the value that wins.
+The raw value is printed without a trailing newline unless stdout is a
+terminal, so
+.B $(envs get NAME store)
+works for multi\-line values too.
+Exit code 2 if no store has the variable.
+Options as for
+.BR ls :
+.BR \-\-first\-wins ,
+.BR \-k ", " \-\-key ,
+.BR \-\-json .
+.SS set
+.B envs set
+.B \-s
+.I STORE
+.RB [ \-o ]
+.RB [ \-k
+.IR PATH | \- ]
+.IR KEY = VALUE ...
+.br
+.B envs set
+.B \-s
+.I STORE
+.RB [ \-o ]
+.RB [ \-k
+.IR PATH | \- ]
+.I KEY
+.PP
+Set one or more variables in one store, in a single write.
+.IR KEY = VALUE
+pairs are refused for encrypted stores, because command lines end up in the
+shell history: give one
+.I KEY
+and pipe its value (one trailing newline is stripped) or type it at the
+hidden prompt, which asks twice.
+Empty stdin is an error, so a variable is never blanked by accident.
+.TP
+.BR \-s ", " \-\-store " \fISTORE\fP"
+The store to change (required).
+.TP
+.BR \-o ", " \-\-overwrite
+Overwrite existing variables; otherwise an existing variable is an error and
+nothing is written.
+.TP
+.BR \-k ", " \-\-key " \fIPATH\fP|\fB\-\fP"
+Key or passphrase file of the store,
+.B \-
+for stdin.
+Default:
+.B [keys]
+in the project file, else a prompt on a terminal.
+.SS rm
+.B envs rm
+.B \-s
+.I STORE
+.RB [ \-k
+.IR PATH | \- ]
+.IR KEY ...
+.PP
+Delete one or more variables from one store, in a single write.
+.TP
+.BR \-s ", " \-\-store " \fISTORE\fP"
+The store to change (required).
+.TP
+.BR \-k ", " \-\-key " \fIPATH\fP|\fB\-\fP"
+Key or passphrase file of the store,
+.B \-
+for stdin.
+.SS import
+.B envs import
+.B \-s
+.I STORE
+.RB [ \-f
+.IR PATH | \- ]
+.RB [ \-t
+.BR dotenv | json | toml ]
+.RB [ \-o ]
+.RB [ \-k
+.IR PATH | \- ]
+.PP
+Fill an existing store from a dotenv, JSON or TOML file, or from stdin.
+JSON and TOML input must be a flat object of string values.
+Dotenv input is imported literally;
+.B ${X}
+is never expanded.
+.TP
+.BR \-s ", " \-\-store " \fISTORE\fP"
+The store to change (required).
+.TP
+.BR \-f ", " \-\-file " \fIPATH\fP|\fB\-\fP"
+Input file;
+.B \-
+or none reads stdin.
+.TP
+.BR \-t ", " \-\-type " \fBdotenv\fP|\fBjson\fP|\fBtoml\fP"
+File format; inferred from the file name when omitted, dotenv for stdin.
+.TP
+.BR \-o ", " \-\-overwrite
+Overwrite existing variables; otherwise the conflicts are listed and nothing
+is written.
+.TP
+.BR \-k ", " \-\-key " \fIPATH\fP|\fB\-\fP"
+Key or passphrase file of the store,
+.B \-
+for stdin.
+.SS export
+.B envs export
+.RB [ \-f
+.IR PATH | \- ]
+.RB [ \-t
+.BR dotenv | json | toml ]
+.RB [ \-\-force ]
+.RB [ \-\-nested ]
+.RB [ \-\-first\-wins ]
+.RB [ \-k
+.IR STORE = PATH ]...
+.RI [ STORE ...]
+.PP
+Export the merged stores as dotenv, JSON or TOML.
+Writes to stdout unless
+.B \-f
+names a file (mode 0600).
+Dotenv values are quoted so that python\-dotenv and Docker Compose read them
+back unchanged; a value that cannot be written safely is refused with a hint
+to use
+.BR "\-t json" ,
+.B "\-t toml"
+or
+.BR run .
+.TP
+.BR \-f ", " \-\-file " \fIPATH\fP|\fB\-\fP"
+Output file;
+.B \-
+or none writes to stdout.
+.TP
+.BR \-t ", " \-\-type " \fBdotenv\fP|\fBjson\fP|\fBtoml\fP"
+File format; inferred from the file name
+.RB ( .env* ,
+.BR .json ,
+.BR .toml )
+when omitted, dotenv for stdout.
+.TP
+.B \-\-force
+Replace an existing output file.
+.TP
+.B \-\-nested
+Do not merge; keep stores apart: one table per store (JSON, TOML) or
+.IB STORE __ NAME
+(dotenv), with the store name in upper case and
+.B \-
+replaced by
+.BR _ .
+.TP
+.B \-\-first\-wins
+The first store wins instead of the last.
+.TP
+.BR \-k ", " \-\-key " \fISTORE\fP=\fIPATH\fP"
+Key or passphrase file of a store; repeatable.
+.SS export-shell
+.B envs export\-shell
+.RB [ \-o ]
+.RB [ \-\-nested ]
+.RB [ \-\-first\-wins ]
+.RB [ \-k
+.IR STORE = PATH ]...
+.RI [ STORE ...]
+.PP
+Print
+.B export
+statements that load the merged stores into a POSIX shell (bash, zsh,
+dash, ...).
+A program cannot change its parent shell, so the output is evaluated:
+.B eval \(dq$(envs export\-shell STORE...)\(dq.
+Variables already set in the shell are kept unless
+.B \-o
+is given.
+.TP
+.BR \-o ", " \-\-overwrite
+Overwrite variables that are already set in the shell.
+.TP
+.B \-\-nested
+Prefix each variable with its store name:
+.IR STORE __ NAME .
+.TP
+.B \-\-first\-wins
+The first store wins instead of the last.
+.TP
+.BR \-k ", " \-\-key " \fISTORE\fP=\fIPATH\fP"
+Key or passphrase file of a store; repeatable.
+.SS run
+.B envs run
+.RB [ \-o ]
+.RB [ \-\-nested ]
+.RB [ \-\-first\-wins ]
+.RB [ \-k
+.IR STORE = PATH ]...
+.RI [ STORE ...]
+.B \-\-
+.I CMD
+.RI [ ARG ...]
+.PP
+Run
+.I CMD
+with the merged variables added to the current environment.
+Everything after the first
+.B \-\-
+is the command, passed on untouched.
+The exit status is the command's; on POSIX the process is replaced, so
+signals reach the command directly.
+Works in every shell, including fish and PowerShell.
+.TP
+.BR \-o ", " \-\-overwrite
+Store values overwrite variables already set in the environment.
+.TP
+.B \-\-nested
+Prefix each variable with its store name:
+.IR STORE __ NAME .
+.TP
+.B \-\-first\-wins
+The first store wins instead of the last.
+.TP
+.BR \-k ", " \-\-key " \fISTORE\fP=\fIPATH\fP"
+Key or passphrase file of a store; repeatable.
+.SS keygen
+.B envs keygen
+.IR PATH | \-
+.PP
+Generate a random 256\-bit key file at
+.I PATH
+(mode 0600, never overwritten).
+.B envs keygen \-
+prints the key instead, for example for a password manager.
+Opens no store and needs no connection.
+.SS rekey
+.B envs rekey
+.B \-s
+.I STORE
+.RB [ \-k
+.IR PATH | \- ]
+.RB ( \-\-new\-key
+.IR PATH | \-
+.RB | " \-\-generate\-key"
+.I PATH
+.RB | " \-\-passphrase" )
+.PP
+Re\-encrypt an encrypted store with a new secret; the new key file or
+passphrase replaces the old one, and passphrases get a new salt.
+Can switch between key file and passphrase.
+.TP
+.BR \-s ", " \-\-store " \fISTORE\fP"
+The store to change (required).
+.TP
+.BR \-k ", " \-\-key " \fIPATH\fP|\fB\-\fP"
+The current key or passphrase file,
+.B \-
+for stdin.
+.TP
+.BR \-\-new\-key " \fIPATH\fP|\fB\-\fP"
+Encrypt with this existing key file.
+.TP
+.BI \-\-generate\-key " PATH"
+Encrypt with a new key file written to
+.I PATH
+(mode 0600, never overwritten).
+.TP
+.B \-\-passphrase
+Encrypt with a passphrase: read from stdin when piped, else asked twice.
+.SS encrypt
+.B envs encrypt
+.B \-s
+.I STORE
+.RB ( \-\-new\-key
+.IR PATH | \-
+.RB | " \-\-generate\-key"
+.I PATH
+.RB | " \-\-passphrase" )
+.PP
+Turn a plaintext store into an encrypted one.
+There is no way back in place; a plaintext copy is made with
+.BR "cp\-store \-\-plain" .
+.TP
+.BR \-s ", " \-\-store " \fISTORE\fP"
+The store to change (required).
+.TP
+.BR \-\-new\-key " \fIPATH\fP|\fB\-\fP"
+Encrypt with this existing key file.
+.TP
+.BI \-\-generate\-key " PATH"
+Encrypt with a new key file written to
+.I PATH
+(mode 0600, never overwritten).
+.TP
+.B \-\-passphrase
+Encrypt with a passphrase: read from stdin when piped, else asked twice.
+.SS tui
+.B envs tui
+.PP
+Start the terminal user interface: browse stores, view, add, edit and delete
+variables.
+Needs the
+.B tui
+extra.
+.SH STORE SELECTION AND KEYS
+Reading commands
+.RB ( ls ,
+.BR get ,
+.BR export ,
+.BR export\-shell ,
+.BR run )
+take the stores as positional arguments; left to right is the load order.
+Without stores they use
+.B stores
+from the project file.
+Their keys are bound by store name:
+.BI \-k " STORE" = PATH\fR,
+repeatable;
+.BI \-k " STORE" =\-
+reads that store's key from stdin.
+.B \-k
+for a store that is not in the list, or that is not encrypted, is an error.
+.PP
+Writing commands
+.RB ( set ,
+.BR rm ,
+.BR import ,
+.BR rekey ,
+.BR encrypt )
+act on exactly one store, named with
+.BR \-s ;
+they never take it from the project file.
+Their key is
+.BI \-k " PATH"
+or
+.BR "\-k \-" .
+Commands that act on a whole store
+.RB ( create\-store ,
+.BR rm\-store ,
+.BR cp\-store ,
+.BR mv\-store )
+take its name as a positional argument.
+.PP
+A key file holds one line,
+.BR envstore\-key\-v1: \fIbase64url\fP.
+For a passphrase store the file given to
+.B \-k
+holds the passphrase; one trailing newline is stripped.
+An encrypted store without a key is asked for with a hidden prompt on a
+terminal, once per store; without a terminal, or with
+.BR \-\-noinput ,
+the command fails with exit code 4.
+Only one
+.B \-k \-
+per command reads stdin.
+.SH MERGE ORDER
+By default the last store wins: a variable present in several stores takes
+the value of the last store in the list that has it.
+.B \-\-first\-wins
+selects first wins instead, where a variable keeps the value of the first
+store that has it.
+It is the only command\-line override; there is no
+.BR \-\-last\-wins .
+When
+.B ENV_STORE_ORDERED_OVERWRITE
+or the project file selects first wins, last wins comes back by unsetting or
+changing that setting.
+Precedence:
+.B \-\-first\-wins
+>
+.B ENV_STORE_ORDERED_OVERWRITE
+>
+.B ordered_overwrite
+in the project file > default (last wins).
+.PP
+Merged output lists the variables in store load order.
+Within one store they are sorted by name (code point order).
+A variable that appears in several stores keeps the position of its first
+appearance and takes the value chosen by the merge order.
+This holds for
+.BR ls ,
+.BR export
+(every format),
+.B export\-shell
+and
+.BR run .
+With store
+.B a
+holding
+.B ENV=development
+and
+.BR DEBUG=True ,
+and store
+.B b
+holding
+.B ENV=staging
+and
+.BR DB_NAME=test ,
+.B envs export a b
+prints:
+.PP
+.RS
+.nf
+DEBUG=True
+ENV=staging
+DB_NAME=test
+.fi
+.RE
+.PP
+.B \-\-nested
+does not merge at all; every store keeps its own namespace.
+.SH ENVIRONMENT
+.TP
+.B ENV_STORE_CONNECTION
+Connection string of the backend, as for
+.BR \-c .
+Precedence:
+.B \-c
+>
+.B ENV_STORE_CONNECTION
+>
+.B connection
+in the project file.
+.TP
+.B ENV_STORE_ORDERED_OVERWRITE
+Merge order:
+.B true
+(default, last wins) or
+.B false
+(first wins).
+Also accepts
+.BR 1 ,
+.BR 0 ,
+.BR yes ,
+.BR no ,
+in any case.
+.PP
+Keys are never read from environment variables.
+.SH FILES
+.TP
+.B .envstore.toml
+Optional project file, searched in the current directory and then in its
+parents; the first one found is used, unless
+.B \-\-no\-project
+is given.
+Keys:
+.B stores
+(default store list for reading commands, in load order),
+.B [keys]
+(key file path per encrypted store, relative to the file's directory,
+.B ~
+expanded; paths only, never key material),
+.B ordered_overwrite
+(boolean) and
+.B connection
+(a connection string; a password in it causes a warning).
+Stores given on the command line replace the file's list;
+.B \-k
+on the command line overrides the file's key for that store.
+.RS
+.PP
+.nf
+stores = ["base_conf", "customer_a"]
+
+[keys]
+customer_a = "~/.keys/a.key"
+.fi
+.RE
+.TP
+.IB directory / store .json\fR,\fP " directory" / store .toml
+One file per store in a
+.B json://
+or
+.B toml://
+backend.
+Directories are created with mode 0700, store files with mode 0600.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Usage or validation error, including a refused schema setup and a missing
+confirmation.
+.TP
+.B 2
+Not found: a store or a variable.
+.TP
+.B 3
+Already exists.
+.TP
+.B 4
+Decryption or key error: wrong key, or a missing key in non\-interactive use.
+.TP
+.B 5
+Concurrent modification: the store changed since it was read; nothing was
+written, run the command again.
+.PP
+.B run
+exits with the status of the command it runs.
+.SH EXAMPLES
+Use a directory of JSON files for the session:
+.PP
+.RS
+.nf
+export ENV_STORE_CONNECTION=json://~/.envstore
+.fi
+.RE
+.PP
+Create a plaintext store and an encrypted one with a new key file:
+.PP
+.RS
+.nf
+envs create\-store base_conf
+envs create\-store \-e \-\-generate\-key a.key customer_a
+.fi
+.RE
+.PP
+Set plaintext values, and a secret from a file:
+.PP
+.RS
+.nf
+envs set \-s base_conf DB_HOST=localhost DB_PORT=5432
+envs set \-s customer_a \-k a.key DB_PASSWORD < secret.txt
+.fi
+.RE
+.PP
+List the merged variables with their values and sources:
+.PP
+.RS
+.nf
+envs ls \-v \-\-source base_conf customer_a \-k customer_a=a.key
+.fi
+.RE
+.PP
+Write a dotenv file, load the stores into the shell, or run a program:
+.PP
+.RS
+.nf
+envs export \-f .env base_conf customer_a
+eval "$(envs export\-shell base_conf customer_a)"
+envs run base_conf customer_a \-\- python app.py
+.fi
+.RE
+.PP
+Run once without installing, with uv:
+.PP
+.RS
+.nf
+uvx \-\-from "environment\-store[cli]" envs ls\-store
+.fi
+.RE
+.SH SECURITY
+Encryption covers the whole store: names and values.
+Only the store name and metadata stay visible, so
+.B ls
+needs the key too.
+A ciphertext is bound to its store name.
+.PP
+Keys are never accepted as literal arguments or environment variables, and
+never stored or cached.
+Pass a key file with
+.BR \-k ,
+pipe it with
+.BR "\-k \-" ,
+or type it at the prompt.
+.PP
+.B set
+refuses
+.IR KEY = VALUE
+for encrypted stores, because command lines end up in the shell history and
+in
+.BR ps (1);
+pipe the value or use the prompt.
+.PP
+Key files and exported files are created with mode 0600; key files are never
+overwritten.
+Exported dotenv files and the output of
+.B export\-shell
+contain plaintext secrets.
+Do not commit a project file whose
+.B connection
+contains a password; set
+.B ENV_STORE_CONNECTION
+instead.
+.SH SEE ALSO
+.BR env (1),
+.BR sh (1)
+.PP
+Documentation: https://github.com/mkaufhol/environment\-store
