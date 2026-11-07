@@ -185,10 +185,10 @@ def test_close_releases_the_connection(postgres_server: PostgresServer, database
 def test_repr_names_the_location_but_no_credentials(
     postgres_server: PostgresServer, database: str
 ) -> None:
-    password = "pw-in-repr"  # noqa: S105 - test value that must never show
-    url = postgres_server.url(database, user="postgres", password=password)
-    with open_postgres(url) as adapter:
-        text = repr(adapter)
+    with postgres_server.owner_role(database) as (user, password):
+        url = postgres_server.url(database, user=user, password=password)
+        with open_postgres(url) as adapter:
+            text = repr(adapter)
 
     assert "environment_store" in text
     assert password not in text

@@ -123,6 +123,24 @@ class PostgresServer:
                 maintenance, sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(name))
             )
 
+    @contextmanager
+    def owner_role(self, database: str) -> Generator[tuple[str, str]]:
+        """A login role with a real password that may create schemas in `database`.
+
+        For tests that must put a password into the URL: a server with password authentication
+        (CI) rejects made-up ones. Its objects and grants are dropped with it afterwards.
+        """
+        with self.role() as (name, password):
+            role = sql.Identifier(name)
+            self.execute(
+                database,
+                sql.SQL("GRANT CREATE ON DATABASE {} TO {}").format(sql.Identifier(database), role),
+            )
+            try:
+                yield name, password
+            finally:
+                self.execute(database, sql.SQL("DROP OWNED BY {}").format(role))
+
     def _maintenance_database(self) -> str:
         return urlsplit(self.admin_url).path.lstrip("/") or _SUPERUSER
 

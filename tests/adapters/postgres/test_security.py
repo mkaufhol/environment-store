@@ -252,16 +252,17 @@ def test_driver_errors_become_backend_errors_naming_the_location(
     database: str,
     operation: Callable[[PostgresAdapter], object],
 ) -> None:
-    url = postgres_server.url(database, user="postgres", password=_PASSWORD)
-    with open_postgres(url) as adapter:
-        _drop_stores(postgres_server, database)
+    with postgres_server.owner_role(database) as (user, password):
+        url = postgres_server.url(database, user=user, password=password)
+        with open_postgres(url) as adapter:
+            _drop_stores(postgres_server, database)
 
-        with pytest.raises(BackendError, match="environment_store") as caught:
-            operation(adapter)
+            with pytest.raises(BackendError, match="environment_store") as caught:
+                operation(adapter)
 
-        assert "SQLSTATE 42P01" in str(caught.value)
-        assert _PASSWORD not in str(caught.value)
-        assert caught.value.__cause__ is not None
+    assert "SQLSTATE 42P01" in str(caught.value)
+    assert password not in str(caught.value)
+    assert caught.value.__cause__ is not None
 
 
 def test_migrate_on_a_closed_adapter_raises_backend_error(
