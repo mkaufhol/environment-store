@@ -45,7 +45,7 @@ $ envs ls-store
 Error: no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, or set 'connection' in .envstore.toml
 ```
 
-`envs keygen`, `envs --help` and `envs --version` work without a connection. They do not read the project file
+`envs keygen`, `envs -h` / `envs --help` and `envs --version` work without a connection. They do not read the project file
 either, so a broken `.envstore.toml` cannot stop them.
 
 A connection with a typo in the path is not an error: it simply points at an empty backend. `ls-store` then says on
@@ -68,7 +68,7 @@ stdout stays empty (`[]` with `--json`) and the exit code is 0, so scripts are n
 | JSON files | `json://envs` | included | one person, one machine; files you can read and diff |
 | TOML files | `toml://envs` | included | the same, if you prefer TOML |
 | SQLite | `sqlite:///envs.db` | included | one file holding all stores |
-| PostgreSQL | `postgresql://user@host/db` | `pip install 'environment-store[postgres]'` | a team or several machines sharing stores |
+| PostgreSQL | `postgresql://user@host/db` | the `postgres` extra: `uv tool install 'environment-store[cli,postgres]'` (pip: `pip install 'environment-store[cli,postgres]'`) | a team or several machines sharing stores |
 
 ### JSON and TOML files
 
@@ -130,7 +130,9 @@ Things to know:
 
 ### PostgreSQL
 
-Install the extra first: `pip install 'environment-store[postgres]'`. Without it you get
+Install the extra first: `uv tool install 'environment-store[cli,postgres]'` for the CLI, `uv add
+'environment-store[postgres]'` for the library, or `pip install 'environment-store[cli,postgres]'`
+(see [Installation](installation.md#optional-extras)). Without it you get
 `Error: this feature needs the optional 'postgres' dependencies: pip install 'environment-store[postgres]'`.
 
 ```text
@@ -356,8 +358,8 @@ Now, from the project directory or any subdirectory:
 $ cd sub/deeper
 $ envs ls -v --source
 DB_HOST=localhost    base
-DB_PASSWORD=hunter2  prod
 DB_PORT=5432         base
+DB_PASSWORD=hunter2  prod
 $ envs get DB_PASSWORD
 hunter2
 ```
@@ -404,7 +406,7 @@ the store, and update it after `envs rekey` (see [Encryption and keys](encryptio
 >
 > Put the passphrase in a file (mode `0600`, outside the repository) and list the path of that file.
 
-A broken project file makes every command fail except `envs keygen`, `envs --help` and `envs --version`, which do not
+A broken project file makes every command fail except `envs keygen`, `envs -h` / `--help` and `envs --version`, which do not
 read it. Use `--no-project` to work around it, or fix the file.
 
 ### Writing commands do not use `stores`
@@ -475,7 +477,7 @@ The same goes for keys: commit the `[keys]` **paths** if you like, but never the
 |---|---|
 | Connection | `-c` / `--connection` → `ENV_STORE_CONNECTION` → `connection` in `.envstore.toml` → error |
 | Store list (reading commands) | stores named on the command line → `stores` in `.envstore.toml` → error |
-| Merge order | `--first-wins` → `ENV_STORE_ORDERED_OVERWRITE` → `ordered_overwrite` → last store wins |
+| Merge order (which value wins) | `--first-wins` → `ENV_STORE_ORDERED_OVERWRITE` → `ordered_overwrite` → last store wins |
 | Key of an encrypted store | `-k` → `[keys]` in `.envstore.toml` → hidden prompt on a terminal → error, exit code 4 |
 
 For example, with `connection = "json://envs"` in the project file, `ENV_STORE_CONNECTION=json://elsewhere` makes
@@ -539,7 +541,7 @@ $ envs -c json://envs set -s customer-a 9BAD=x
 Error: invalid variable name '9BAD': use letters, digits and '_', not starting with a digit (^[A-Za-z_][A-Za-z0-9_]*$)
 ```
 
-Output is always sorted by variable name.
+A single store is listed sorted by variable name. Several stores are listed store by store in load order, each sorted by name, with a variable that several stores define at its first position ([output order](cli.md#output-order)).
 
 ### Values
 

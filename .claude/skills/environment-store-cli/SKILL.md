@@ -10,7 +10,15 @@ description: Use when the user asks to list, read, set, delete, import, export o
 key file or passphrase). Reading commands merge several stores in load order. `environment-store`
 is the same program.
 
-Full option tables and the error catalogue are in [reference.md](reference.md).
+Full option tables and the error catalogue are in [reference.md](reference.md). `envs -h` (same as
+`--help`) prints the help of `envs` or of any command (`envs export -h`).
+
+If `envs` is not installed, do not `pip install` it globally. Ask the user, then prefer uv:
+`uv tool install 'environment-store[cli]'` (add extras as needed, e.g. `[cli,postgres]`), or run it
+once with `uvx --from 'environment-store[cli]' envs ...`; inside a uv project use `uv run envs ...`.
+2.0 is not on PyPI yet (PyPI has 0.1 without `envs`); until it is, use the Git URL:
+`uv tool install 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2'`.
+Check with `envs --version` (must be `2.0.0.dev0` or later).
 
 ## Rules for agents
 
@@ -221,7 +229,10 @@ next call. Prefer `envs run ... -- CMD`, or chain `eval` and the command in the 
 ## Machine-readable output
 
 Data goes to stdout as UTF-8; messages (`created store 'x'`, `Error: ...`) go to stderr.
-Output is sorted by variable name (`ls-store` by store name).
+A single store is listed sorted by variable name (`ls-store` by store name). Merged output of several
+stores (`ls`, `ls --json`, `export`, `export-shell`, `run`) goes store by store in load order, each
+store's names sorted; a name defined by several stores keeps its first position and takes the
+winning value (see below).
 
 - `ls-store --json`: list of `{created_at, encrypted, key_mode, name, revision, updated_at}`;
   `key_mode` is `"keyfile"`, `"passphrase"` or `null`.
@@ -242,6 +253,12 @@ $ envs --noinput ls -v --source base dev           $ envs --noinput ls -v --sour
 DB_HOST=dev.example.com  dev                        DB_HOST=localhost  base
 DB_PORT=5432             base                       DB_PORT=5432       base
 ```
+
+**Output order**: stores in load order, names sorted within each store, a shared name at its first
+position with the winning value. `store-a` = `ENV=development DEBUG=True`, `store-b` =
+`ENV=staging DB_NAME=test`: `envs --noinput export store-a store-b` prints `DEBUG=True`,
+`ENV=staging`, `DB_NAME=test` (with `--first-wins`, `ENV=development`). Do not assume the output
+is sorted alphabetically, and do not expect the order in which variables were set.
 
 `--nested` (on `export`, `export-shell`, `run`) does not merge: each variable becomes
 `STORE__NAME`, with the store upper-cased and `-` turned into `_` (`customer-a` + `DB_HOST` ->
@@ -287,6 +304,6 @@ two stores producing the same flat name (`customer-a` and `customer_a`), is an e
 | `Delete store 'dev'? Confirm with -y/--yes (no terminal to ask, or --noinput)` (1) | Ask the user; rerun with `-y` only after a yes. |
 | `output file '.env' already exists; use --force to replace it` (1) | Ask, then add `--force`, or pick another path. |
 | `stdin can be used only once per command ...` (1) | Put the key in a file and use `-k PATH`. |
-| `this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'` | Install the named extra (`cli`, `postgres`, `tui`). |
+| `this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'` | Install the named extra (`cli`, `postgres`, `tui`), after asking. With uv, reinstall with the extra added: `uv tool install 'environment-store[cli,postgres]'`; in a uv project `uv add 'environment-store[postgres]'`. |
 
 `envs tui` is interactive and refused under `--noinput`; agents should not use it.

@@ -20,10 +20,15 @@ The TUI is built on [Textual](https://textual.textualize.io/) and ships as an op
 itself comes from the `cli` extra, so install both:
 
 ```sh
-pip install 'environment-store[cli,tui]'
+uv tool install 'environment-store[cli,tui]'
 # or everything, including PostgreSQL support:
-pip install 'environment-store[all]'
+uv tool install 'environment-store[all]'
+# with pip, in a virtual environment:
+pip install 'environment-store[cli,tui]'
 ```
+
+2.0 is not on PyPI yet; until it is, append the repository URL:
+`uv tool install 'environment-store[cli,tui] @ git+https://github.com/mkaufhol/environment-store@feature/v2'`.
 
 Without Textual, `envs tui` stops with exit code 1 and tells you what to install:
 
@@ -31,7 +36,7 @@ Without Textual, `envs tui` stops with exit code 1 and tells you what to install
 Error: this feature needs the optional 'tui' dependencies: pip install 'environment-store[tui]'
 ```
 
-See [Installation](installation.md) for `uv` and `pipx`.
+With uv, install the tool again with `tui` in the list of extras. See [Installation](installation.md#optional-extras) for every extra.
 
 ## Start the TUI
 

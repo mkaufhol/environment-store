@@ -9,22 +9,23 @@ everything afterwards.
 
 ## 1. Install
 
-Version 2.0 is not on PyPI yet (`pip install environment-store` currently gives you the old 0.1 line, which has no
-`envs` command), so install it from a clone of the repository. Do this outside your empty work directory:
+Install the command with [uv](https://docs.astral.sh/uv/). `uv tool install` gives it its own isolated environment
+and puts `envs` on your `PATH`. Version 2.0 is not on PyPI yet (the package there is the old 0.1 line, which has
+no `envs` command), so install it from the Git repository:
 
 ```console
-$ git clone https://github.com/mkaufhol/environment-store.git && cd environment-store
-$ git switch feature/v2
-$ python3.13 -m venv .venv && . .venv/bin/activate
-$ pip install -e '.[cli]'
+$ uv tool install 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2'
 $ envs --version
 environment-store 2.0.0.dev0
 ```
 
-Keep the virtual environment active and change into your empty work directory for the rest of the guide.
+Then change into your empty work directory for the rest of the guide. Once 2.0 is on PyPI, the command is
+`uv tool install 'environment-store[cli]'`. With pip, run `pip install` with the same text inside a virtual
+environment.
 
 The `[cli]` extra adds the `envs` command. It is also installed as `environment-store`; both names run the same
-tool. See [Installation](installation.md) for PostgreSQL support, the TUI and how to install once 2.0 is on PyPI.
+tool. `envs -h` shows the help of every command. See [Installation](installation.md) for PostgreSQL support, the
+TUI and the other extras.
 
 ## 2. Create a plain store
 
@@ -170,9 +171,9 @@ each key to its store with `-k STORE=PATH`. `--source` shows where each value co
 ```console
 $ envs ls -v --source dev prod -k prod=prod.key
 DB_HOST=db.example.com   prod
-DB_PASSWORD=s3cr3t-pa55  prod
 DB_PORT=5432             dev
 DEBUG=true               dev
+DB_PASSWORD=s3cr3t-pa55  prod
 ```
 
 `DB_HOST` comes from `prod` because `prod` is listed last. Add `--first-wins` to let the first store win instead.
@@ -231,8 +232,8 @@ $ unset DB_HOST DB_PORT DEBUG
 
 ## 8. Use the variables in Python
 
-Install the library (the CLI extra already includes it) and call `load()` at the start of your program. It merges
-the stores like the CLI and puts the variables into `os.environ`. Keys are given as `Path` objects:
+Call `load()` at the start of your program. It merges the stores like the CLI and puts the variables into
+`os.environ`. Keys are given as `Path` objects:
 
 ```python
 # app.py
@@ -247,10 +248,16 @@ environment_store.load(
 print(os.environ["DB_HOST"], os.environ["DB_PASSWORD"])
 ```
 
+The `envs` tool from step 1 lives in its own environment, so your Python cannot import the library from there.
+`uv run --with` runs the script in a temporary environment that has it:
+
 ```console
-$ python app.py
+$ uv run --with 'environment-store @ git+https://github.com/mkaufhol/environment-store@feature/v2' python app.py
 db.example.com s3cr3t-pa55
 ```
+
+In a real project, add the library once with `uv add environment-store` (today with the same `@ git+...` URL) and
+run `uv run python app.py`, or `pip install` it into your virtual environment and run `python app.py`.
 
 Like the CLI, `load()` keeps variables that are already set unless you pass `overwrite=True`, and it reads
 `ENV_STORE_CONNECTION` when you leave out `connection=`. For full control, open the backend yourself:
@@ -262,7 +269,7 @@ from environment_store import EnvironmentStore, Source
 with EnvironmentStore("sqlite:///envs.db") as es:
     env = es.load(["dev", Source("prod", key=Path("prod.key"))])
     print(env.variables())
-    # {'DB_HOST': 'db.example.com', 'DB_PASSWORD': 's3cr3t-pa55', 'DB_PORT': '5432', 'DEBUG': 'true'}
+    # {'DB_HOST': 'db.example.com', 'DB_PORT': '5432', 'DEBUG': 'true', 'DB_PASSWORD': 's3cr3t-pa55'}
 ```
 
 See [Python library](python.md) for the whole API.
@@ -287,9 +294,9 @@ commands get much shorter:
 $ unset ENV_STORE_CONNECTION
 $ envs ls -v --source
 DB_HOST=db.example.com   prod
-DB_PASSWORD=s3cr3t-pa55  prod
 DB_PORT=5432             dev
 DEBUG=true               dev
+DB_PASSWORD=s3cr3t-pa55  prod
 $ mkdir -p src/app && cd src/app
 $ envs get DB_HOST
 db.example.com

@@ -24,7 +24,9 @@ against the real CLI.
 
 | Task | Where to look |
 |---|---|
-| install it? | [Installation](installation.md) (2.0 is not on PyPI yet; install from source) |
+| install it? | [Installation](installation.md) (with uv; 2.0 is not on PyPI yet, so install from the repository) |
+| know which extra I need? | [Optional extras](installation.md#optional-extras) |
+| read the man page or the tldr page? | [Reference pages](cli.md#reference-pages-man-and-tldr) |
 | create a store and add variables? | [Quickstart](quickstart.md#2-create-a-plain-store), [`envs set`](cli.md#envs-set--set-variables) |
 | bring in an existing `.env`, JSON or TOML file? | [`envs import`](cli.md#envs-import--fill-a-store-from-a-file) |
 | keep secrets encrypted? | [Quickstart](quickstart.md#4-create-an-encrypted-store), [Encryption and keys](encryption.md) |
@@ -52,4 +54,4 @@ against the real CLI.
   `sqlite:///file.db` or `postgresql://user@host/db`.
 - A store is either **plain** or **encrypted** as a whole, with a **key file** or a **passphrase**.
 - Reading commands take several stores in **load order**. By default the last store wins when two define the same
-  variable.
+  variable. The output lists the stores' variables in that order ([output order](cli.md#output-order)).

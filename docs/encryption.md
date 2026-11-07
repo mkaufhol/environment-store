@@ -239,8 +239,8 @@ store by name. Repeat `-k` for each encrypted store; plain stores need nothing.
 ```console
 $ envs ls base prod -k prod=prod.key -v
 DB_HOST=localhost
-DB_PASSWORD=hunter2
 DB_PORT=5432
+DB_PASSWORD=hunter2
 $ envs ls base prod -k prod.key
 Error: -k <path> without a store name works with exactly one store; with several stores bind each key by name: -k <store>=<path>
 ```
@@ -289,8 +289,8 @@ prod = "keys/prod.key"
 ```console
 $ envs ls -v --source
 DB_HOST=localhost    base
-DB_PASSWORD=hunter2  prod
 DB_PORT=5432         base
+DB_PASSWORD=hunter2  prod
 ```
 
 - Relative paths are resolved from the directory of `.envstore.toml`; `~` is expanded.

@@ -27,16 +27,26 @@ with [the setup below](#set-up-the-example-stores), and the output shown is the 
 
 ## Install
 
-The library needs Python 3.13 or newer.
+The library needs Python 3.13 or newer. In a uv project, add it with `uv add` and run your code
+with `uv run`; with pip, install it into your virtual environment:
 
 ```sh
-pip install environment-store                # library, encryption, JSON, TOML and SQLite
-pip install 'environment-store[postgres]'    # adds the PostgreSQL backend (psycopg)
-pip install 'environment-store[all]'         # library, PostgreSQL, CLI and TUI
+uv add environment-store                     # library, encryption, JSON, TOML and SQLite
+uv add 'environment-store[postgres]'         # adds the PostgreSQL backend (psycopg)
+uv add 'environment-store[all]'              # library, PostgreSQL, CLI and TUI
+uv run python app.py                         # run your code in the project's environment
+
+pip install environment-store                # the same with pip
+pip install 'environment-store[postgres]'
 ```
 
+2.0 is not on PyPI yet. Until it is, add it from the repository:
+`uv add 'environment-store[postgres] @ git+https://github.com/mkaufhol/environment-store@feature/v2'`.
+[Installation](installation.md#optional-extras) explains every extra and the pip equivalents.
+
 If you open a `postgresql://` connection without the `postgres` extra, you get a
-`MissingExtraError` that tells you the `pip install` command to run.
+`MissingExtraError` that tells you the `pip install` command to run; with uv, run
+`uv add 'environment-store[postgres]'` instead.
 
 ## Concepts in two minutes
 
@@ -71,7 +81,9 @@ If you open a `postgresql://` connection without the `postgres` extra, you get a
   SQLite database is set up on the first write, a PostgreSQL schema on first use. Put database
   passwords in the `ENV_STORE_CONNECTION` environment variable, never in a file you commit.
 - When you load several stores, they are merged **in order, and the last store wins** for a
-  variable that appears in more than one. `first_wins=True` reverses that.
+  variable that appears in more than one. `first_wins=True` reverses that. The merged result
+  lists the variables store by store in load order, each store's names sorted; see
+  [the order of the merged variables](#the-order-of-the-merged-variables).
 
 ## Set up the example stores
 
@@ -144,7 +156,7 @@ print(env.variables())
 
 ```text
 dev.example.com
-{'DB_HOST': 'dev.example.com', 'DB_PORT': '5432', 'DEBUG': 'true', 'LOG_LEVEL': 'info'}
+{'DB_HOST': 'dev.example.com', 'DB_PORT': '5432', 'LOG_LEVEL': 'info', 'DEBUG': 'true'}
 ```
 
 `base` has `DB_HOST=localhost` and `dev` has `DB_HOST=dev.example.com`; `dev` comes last, so it
@@ -263,11 +275,37 @@ print(env.with_sources())
 
 ```text
 dev.example.com
-{'DB_HOST': ('dev.example.com', 'dev'), 'DB_PORT': ('5432', 'base'), 'DEBUG': ('true', 'dev'), 'LOG_LEVEL': ('info', 'base')}
+{'DB_HOST': ('dev.example.com', 'dev'), 'DB_PORT': ('5432', 'base'), 'LOG_LEVEL': ('info', 'base'), 'DEBUG': ('true', 'dev')}
 ```
 
 `es.load()` only reads; it does not touch `os.environ`. Call `env.apply()` if you want that.
 To pick the merge order, pass `order=MergeOrder.FIRST_WINS`.
+
+### The order of the merged variables
+
+`Environment.variables()`, `with_sources()`, `apply()`, `dumps()` and `to_file()` list the
+variables **store by store, in load order**. Within one store the names are sorted. A variable
+that several stores define stays where it first appears and takes the value the merge order
+picks. Above, `base` gives `DB_HOST`, `DB_PORT`, `LOG_LEVEL`, then `dev` adds `DEBUG`; `DB_HOST`
+keeps its first place with `dev`'s value. Another example, with `store-a` holding
+`ENV=development` and `DEBUG=True`, and `store-b` holding `ENV=staging` and `DB_NAME=test`:
+
+```python
+from environment_store import EnvironmentStore, MergeOrder
+
+with EnvironmentStore("sqlite:///envs.db") as es:
+    print(es.load(["store-a", "store-b"]).variables())
+    print(es.load(["store-a", "store-b"], order=MergeOrder.FIRST_WINS).variables())
+```
+
+```text
+{'DEBUG': 'True', 'ENV': 'staging', 'DB_NAME': 'test'}
+{'DEBUG': 'True', 'ENV': 'development', 'DB_NAME': 'test'}
+```
+
+`store-a`'s names come first, sorted (`DEBUG`, `ENV`); `store-b` adds `DB_NAME` at the end, and
+its `ENV` changes the value but not the position. A single store's variables
+(`es.variables("dev")`) are sorted by name. The CLI prints the same order.
 
 To open the backend named by `ENV_STORE_CONNECTION` (and nothing else; no project file), use
 `EnvironmentStore.from_env()`:
@@ -297,8 +335,8 @@ print(env.dumps("dotenv"), end="")
 ```text
 DB_HOST=dev.example.com
 DB_PORT=5432
-DEBUG=true
 LOG_LEVEL=info
+DEBUG=true
 ```
 
 Things to know:
@@ -458,7 +496,7 @@ with EnvironmentStore("sqlite:///envs.db") as es:
 ```text
 store 'prod' is encrypted (keyfile mode): a key or passphrase is required
 {'DB_PASSWORD': 'hunter2'}
-{'DB_HOST': 'localhost', 'DB_PASSWORD': 'hunter2', 'DB_PORT': '5432', 'LOG_LEVEL': 'info'}
+{'DB_HOST': 'localhost', 'DB_PORT': '5432', 'LOG_LEVEL': 'info', 'DB_PASSWORD': 'hunter2'}
 ```
 
 A wrong key raises
@@ -630,9 +668,11 @@ variables not found in store 'base': NOPE, ALSO_NOPE
   ```
 
 - Values are always `str`; `variables()`, `nested_flat()` and `apply()` return `dict[str, str]`.
-  `variables()` and `apply()` are sorted by name. `nested_flat()` and `apply(nested=True)` keep
-  the stores in load order and sort the variables within each store, so `PROD__A` can come
-  before `BASE__Z`.
+  `variables()` and `apply()` follow the merged order: stores in load order, each store's
+  names sorted, a shared name at its first position (see
+  [the order of the merged variables](#the-order-of-the-merged-variables)).
+  `nested_flat()` and `apply(nested=True)` also keep the stores in load order and sort the
+  variables within each store, so `PROD__A` can come before `BASE__Z`.
 - `Source`, `KeyMaterial`, `Passphrase`, `StoreInfo`, `MigrationReport` and `Environment` are
   frozen dataclasses. Their secret-holding arguments are keyword-only (`Source("prod", key=...)`,
   `Passphrase(text=...)`).
@@ -692,8 +732,8 @@ one from `load()` or `EnvironmentStore.load()`. Its `repr` hides the values.
 
 | Method | Description |
 |---|---|
-| `variables() -> dict[str, str]` | The merged variables. |
-| `with_sources() -> dict[str, tuple[str, str]]` | `{name: (value, store)}`, naming the winning store. |
+| `variables() -> dict[str, str]` | The merged variables, in [merged order](#the-order-of-the-merged-variables). |
+| `with_sources() -> dict[str, tuple[str, str]]` | `{name: (value, store)}`, naming the winning store; same order as `variables()`. |
 | `nested() -> dict[str, dict[str, str]]` | `{store: {name: value}}` in load order; a store listed twice raises `ValidationError`. |
 | `nested_flat() -> dict[str, str]` | `{"STORE__NAME": value}`; a name collision raises `ValidationError`. |
 | `apply(*, overwrite: bool = False, nested: bool = False, environ: MutableMapping[str, str] \| None = None) -> dict[str, str]` | Write into `os.environ` (or `environ`); returns what was set. |

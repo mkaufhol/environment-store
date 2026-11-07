@@ -1,6 +1,7 @@
 # environment-store CLI reference
 
 Companion to [SKILL.md](SKILL.md). Checked against `envs --version` = `environment-store 2.0.0.dev0`.
+The same reference is in the man page `envs(1)` (`docs/man/share/man/man1/envs.1` in the repository).
 Every flag defaults to off; every option with a value defaults to none.
 
 ## Global options (before the command name)
@@ -14,7 +15,7 @@ global option: put it before the command, e.g. envs --noinput ls`.
 | `--no-project` | Ignore `.envstore.toml`. |
 | `--noinput` | Never prompt: missing keys exit 4, missing confirmations (no `-y`) exit 1. Without a terminal the CLI already behaves this way. |
 | `--version` | Print `environment-store <version>`. |
-| `--help` | Help; also `envs COMMAND --help`. |
+| `-h, --help` | Help; also `envs COMMAND -h` / `envs COMMAND --help`. Reads neither the connection nor `.envstore.toml`. |
 
 Environment variables (the only two read; there are none for keys):
 
@@ -31,6 +32,11 @@ There is no `--last-wins` flag.
 ### Reading: `ls`, `get`, `export`, `export-shell`, `run`
 
 Positional `STORES...` in load order (default: `stores` in `.envstore.toml`; positional stores replace it).
+
+Merged output order: store by store in load order, names sorted within a store, a name shared by
+several stores at its first position with the winning value (`store-a`: `ENV`, `DEBUG`; `store-b`: `ENV`,
+`DB_NAME` -> `DEBUG`, `ENV`, `DB_NAME`). Applies to `ls` (also `--json`), `export` (every format),
+`export-shell` and `run`.
 
 | Option | `ls` | `get` | `export` | `export-shell` | `run` | Meaning |
 |---|---|---|---|---|---|---|
@@ -100,7 +106,7 @@ again` (`passphrase` for a passphrase).
 - Found by walking up from the current directory; the first regular file wins.
 - Ignored with a warning when not owned by you or root, or world-writable.
 - `envs` never writes it: add `[keys]` entries yourself after `create-store -e` or `encrypt`.
-- Only keys `connection`, `stores`, `ordered_overwrite`, `[keys]`; anything else is an error (exit 1) that breaks every command except `keygen`, `--help` and `--version` (they do not read the file).
+- Only keys `connection`, `stores`, `ordered_overwrite`, `[keys]`; anything else is an error (exit 1) that breaks every command except `keygen`, `-h`/`--help` and `--version` (they do not read the file).
 - Relative `json://`, `toml://`, `sqlite:///` connections and `[keys]` paths are relative to the project file's directory.
 - `[keys]` holds paths only, never key material. A `[keys]` entry for a plaintext store that a command loads is an error.
 - A password in `connection` prints a warning on every command that reads the file; put such connections in `ENV_STORE_CONNECTION`.

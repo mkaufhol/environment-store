@@ -32,21 +32,29 @@ All examples on this page were run against `environment-store 2.0.0.dev0`. The o
 - [Output modes](#output-modes)
 - [Exit codes](#exit-codes)
 - [Recipes](#recipes)
+- [Reference pages: man and tldr](#reference-pages-man-and-tldr)
 - [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Install
 
-Environment Store needs Python 3.13 or newer. The CLI is an optional extra:
+Environment Store needs Python 3.13 or newer. The CLI is the optional `cli` extra. These docs use [uv](https://docs.astral.sh/uv/): `uv tool install` puts `envs` into its own isolated environment and links the command onto your `PATH`, so it never mixes with other packages and needs no global `pip`. `uvx` runs it once without installing anything.
 
 ```sh
-pip install 'environment-store[cli]'            # CLI with JSON, TOML and SQLite backends
-pip install 'environment-store[cli,postgres]'   # ... plus PostgreSQL
-pip install 'environment-store[all]'            # CLI, PostgreSQL and the terminal UI
+uv tool install 'environment-store[cli]'            # CLI with JSON, TOML and SQLite backends
+uv tool install 'environment-store[cli,postgres]'   # ... plus PostgreSQL
+uv tool install 'environment-store[all]'            # CLI, PostgreSQL and the terminal UI
+uvx --from 'environment-store[cli]' envs --version  # run once, without installing
 ```
 
-`uv tool install 'environment-store[all]'` and `pipx install 'environment-store[cli]'` work too. [installation.md](installation.md) has the details, including installing from source.
+**2.0 is not on PyPI yet**, so today these commands would find the old 0.1 line. Until the release, install from the repository with the same extras:
+
+```sh
+uv tool install 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2'
+```
+
+With pip, use `pip install 'environment-store[cli]'` inside a virtual environment. [installation.md](installation.md) has the details: every extra in a table, the library install with `uv add`, installing from a clone, and pip.
 
 | Extra | Adds |
 |---|---|
@@ -62,7 +70,9 @@ $ envs --version
 environment-store 2.0.0.dev0
 ```
 
-`envs` and `environment-store` are the same program, and `python -m environment_store.cli` works too. If an extra is missing, the command tells you which one to install, for example `Error: this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'`.
+`envs` and `environment-store` are the same program, and `python -m environment_store.cli` works too. If an extra is missing, the command tells you which one to install, for example `Error: this feature needs the optional 'cli' dependencies: pip install 'environment-store[cli]'`. The hint names the pip command. With uv, install the tool again with the extra added, for example `uv tool install 'environment-store[cli,postgres]'` when `postgres` is missing.
+
+`envs -h` is short for `envs --help`, on `envs` itself and on every command (`envs export -h`). The same reference is also available as a man page and a tldr page; see [Reference pages](#reference-pages-man-and-tldr).
 
 ---
 
@@ -83,8 +93,8 @@ set DB_HOST, DEBUG in store 'dev'
 $ envs ls -v base dev
 DB_HOST=dev.example.com
 DB_PORT=5432
-DEBUG=false
 LOG_LEVEL=info
+DEBUG=false
 $ envs run base dev -- python3 -c 'import os; print(os.environ["DB_HOST"])'
 dev.example.com
 ```
@@ -168,7 +178,7 @@ $ envs -c json://envs set -s dev 9BAD=x
 Error: invalid variable name '9BAD': use letters, digits and '_', not starting with a digit (^[A-Za-z_][A-Za-z0-9_]*$)
 ```
 
-Listings are always sorted: variables by name, stores by name.
+The variables of one store are listed sorted by name, and `ls-store` sorts the stores by name. When you combine several stores, the output follows the load order instead; see [Output order](#output-order).
 
 ### Combining several stores
 
@@ -178,8 +188,8 @@ Reading commands (`ls`, `get`, `export`, `export-shell`, `run`) take a list of s
 $ envs ls -v --source base dev
 DB_HOST=dev.example.com  dev
 DB_PORT=5432             base
-DEBUG=false              dev
 LOG_LEVEL=info           base
+DEBUG=false              dev
 ```
 
 To make the **first** store win instead, use `--first-wins`:
@@ -188,11 +198,40 @@ To make the **first** store win instead, use `--first-wins`:
 $ envs ls -v --source --first-wins base dev
 DB_HOST=localhost  base
 DB_PORT=5432       base
-DEBUG=false        dev
 LOG_LEVEL=info     base
+DEBUG=false        dev
 ```
 
-You can also flip the default with `ENV_STORE_ORDERED_OVERWRITE=false` or `ordered_overwrite = false` in the project file. The rule, strongest first:
+#### Output order
+
+Merged output lists the variables **store by store, in load order**. Within one store they are sorted by name. A variable that appears in several stores stays at the position where it first appears and gets the value the merge order picks. Above, `base` contributes `DB_HOST`, `DB_PORT` and `LOG_LEVEL` (sorted), then `dev` adds `DEBUG`; `DB_HOST` stays first but takes `dev`'s value.
+
+Another example, with two stores:
+
+```console
+$ envs create-store store-a
+created store 'store-a'
+$ envs set -s store-a ENV=development DEBUG=True
+set ENV, DEBUG in store 'store-a'
+$ envs create-store store-b
+created store 'store-b'
+$ envs set -s store-b ENV=staging DB_NAME=test
+set ENV, DB_NAME in store 'store-b'
+$ envs export store-a store-b
+DEBUG=True
+ENV=staging
+DB_NAME=test
+$ envs export --first-wins store-a store-b
+DEBUG=True
+ENV=development
+DB_NAME=test
+```
+
+`store-a` comes first, so its names come first, sorted: `DEBUG`, `ENV`. `store-b` only adds `DB_NAME` at the end; its `ENV` replaces the value but not the position. The order is the same for `ls` (also with `--json`), every `export` format, `export-shell` and `run`. A store's own variables are sorted by name, not kept in the order you set them.
+
+#### Changing which store wins
+
+Besides `--first-wins`, you can flip the default with `ENV_STORE_ORDERED_OVERWRITE=false` or `ordered_overwrite = false` in the project file. The rule, strongest first:
 
 1. `--first-wins` on the command line.
 2. `ENV_STORE_ORDERED_OVERWRITE` (`true`/`false`/`1`/`0`/`yes`/`no`, any case; `true` means last wins).
@@ -272,9 +311,9 @@ $ envs ls -v base prod -k prod.key
 Error: -k <path> without a store name works with exactly one store; with several stores bind each key by name: -k <store>=<path>
 $ envs ls -v --source base prod -k prod=prod.key
 DB_HOST=db.prod.internal  prod
-DB_PASSWORD=hunter2       prod
 DB_PORT=5432              base
 LOG_LEVEL=info            base
+DB_PASSWORD=hunter2       prod
 ```
 
 Only the text before the first `=` that is a valid store name counts as a store, so a path like `./a=b.key` is still read as a path.
@@ -396,8 +435,8 @@ $ envs ls -v --source
 API_TOKEN=tok-123        secret
 DB_HOST=dev.example.com  dev
 DB_PORT=5432             base
-DEBUG=false              dev
 LOG_LEVEL=info           base
+DEBUG=false              dev
 $ envs get DB_HOST
 dev.example.com
 $ envs get DB_HOST --first-wins
@@ -430,7 +469,7 @@ Things to know:
   Error: no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, or set 'connection' in .envstore.toml
   ```
 
-- The file is read by every command except `keygen`, `--help` and `--version`. A broken project file makes every other command fail until you fix it or pass `--no-project`.
+- The file is read by every command except `keygen`, `-h`/`--help` and `--version`. A broken project file makes every other command fail until you fix it or pass `--no-project`.
 
 ---
 
@@ -452,7 +491,7 @@ Error: No such option: --noinput; --noinput is a global option: put it before th
 | `--no-project` | Ignore `.envstore.toml`. |
 | `--noinput` | Never prompt, even at a terminal. A missing key fails with exit code 4; a missing confirmation (no `-y`) fails with exit code 1. Use it in CI and scripts. |
 | `--version` | Print the version and exit. |
-| `--help` | Show help. Every command has its own `--help` too: `envs export --help`. |
+| `-h`, `--help` | Show help. Every command has its own `-h` / `--help` too: `envs export -h`. |
 
 When stdin is not a terminal (in a pipe or CI), `envs` already behaves as if `--noinput` were set.
 
@@ -645,7 +684,7 @@ Error: use only one of --plain, --new-key, --generate-key, --passphrase
 envs ls [STORES]... [-v] [--source] [--first-wins] [-k STORE=PATH]... [--json]
 ```
 
-Lists the variable names of one or more stores, merged in load order. With no stores, it uses `stores` from the project file.
+Lists the variable names of one or more stores, merged in load order. With no stores, it uses `stores` from the project file. One store is listed sorted by name; several stores are listed store by store in load order, as described in [Output order](#output-order).
 
 | Option | Meaning |
 |---|---|
@@ -663,13 +702,13 @@ LOG_LEVEL
 $ envs ls -v base dev
 DB_HOST=dev.example.com
 DB_PORT=5432
-DEBUG=false
 LOG_LEVEL=info
+DEBUG=false
 $ envs ls -v --source base dev
 DB_HOST=dev.example.com  dev
 DB_PORT=5432             base
-DEBUG=false              dev
 LOG_LEVEL=info           base
+DEBUG=false              dev
 ```
 
 Values that do not fit on one line are shown as JSON strings, for example `MULTI="a\nb"`. Missing stores are all named in one error (exit code 2):
@@ -879,24 +918,26 @@ envs export [STORES]... [-f PATH|-] [-t dotenv|json|toml] [--force] [--nested] [
 | `--first-wins` | The first store wins instead of the last. |
 | `-k`, `--key STORE=PATH` | Key or passphrase file of a store; repeatable. |
 
+The variables come out in the merged [output order](#output-order): `base`'s variables sorted by name, then the ones `dev` adds. `DB_HOST` keeps its place from `base` but has `dev`'s value.
+
 ```console
 $ envs export base dev
 DB_HOST=dev.example.com
 DB_PORT=5432
-DEBUG=false
 LOG_LEVEL=info
+DEBUG=false
 $ envs export -t json base dev
 {
   "DB_HOST": "dev.example.com",
   "DB_PORT": "5432",
-  "DEBUG": "false",
-  "LOG_LEVEL": "info"
+  "LOG_LEVEL": "info",
+  "DEBUG": "false"
 }
 $ envs export -t toml base dev
 DB_HOST = "dev.example.com"
 DB_PORT = "5432"
-DEBUG = "false"
 LOG_LEVEL = "info"
+DEBUG = "false"
 ```
 
 Nested output:
@@ -1001,13 +1042,13 @@ It prints shell statements. By default, a variable already set in your shell (ev
 $ envs export-shell base dev
 [ -n "${DB_HOST+x}" ] || export DB_HOST=dev.example.com
 [ -n "${DB_PORT+x}" ] || export DB_PORT=5432
-[ -n "${DEBUG+x}" ] || export DEBUG=false
 [ -n "${LOG_LEVEL+x}" ] || export LOG_LEVEL=info
+[ -n "${DEBUG+x}" ] || export DEBUG=false
 $ envs export-shell -o base dev
 export DB_HOST=dev.example.com
 export DB_PORT=5432
-export DEBUG=false
 export LOG_LEVEL=info
+export DEBUG=false
 ```
 
 Values are quoted for the shell, so spaces, quotes and newlines are safe. It works in POSIX shells (bash, zsh, dash). For fish or PowerShell, use [`envs run`](#envs-run--run-a-command-with-the-variables).
@@ -1211,19 +1252,19 @@ $ envs ls --json -v --source base dev
     "value": "5432"
   },
   {
-    "name": "DEBUG",
-    "store": "dev",
-    "value": "false"
-  },
-  {
     "name": "LOG_LEVEL",
     "store": "base",
     "value": "info"
+  },
+  {
+    "name": "DEBUG",
+    "store": "dev",
+    "value": "false"
   }
 ]
 ```
 
-JSON output has sorted keys and 2-space indentation, so it is easy to diff and to read with `jq`. Status messages and errors always go to stderr, so piping stdout gives you clean data.
+Each JSON object has sorted keys, the list itself follows the [output order](#output-order), and the indentation is 2 spaces, so it is easy to diff and to read with `jq`. Status messages and errors always go to stderr, so piping stdout gives you clean data.
 
 ---
 
@@ -1275,8 +1316,8 @@ Keep shared defaults in `base` and the differences per environment in `dev`, `st
 $ envs ls -v --source base dev
 DB_HOST=dev.example.com  dev
 DB_PORT=5432             base
-DEBUG=false              dev
 LOG_LEVEL=info           base
+DEBUG=false              dev
 ```
 
 For prod, encrypt the store and bind its key:
@@ -1284,9 +1325,9 @@ For prod, encrypt the store and bind its key:
 ```console
 $ envs ls -v --source base prod -k prod=prod.key
 DB_HOST=db.prod.internal  prod
-DB_PASSWORD=hunter2       prod
 DB_PORT=5432              base
 LOG_LEVEL=info            base
+DB_PASSWORD=hunter2       prod
 ```
 
 To make the layering the default for a project, put it in `.envstore.toml`:
@@ -1339,8 +1380,8 @@ exported to '.env'
 $ cat .env
 DB_HOST=dev.example.com
 DB_PORT=5432
-DEBUG=false
 LOG_LEVEL=info
+DEBUG=false
 ```
 
 The file is created with mode 0600. Docker Compose reads `.env` from the project folder for `${VAR}` substitution in `compose.yaml`, or you can pass it to a service:
@@ -1431,6 +1472,30 @@ moved store 'legacy-plain' to 'legacy-plain'
 ```
 
 Encrypted stores stay encrypted with the same key unless you choose `--plain` or a new secret.
+
+---
+
+## Reference pages: man and tldr
+
+Besides `envs -h`, two reference pages ship with the project:
+
+| Page | In the repository | What it is |
+|---|---|---|
+| man page `envs(1)` | [`docs/man/share/man/man1/envs.1`](man/share/man/man1/envs.1) | every command and option, global options, exit codes, environment variables, the project file and the merge order. `environment-store(1)` is the same page. |
+| tldr page | [`docs/tldr/envs.md`](tldr/envs.md) | eight common examples in the [tldr-pages](https://github.com/tldr-pages/tldr) format |
+
+**The man page.** The wheel installs it as `share/man/man1/envs.1` under the environment's prefix. Where that prefix's `bin` is on your `PATH`, `man envs` finds it, for example in an activated virtual environment after `uv pip install 'environment-store[cli]'` or `pip install 'environment-store[cli]'`, or with `uv run` in a project (`uv run man envs`).
+
+`uv tool install` is different: uv links only the executables into `~/.local/bin`, not the man page, so plain `man envs` finds nothing. The page is still inside the tool's environment, which `uv tool dir` names. Open it by path, or add the directory to `MANPATH` (the trailing `:` keeps the system man pages):
+
+```sh
+man "$(uv tool dir)/environment-store/share/man/man1/envs.1"
+export MANPATH="$(uv tool dir)/environment-store/share/man:"   # then: man envs
+```
+
+From a clone of the repository, `man docs/man/share/man/man1/envs.1` works without installing anything.
+
+**The tldr page** is not in the tldr-pages project yet (it has not been submitted), so `tldr envs` does not find it. Read [`docs/tldr/envs.md`](tldr/envs.md) directly, or render it with a client that accepts a file, for example `tldr --render docs/tldr/envs.md` (checked with tealdeer; other clients have similar options).
 
 ---
 
