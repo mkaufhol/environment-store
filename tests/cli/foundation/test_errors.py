@@ -155,7 +155,7 @@ def test_nested_input_refusal_names_the_nested_option() -> None:
 def test_missing_key_names_the_key_option() -> None:
     assert message_for(KeyRequiredError.for_store("prod")) == (
         "store 'prod' is encrypted and no key or passphrase was given; "
-        "pass it with -k <path> (or -k - for stdin)"
+        "pass it with -k <path> (or -k - for stdin), or set ENV_STORE_KEY_PROD"
     )
 
 

@@ -24,6 +24,7 @@ from environment_store.cli.options import (
 from environment_store.cli.output import err
 from environment_store.cli.secrets import existing_secret
 from environment_store.cli.state import get_state
+from environment_store.core.names import key_variable
 from environment_store.formats import dotenv, json_format, toml_format
 from environment_store.formats.infer import Format
 from environment_store.library.files import read_input_file
@@ -67,9 +68,10 @@ def import_variables(  # noqa: PLR0913 - one parameter per option of the command
         text = read_input_file(path)
     variables = _LOADERS[resolved](text)
     if not variables:
-        # Nothing is written (PD 27), but a given or project key is still checked (§6.0.1,
-        # PD 5): only the prompt for a missing key is skipped.
-        if key is not None or store in state.settings().key_paths:
+        # Nothing is written (PD 27), but a given, environment (D53) or project key is still
+        # checked (§6.0.1, PD 5): only the prompt for a missing key is skipped.
+        given = key is not None or key_variable(store) in state.runtime.environ()
+        if given or store in state.settings().key_paths:
             existing_secret(ctx, store, key)
         err(f"nothing to import into store '{store}'")
         return

@@ -1,7 +1,7 @@
 """Secrets for commands: an existing store's key, a new secret, generated key files (D3, PD 33).
 
-- `existing_secret`: `-k path|-` > the project file's `[keys]` (PD 5) > a prompt when
-  interactive > `KeyRequiredError` (exit 4).
+- `existing_secret`: `-k path|-` > `ENV_STORE_KEY_<STORE>` (D53) > the project file's
+  `[keys]` (PD 5) > a prompt when interactive > `KeyRequiredError` (exit 4).
 - `new_secret`: exactly one of the new-key option, `--generate-key` and `--passphrase`
   (PD 24); `--generate-key -` is refused for every command. `new_secret_choice` checks the
   options alone, so a command can refuse them before it asks for an existing key.
@@ -22,7 +22,6 @@ from environment_store.cli.output import err
 from environment_store.cli.state import CliState, get_state
 from environment_store.config.secrets import (
     GenerateKeyFile,
-    KeyFile,
     KeySource,
     NewKeyFile,
     NewPassphrase,
@@ -96,7 +95,7 @@ def existing_secret(ctx: typer.Context, store: str, key: str | None) -> Secret |
 def resolve_existing(
     state: CliState, resolver: SecretResolver, store: str, source: KeySource | None
 ) -> Secret | None:
-    """Resolve one store's secret: the given source, else the project key, else a prompt.
+    """Resolve one store's secret by the precedence of `SecretResolver.existing` (D53).
 
     Args:
         state: The invocation state (for the project file's `[keys]`).
@@ -114,6 +113,9 @@ def resolve_existing(
     try:
         return _resolve_existing(state, resolver, store, source)
     except KeyModeMismatchError as error:
+        if resolver.uses_key_variable(store, source):
+            # The message names the variable; -k is not what the user gave (D53).
+            raise
         message = (
             f"{error}: pass the passphrase file with -k (or -k - for stdin), or switch the "
             f"store to the key file with 'envs rekey -s {store} --new-key <path>'"
@@ -131,7 +133,7 @@ def _resolve_existing(
     if path is None:
         return resolver.existing(store, None)
     try:
-        return resolver.existing(store, KeyFile(path))
+        return resolver.existing(store, None, project_key=path)
     except NotEncryptedError as error:
         message = (
             f"[keys] in '{settings.project_file}' names a key for store {store!r}, which is not "

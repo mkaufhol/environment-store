@@ -256,14 +256,15 @@ class StoreService:
         opened = open_record(record, None)
         self._write(opened, opened.variables, new_sealing(secret, self._kdf_params_factory))
 
-    def rekey_store(self, name: str, *, old: Secret, new: Secret) -> None:
+    def rekey_store(self, name: str, *, old: Secret | None, new: Secret) -> None:
         """Re-encrypt a store with a new secret; may switch the key mode (D4).
 
         A new passphrase always gets a new salt.
 
         Args:
             name: The store name.
-            old: The current key or passphrase.
+            old: The current key or passphrase; `None` raises `KeyRequiredError` for an
+                encrypted store.
             new: The new key or passphrase.
 
         Raises:

@@ -19,6 +19,8 @@ CLI flags (D47): an error whose remedy is a parameter keeps that remedy in `hint
 from collections.abc import Iterable
 from typing import Self
 
+from environment_store.core.names import key_variable
+
 __all__ = [
     "AlreadyEncryptedError",
     "AlreadyExistsError",
@@ -109,12 +111,17 @@ class MissingExtraError(EnvironmentStoreError):
     def __init__(self, extra: str) -> None:
         """Create the error for a missing extra.
 
+        The message leads with uv and names pip as the alternative (D50, D51). The CLI tool
+        line always includes `cli`, since an extra used from `envs` needs the CLI too.
+
         Args:
             extra: Name of the pip extra that provides the dependency, e.g. `postgres`.
         """
+        tool_extras = "cli" if extra == "cli" else f"cli,{extra}"
         message = (
             f"this feature needs the optional '{extra}' dependencies: "
-            f"pip install 'environment-store[{extra}]'"
+            f"uv add 'environment-store[{extra}]' (or pip install 'environment-store[{extra}]'); "
+            f"for the CLI tool: uv tool install 'environment-store[{tool_extras}]'"
         )
         super().__init__(message)
         self.extra = extra
@@ -225,13 +232,21 @@ class CryptoError(EnvironmentStoreError):
 
 
 class KeyRequiredError(CryptoError):
-    """The store is encrypted and no key or passphrase was given."""
+    """The store is encrypted and no key or passphrase was given.
+
+    Attributes:
+        store: The store, when the error was made by `for_store`; a frontend uses it to name
+            the store's key variable in its own remedy (D47, D53).
+    """
+
+    store: str | None = None
 
     @classmethod
     def for_store(cls, store: str) -> Self:
         """Create the error for an encrypted store that was given no secret.
 
-        `EnvironmentStore` methods and `load()` raise it with the same wording (D47).
+        `EnvironmentStore` methods and `load()` raise it with the same wording (D47). The hint
+        names every source of the library: the parameters and the key variable (D53).
 
         Args:
             store: The encrypted store.
@@ -239,10 +254,10 @@ class KeyRequiredError(CryptoError):
         Returns:
             The error.
         """
-        return cls(
-            f"store {store!r} is encrypted and no key or passphrase was given",
-            hint=f"pass key=... (or keys={{{store!r}: ...}} to load())",
-        )
+        hint = f"pass key=... (or keys={{{store!r}: ...}} to load()), or set {key_variable(store)}"
+        error = cls(f"store {store!r} is encrypted and no key or passphrase was given", hint=hint)
+        error.store = store
+        return error
 
 
 class DecryptionError(CryptoError):

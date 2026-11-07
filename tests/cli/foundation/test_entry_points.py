@@ -52,7 +52,7 @@ def test_main_without_typer_prints_the_install_hint_and_exits_with_one(
     code = _run_main(monkeypatch, "--version")
 
     assert code == 1
-    assert "pip install 'environment-store[cli]'" in capsys.readouterr().err
+    assert "uv tool install 'environment-store[cli]'" in capsys.readouterr().err
 
 
 def test_importing_the_app_without_typer_raises_missing_extra(

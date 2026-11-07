@@ -221,7 +221,7 @@ def test_open_adapter_turns_a_missing_required_package_into_missing_extra(
         open_adapter("fake://x", factories={"fake": entry})
 
     assert caught.value.extra == "postgres"
-    assert "pip install 'environment-store[postgres]'" in str(caught.value)
+    assert "uv add 'environment-store[postgres]'" in str(caught.value)
     assert isinstance(caught.value.__cause__, ModuleNotFoundError)
 
 

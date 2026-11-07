@@ -4,6 +4,10 @@ It owns exactly one adapter, opened on construction (so a refused schema or a mi
 surfaces at once), and one `StoreService` over it. Keys are taken as `KeyInput` (PD 12): for an
 existing store a `Path` is read and interpreted by the store's mode; for a new secret a `Path`
 must be a key file. Key text without a file is passed as `parse_key_text(text)` (D47).
+
+An existing store's key that is not given comes from `ENV_STORE_KEY_<STORE>` when that is set
+(D53); new keys never do. The environment is passed in (`os.environ` by default) and never
+changed.
 """
 
 import os
@@ -13,7 +17,11 @@ from types import TracebackType
 from typing import Final, Literal, Self
 
 from environment_store.config.project import PROJECT_FILE_NAME
-from environment_store.config.secrets import read_secret_file
+from environment_store.config.secrets import (
+    check_key_variables,
+    read_secret_file,
+    secret_from_environment,
+)
 from environment_store.config.settings import ENV_CONNECTION, Settings
 from environment_store.core.adapter import Adapter, MigratableAdapter, MigrationReport, SetupMode
 from environment_store.core.clock import Clock, utc_now
@@ -67,9 +75,10 @@ class EnvironmentStore:
 
     _scheme: str
     _service: StoreService
+    _environ: Mapping[str, str]
     _closed: bool
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - every boundary is a keyword
         self,
         connection: str,
         *,
@@ -77,6 +86,7 @@ class EnvironmentStore:
         clock: Clock = utc_now,
         kdf_params_factory: Callable[[], KdfParams] | None = None,
         opener: AdapterOpener = open_configured_adapter,
+        environ: Mapping[str, str] | None = None,
     ) -> None:
         """Open the backend a connection string names.
 
@@ -87,6 +97,8 @@ class EnvironmentStore:
             kdf_params_factory: Argon2id parameters for new passphrases; `None` for the spec
                 defaults (D34).
             opener: Opens the adapter; tests inject fakes here.
+            environ: Where `ENV_STORE_KEY_<STORE>` is looked up (D53); `None` for
+                `os.environ`.
 
         Raises:
             ValidationError: The connection string is malformed or its scheme is unknown.
@@ -94,6 +106,7 @@ class EnvironmentStore:
             BackendError: The backend cannot be opened or its schema is refused.
         """
         self._scheme = scheme_of(connection)
+        self._environ = os.environ if environ is None else environ
         adapter = opener(connection, setup)
         self._service = StoreService(
             adapter,
@@ -115,7 +128,8 @@ class EnvironmentStore:
         """Open the backend named by `ENV_STORE_CONNECTION` only (no project file).
 
         Args:
-            environ: The environment; `None` for `os.environ`.
+            environ: The environment, also for `ENV_STORE_KEY_<STORE>` (D53); `None` for
+                `os.environ`.
             setup: As for the constructor.
             clock: As for the constructor.
             kdf_params_factory: As for the constructor.
@@ -127,7 +141,8 @@ class EnvironmentStore:
         Raises:
             ConfigurationError: The variable is not set or empty (D29).
         """
-        connection = (os.environ if environ is None else environ).get(ENV_CONNECTION)
+        environ = os.environ if environ is None else environ
+        connection = environ.get(ENV_CONNECTION)
         if not connection:
             message = f"no connection configured: set {ENV_CONNECTION}"
             raise ConfigurationError(message)
@@ -137,10 +152,11 @@ class EnvironmentStore:
             clock=clock,
             kdf_params_factory=kdf_params_factory,
             opener=opener,
+            environ=environ,
         )
 
     @classmethod
-    def from_settings(
+    def from_settings(  # noqa: PLR0913 - every boundary is a keyword
         cls,
         settings: Settings,
         *,
@@ -148,6 +164,7 @@ class EnvironmentStore:
         clock: Clock = utc_now,
         kdf_params_factory: Callable[[], KdfParams] | None = None,
         opener: AdapterOpener = open_configured_adapter,
+        environ: Mapping[str, str] | None = None,
     ) -> Self:
         """Open the backend of resolved settings (option > environment > project file).
 
@@ -157,6 +174,7 @@ class EnvironmentStore:
             clock: As for the constructor.
             kdf_params_factory: As for the constructor.
             opener: As for the constructor.
+            environ: As for the constructor.
 
         Returns:
             The open store.
@@ -172,6 +190,7 @@ class EnvironmentStore:
             clock=clock,
             kdf_params_factory=kdf_params_factory,
             opener=opener,
+            environ=environ,
         )
 
     # --- lifetime ------------------------------------------------------------------------------
@@ -410,16 +429,18 @@ class EnvironmentStore:
         """
         self._open_service().encrypt_store(store, secret=_new_secret(key))
 
-    def rekey_store(self, store: str, *, old: KeyInput, new: KeyInput) -> None:
+    def rekey_store(self, store: str, *, old: KeyInput | None = None, new: KeyInput) -> None:
         """Re-encrypt a store with a new secret (D4).
 
         Args:
             store: The store name.
-            old: The current key.
-            new: The new secret (a key file `Path`, `KeyMaterial` or `Passphrase`).
+            old: The current key; `None` takes it from `ENV_STORE_KEY_<STORE>` (D53).
+            new: The new secret (a key file `Path`, `KeyMaterial` or `Passphrase`); never
+                taken from the environment.
         """
         service = self._open_service()
-        service.rekey_store(store, old=self.secret_for(store, old), new=_new_secret(new))
+        old_secret = self._existing_secret(store, old)
+        service.rekey_store(store, old=old_secret, new=_new_secret(new))
 
     def secret_for(self, store: str, key: KeyInput) -> Secret:
         """Turn a key input into the secret of an existing store.
@@ -437,6 +458,26 @@ class EnvironmentStore:
         if isinstance(checked, Path):
             return self.parse_secret(store, read_secret_file(checked))
         return checked
+
+    def environment_secret(self, store: str) -> Secret | None:
+        """Return an existing store's secret from `ENV_STORE_KEY_<STORE>` (D53).
+
+        The frontends use it to try the variable before a project key or a prompt.
+
+        Args:
+            store: The store name.
+
+        Returns:
+            The secret, or `None` if the variable is not set or the store is plaintext.
+
+        Raises:
+            KeySourceError: The variable is set but empty or not UTF-8.
+            CryptoError: The value does not fit the store's key mode; it names the variable,
+                never the value.
+        """
+        self._open_service()
+        validate_store_name(store)
+        return secret_from_environment(self, store, self._environ)
 
     def parse_secret(self, store: str, text: str) -> Secret:
         """Interpret raw secret text by the store's key mode (D3).
@@ -468,7 +509,14 @@ class EnvironmentStore:
         if isinstance(sources, str):
             message = "sources must be a list of stores, not a single string"
             raise ValidationError(message)
-        resolved = [self._core_source(source) for source in sources]
+        checked = [_checked_source(source) for source in sources]
+        # Before any key is read: a shared key variable is ambiguous (D53).
+        check_key_variables(
+            [source.name for source in checked],
+            explicit={source.name for source in checked if source.key is not None},
+            environ=self._environ,
+        )
+        resolved = [self._core_source(source) for source in checked]
         return Environment(stores=tuple(service.load(resolved)), order=order)
 
     def migrate(self) -> MigrationReport:
@@ -495,14 +543,11 @@ class EnvironmentStore:
         return self._service
 
     def _existing_secret(self, store: str, key: KeyInput | None) -> Secret | None:
-        return None if key is None else self.secret_for(store, key)
+        # The explicit key, else the key variable (D53); None lets the service raise
+        # KeyRequiredError for an encrypted store.
+        return self.environment_secret(store) if key is None else self.secret_for(store, key)
 
-    def _core_source(self, source: Source | str) -> CoreSource:
-        if isinstance(source, str):
-            source = Source(source)
-        elif not isinstance(source, Source):
-            message = f"a load source must be a Source or a store name, got {type(source).__name__}"
-            raise ValidationError(message)
+    def _core_source(self, source: Source) -> CoreSource:
         return CoreSource(name=source.name, secret=self._existing_secret(source.name, source.key))
 
     def _copy_arguments(
@@ -515,6 +560,15 @@ class EnvironmentStore:
         service = self._open_service()
         destination = None if to is None else to._open_service()
         return service, self._existing_secret(src, key), _encryption(encryption), destination
+
+
+def _checked_source(source: Source | str) -> Source:
+    if isinstance(source, str):
+        return Source(source)
+    if not isinstance(source, Source):
+        message = f"a load source must be a Source or a store name, got {type(source).__name__}"
+        raise ValidationError(message)
+    return source
 
 
 def _new_secret(key: KeyInput) -> Secret:

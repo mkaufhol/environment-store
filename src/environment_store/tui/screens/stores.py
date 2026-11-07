@@ -2,8 +2,9 @@
 
 `q` quits the app, here and on the variables screen; `escape` goes back from there.
 
-An encrypted store is opened with the project file's key when it names one (PD 5), without
-asking; otherwise, or when that key does not fit, the `UnlockScreen` asks for one.
+An encrypted store is opened without asking with the key from `ENV_STORE_KEY_<STORE>` (D53),
+else with the project file's key when it names one (PD 5); otherwise, or when that key does not
+fit, the `UnlockScreen` asks for one.
 """
 
 from typing import ClassVar, Final, override
@@ -17,6 +18,7 @@ from textual.widgets.data_table import RowKey
 
 from environment_store.core.errors import EnvironmentStoreError
 from environment_store.core.models import StoreInfo
+from environment_store.core.names import key_variable
 from environment_store.tui.messages import message_for, notify_error, notify_problem
 from environment_store.tui.screens.unlock import UnlockScreen, describe_encryption
 from environment_store.tui.screens.variables import VariablesScreen
@@ -91,7 +93,7 @@ class StoresScreen(Screen[None]):
         self.open_store(self._stores[event.row_key])
 
     def open_store(self, info: StoreInfo) -> None:
-        """Open a store: directly, with the project key, or after asking for a key.
+        """Open a store: directly, with its key variable or project key, or after asking.
 
         Args:
             info: The store's listing entry.
@@ -107,21 +109,32 @@ class StoresScreen(Screen[None]):
             self._show(opened)
 
     def _open_without_asking(self, info: StoreInfo) -> OpenedStore | None:
+        name = info.name
         if not info.encrypted:
-            return self._session.open(info.name)
-        path = self._session.project_key(info.name)
+            return self._session.open(name)
+        # D53: the key variable comes before the project key; when set, it alone is tried.
+        try:
+            secret = self._session.environment_secret(name)
+            if secret is not None:
+                return self._session.open(name, secret)
+        except EnvironmentStoreError as error:
+            self._notify_failed(key_variable(name), error)
+            return None
+        return self._open_with_project_key(name)
+
+    def _open_with_project_key(self, name: str) -> OpenedStore | None:
+        path = self._session.project_key(name)
         if path is None:
             return None
         try:
-            return self._session.open(info.name, self._session.secret_from_file(info.name, path))
+            return self._session.open(name, self._session.secret_from_file(name, path))
         except EnvironmentStoreError as error:
-            # The user did not choose this key, so the message names it and where it came from.
-            notify_problem(
-                self.app,
-                f"unlocking with the key file '{path}' from the project file failed: "
-                f"{message_for(error)}",
-            )
+            self._notify_failed(f"the key file '{path}' from the project file", error)
             return None
+
+    def _notify_failed(self, source: str, error: EnvironmentStoreError) -> None:
+        # The user did not choose this key, so the message names it and where it came from.
+        notify_problem(self.app, f"unlocking with {source} failed: {message_for(error)}")
 
     def _show(self, opened: OpenedStore | None) -> None:
         if opened is not None:

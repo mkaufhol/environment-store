@@ -18,6 +18,7 @@ from environment_store.core.errors import (
     NotFoundError,
     VariableExistsError,
 )
+from environment_store.core.names import key_variable
 from environment_store.formats import NestedInputError
 from environment_store.formats.dotenv import DotenvValueError
 from environment_store.library.files import OutputFileExistsError
@@ -60,6 +61,8 @@ def exit_code_for(error: EnvironmentStoreError) -> ExitCode:
     return ExitCode.USAGE
 
 
+_KEY_HINT: Final = "pass it with -k <path> (or -k - for stdin)"
+
 # Error class -> the CLI's remedy, replacing the library's hint (D47). Checked in order.
 _CLI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
     (VariableExistsError, "use -o/--overwrite to replace them"),
@@ -71,7 +74,7 @@ _CLI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
         "instead",
     ),
     (InvalidKeyFileError, "create one with envs keygen"),
-    (KeyRequiredError, "pass it with -k <path> (or -k - for stdin)"),
+    (KeyRequiredError, _KEY_HINT),
 )
 
 
@@ -87,6 +90,9 @@ def message_for(error: EnvironmentStoreError) -> str:
     Returns:
         The message, without the `Error: ` prefix.
     """
+    if isinstance(error, KeyRequiredError) and error.store is not None:
+        # The store's key variable is a source of the CLI as well (D53).
+        return f"{error.detail}; {_KEY_HINT}, or set {key_variable(error.store)}"
     if error.hint is not None:
         for category, hint in _CLI_HINTS:
             if isinstance(error, category):

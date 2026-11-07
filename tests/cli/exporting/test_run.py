@@ -310,3 +310,35 @@ def test_end_to_end_missing_command_exits_127(backend: dict[str, str], tmp_path:
 
     assert result.returncode == 127
     assert "envs-test-no-such-command" in result.stderr
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="exec() replaces the process on POSIX only")
+def test_end_to_end_key_variables_never_reach_the_command(
+    backend: dict[str, str], tmp_path: Path
+) -> None:
+    # D53: an encrypted store read with its key variable, plus a variable of an unused store.
+    with EnvironmentStore(backend["ENV_STORE_CONNECTION"]) as library:
+        library.create_store("locked", encrypt=True, key=Passphrase(text="pw"))
+        library.set("locked", "ENVS_LOCKED", "opened", key=Passphrase(text="pw"))
+    code = (
+        "import os; print(os.environ['ENVS_LOCKED'], os.environ['ENVS_E2E'], "
+        "sorted(n for n in os.environ if n.startswith('ENV_STORE_KEY')))"
+    )
+    env = {
+        **backend,
+        "ENV_STORE_KEY_LOCKED": "pw\n",
+        "ENV_STORE_KEY_UNUSED": "x",
+        "ENV_STORE_KEYRING": "kept",
+    }
+
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and arguments
+        _envs("run", "a", "locked", "--", sys.executable, "-c", code),
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "opened from-store ['ENV_STORE_KEYRING']\n"

@@ -96,6 +96,20 @@ class StoreSession:
         """
         return self._key_paths.get(name)
 
+    def environment_secret(self, name: str) -> Secret | None:
+        """Return a store's secret from `ENV_STORE_KEY_<STORE>`, tried first (D53).
+
+        Args:
+            name: The store name.
+
+        Returns:
+            The secret, or `None` if the variable is not set or the store is plaintext.
+
+        Raises:
+            CryptoError: The variable is set but empty or does not fit the store's key mode.
+        """
+        return self._store.environment_secret(name)
+
     def secret_from_file(self, name: str, path: Path) -> Secret:
         """Read a key or passphrase file and interpret it by the store's key mode (D3).
 

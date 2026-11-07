@@ -11,6 +11,7 @@ from enum import StrEnum
 from typing import Final
 
 from environment_store.core.errors import ConfigurationError, ValidationError
+from environment_store.core.names import screaming_snake
 from environment_store.core.validation import validate_store_name, validate_variable_name
 
 __all__ = [
@@ -119,8 +120,7 @@ def nested_flat_key(store: str, variable: str) -> str:
     """
     validate_store_name(store)
     validate_variable_name(variable)
-    prefix = store.upper().replace("-", "_")
-    return f"{prefix}{_NESTED_SEPARATOR}{variable}"
+    return f"{screaming_snake(store)}{_NESTED_SEPARATOR}{variable}"
 
 
 def nested_flat(stores: Sequence[tuple[str, Mapping[str, str]]]) -> dict[str, str]:

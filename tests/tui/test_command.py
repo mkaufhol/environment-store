@@ -122,7 +122,7 @@ def test_tui_without_textual_exits_with_one_and_the_install_hint(
     result = cli_json.invoke("tui", stdin_tty=True, stdout_tty=True)
 
     assert_exit(result, 1)
-    assert "pip install 'environment-store[tui]'" in result.stderr
+    assert "uv tool install 'environment-store[cli,tui]'" in result.stderr
 
 
 def test_tui_help_works_without_a_connection(cli_json: CliHarness) -> None:

@@ -1,7 +1,8 @@
 """`load()`: the one-liner that resolves configuration like the CLI and fills `os.environ` (D36).
 
 Like python-dotenv's `load_dotenv()`: connection, project file, stores and keys are resolved
-exactly as the CLI does (spec §5, §6.0.3), encrypted stores are prompted for on a terminal
+exactly as the CLI does (spec §5, §6.0.3; keys: `keys=` > `ENV_STORE_KEY_<STORE>` > `[keys]` >
+prompt, D53), encrypted stores are prompted for on a terminal
 (D3, PD 11, never with `noinput`, D35) and variables already in the environment are kept unless
 `overwrite` is set (PD 14). `load_with` is the same with every boundary injected.
 """
@@ -13,7 +14,7 @@ from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
 
 from environment_store.config.prompt import GetpassPrompter, Prompter
-from environment_store.config.secrets import KeyFile, SecretInput, SecretResolver, no_stdin
+from environment_store.config.secrets import SecretInput, SecretResolver, no_stdin
 from environment_store.config.settings import (
     CredentialsInProjectFileWarning,
     Settings,
@@ -53,7 +54,7 @@ def load(  # noqa: PLR0913 - the keyword-only options of D36
         *stores: Stores in load order; none uses the project file's `stores`.
         connection: The connection string; `None` uses `ENV_STORE_CONNECTION`, then the
             project file.
-        keys: Store name → key; beats the project file's `[keys]`.
+        keys: Store name → key; beats `ENV_STORE_KEY_<STORE>` and the project file's `[keys]`.
         first_wins: The first store wins instead of the last (beats every other setting).
         overwrite: Replace variables already in `os.environ`.
         nested: Set prefixed names (`STORE__NAME`, D30) instead of merging.
@@ -115,7 +116,7 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
         nested: As for `load`.
         use_project: As for `load`.
         noinput: As for `load`.
-        environ: The environment variables that configure the run.
+        environ: The environment variables that configure the run (incl. the key variables).
         cwd: Where the project file search starts.
         interactive: Whether stdin is a terminal.
         prompter: Asks for keys when interactive and not `noinput`.
@@ -150,14 +151,16 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
         read_stdin=no_stdin,
         stdin_is_tty=interactive,
         prompter=prompter if interactive and not noinput else None,
+        environ=environ,
     )
     unique = tuple(dict.fromkeys(names))
-    with EnvironmentStore.from_settings(settings, opener=opener) as store:
+    with EnvironmentStore.from_settings(settings, opener=opener, environ=environ) as store:
         # Like the CLI (PD 18): every store must exist before a key is read or prompted for,
         # so a typo never costs a prompt.
         for name in unique:
             store.store_info(name)
         resolver = SecretResolver(store, secret_input)
+        resolver.check_key_variables(unique, explicit=explicit.keys())
         secrets = {
             name: _secret(store, resolver, name, explicit.get(name), settings) for name in unique
         }
@@ -208,7 +211,7 @@ def _secret(
     if path is None:
         return resolver.existing(name, None)
     try:
-        return resolver.existing(name, KeyFile(path))
+        return resolver.existing(name, None, project_key=path)
     except NotEncryptedError as err:
         # Keys are bound by store name, so a project key for a used plaintext store is an error
         # (PD 5); the user gave no key, so the message points at where it came from.

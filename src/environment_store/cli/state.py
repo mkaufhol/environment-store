@@ -108,6 +108,7 @@ class CliState:
                 clock=runtime.clock,
                 kdf_params_factory=runtime.kdf_params_factory,
                 opener=runtime.adapter_opener,
+                environ=runtime.environ(),
             )
             ctx.with_resource(store)
             self._stores[key] = store
@@ -139,8 +140,8 @@ class CliState:
             purpose: What would read stdin, e.g. `-k -`; named if stdin is claimed twice.
 
         Returns:
-            The TTY state, the prompter only when interactive, and a `read_stdin` that claims
-            stdin before reading it.
+            The TTY state, the prompter only when interactive, a `read_stdin` that claims
+            stdin before reading it, and the environment (`ENV_STORE_KEY_<STORE>`, D53).
         """
 
         def read_stdin() -> bytes:
@@ -151,6 +152,7 @@ class CliState:
             read_stdin=read_stdin,
             stdin_is_tty=self.runtime.stdin_is_tty(),
             prompter=self.prompter() if self.interactive() else None,
+            environ=self.runtime.environ(),
         )
 
     def claim_stdin(self, purpose: str) -> None:

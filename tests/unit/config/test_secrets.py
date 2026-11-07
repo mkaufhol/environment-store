@@ -110,7 +110,10 @@ def _input(
     stdin: Stdin | None = None, *, tty: bool = False, prompter: Prompter | None = None
 ) -> SecretInput:
     return SecretInput(
-        read_stdin=Stdin() if stdin is None else stdin, stdin_is_tty=tty, prompter=prompter
+        read_stdin=Stdin() if stdin is None else stdin,
+        stdin_is_tty=tty,
+        prompter=prompter,
+        environ={},
     )
 
 

@@ -4,6 +4,7 @@ On POSIX the process is replaced (`execvpe`, D33), so the command's exit code is
 of `run` and signals reach the command directly. Before that, the store is closed (no SQLite
 handle or file lock leaks into the command) and stdout / stderr are flushed. A command that
 cannot be started exits with the shell's codes, 127 or 126 (PD 28), on every platform.
+Every `ENV_STORE_KEY_*` variable is removed from the command's environment (D53).
 """
 
 import subprocess  # nosec B404  # Windows has no exec(); used by run's fallback only
@@ -24,6 +25,7 @@ from environment_store.cli.options import (
 from environment_store.cli.output import err
 from environment_store.cli.state import get_state
 from environment_store.core.errors import ValidationError
+from environment_store.core.names import is_key_variable
 
 __all__ = ["run"]
 
@@ -55,6 +57,8 @@ def run(  # noqa: PLR0913 - the options of spec §6.13
     environment = load_for_reading(ctx, stores=stores, keys=keys, first_wins=first_wins)
     env = dict(state.runtime.environ())
     environment.apply(overwrite=overwrite, nested=nested, environ=env)
+    # The command never inherits keys, used or not (D53).
+    env = {name: value for name, value in env.items() if not is_key_variable(name)}
     state.close_stores()
     sys.stdout.flush()
     sys.stderr.flush()

@@ -89,11 +89,22 @@ def test_concrete_errors_belong_to_exactly_one_category() -> None:
         assert sum(issubclass(error, category) for category in _CATEGORIES) == 1
 
 
-def test_missing_extra_error_names_the_extra_and_the_install_command() -> None:
+def test_missing_extra_error_names_the_extra_and_the_install_commands_uv_first() -> None:
     error = MissingExtraError("postgres")
 
     assert error.extra == "postgres"
-    assert "pip install 'environment-store[postgres]'" in str(error)
+    assert str(error) == (
+        "this feature needs the optional 'postgres' dependencies: "
+        "uv add 'environment-store[postgres]' (or pip install 'environment-store[postgres]'); "
+        "for the CLI tool: uv tool install 'environment-store[cli,postgres]'"
+    )
+
+
+def test_missing_cli_extra_does_not_name_cli_twice_in_the_tool_command() -> None:
+    error = MissingExtraError("cli")
+
+    assert str(error).endswith("for the CLI tool: uv tool install 'environment-store[cli]'")
+    assert "cli,cli" not in str(error)
 
 
 def test_variable_not_found_error_lists_all_missing_names() -> None:
@@ -141,4 +152,18 @@ def test_key_required_for_a_store_names_the_library_key_parameters() -> None:
 
     assert isinstance(error, KeyRequiredError)
     assert error.detail == "store 'prod' is encrypted and no key or passphrase was given"
-    assert error.hint == "pass key=... (or keys={'prod': ...} to load())"
+    assert error.hint == (
+        "pass key=... (or keys={'prod': ...} to load()), or set ENV_STORE_KEY_PROD"
+    )
+    assert error.store == "prod"
+
+
+def test_key_required_for_a_store_names_its_key_variable_in_screaming_snake_case() -> None:
+    error = KeyRequiredError.for_store("customer-a")
+
+    assert error.hint is not None
+    assert error.hint.endswith("or set ENV_STORE_KEY_CUSTOMER_A")
+
+
+def test_a_key_required_error_without_a_store_has_none() -> None:
+    assert KeyRequiredError("no key").store is None
