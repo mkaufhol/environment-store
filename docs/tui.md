@@ -1,8 +1,10 @@
 # Terminal UI
 
-`envs tui` opens a full-screen terminal interface for your stores. You can browse the stores, unlock an encrypted
-one, look at its variables with the values hidden, and add, edit or delete variables. Everything else (creating,
-copying and deleting stores, import and export, keys) stays in the [command line](cli.md).
+`envs tui` opens a full-screen terminal interface for your stores. You can browse the stores, create and remove
+stores, export stores to a file, unlock an encrypted store, look at its variables with the values hidden, and add,
+edit or delete variables. Every path input completes existing files and directories as you type. Everything else
+(copying and renaming stores, import, `export-shell`, `encrypt`, `rekey`, `keygen`) stays in the
+[command line](cli.md).
 
 - [Install the tui extra](#install-the-tui-extra)
 - [Start the TUI](#start-the-tui)
@@ -54,8 +56,9 @@ envs -c json://envs tui
 | Project file | `.envstore.toml` in the current directory or a parent; `--no-project` ignores it |
 
 So in a project with an `.envstore.toml` that sets `connection`, a plain `envs tui` is enough. The project file's
-`stores` list and `ordered_overwrite` play no role in the TUI: it always shows every store in the backend, one at a
-time. See [Configuration](configuration.md) for the project file.
+`stores` list plays no role in the TUI: it always shows every store in the backend. `ordered_overwrite` only sets the
+default of **First wins** in the export dialog (`ordered_overwrite = false` checks it). See
+[Configuration](configuration.md) for the project file.
 
 `envs tui` refuses to start when it cannot be interactive (exit code 1):
 
@@ -71,9 +74,10 @@ variables, so no secrets end up on screen) and exits with a non-zero code.
 
 ## The screens at a glance
 
-The TUI has two full screens and three dialogs. Every screen has the title bar at the top and a footer at the bottom
-that lists the keys you can press right now, including `⏎` (Enter) where it opens, edits or unlocks. The dialogs
-show their own keys in their footer.
+The TUI has two full screens and several dialogs: create store, remove store, the three export steps, edit and add,
+unlock, and confirm. Every screen has the title bar at the top and a footer at the bottom that lists the keys you can
+press right now, including `⏎` (Enter) where it opens, edits, creates, removes, exports or unlocks. The dialogs show
+their own keys in their footer.
 
 ### Stores
 
@@ -86,25 +90,128 @@ The first screen lists every store in the backend, sorted by name, with its encr
  dev         plain
  prod        encrypted (keyfile)
 
- ⏎ Open  r Reload  q Quit
+ ⏎ Open  a Add  d Remove  x Export  r Reload  q Quit
 ```
 
 The Encryption column shows `plain`, `encrypted (keyfile)` or `encrypted (passphrase)`. Listing the stores needs no
 key, so you always see every store, encrypted or not.
 
-If the backend holds no stores, the screen says so instead of showing an empty table. The TUI does not create
-stores; create one on the command line and press `r`:
+If the backend holds no stores, the screen says so instead of showing an empty table. Press `a` to create one (see
+[Create store](#create-store)):
 
 ```
  ⭘                              Environment Store
  Store  Encryption
-No stores yet. Create one with envs create-store NAME
+No stores yet. Press a to create one
 
- ⏎ Open  r Reload  q Quit
+ ⏎ Open  a Add  d Remove  x Export  r Reload  q Quit
 ```
 
 An empty list with stores you expected usually means a typo in the connection; `envs ls-store` shows the location
 it looked at.
+
+### Create store
+
+`a` on the stores screen opens a dialog with the store name and its encryption, with every option of
+`envs create-store`:
+
+```
+  Create a store
+  ┌──────────────────────────────────────────┐
+  │ Store name, e.g. base_conf               │
+  └──────────────────────────────────────────┘
+  Encryption
+  ◉ None
+  ○ New key file (generated)
+  ○ Existing key file
+  ○ Passphrase
+   Create (ctrl+s)      Cancel (esc)
+
+ ⏎ Create  ^s Create  esc Cancel
+```
+
+The name is checked as you type: an invalid name or the name of a listed store shows the problem below the field.
+Choosing an encryption shows its fields:
+
+| Encryption | Like | Fields |
+|---|---|---|
+| None | `envs create-store NAME` | none |
+| New key file (generated) | `--generate-key PATH` | where to write the new key file; it starts as `./NAME.key` and follows the name until you type a path of your own. An existing file is never overwritten, and the file gets mode `0600`. |
+| Existing key file | `-k PATH` | the key file (from `envs keygen`) |
+| Passphrase | `--passphrase` | the passphrase, typed twice; both fields are hidden |
+
+The store is created before the dialog closes, so a problem (a key file that is not a key, passphrases that do not
+match) keeps the dialog open with what you typed. If the store cannot be created, a newly generated key file is
+removed again, unless the store may already use it; then the error says that the file was kept.
+
+After a new passphrase or a generated key file, a yellow notification titled **Keep your key** reminds you that envs
+does not save it, for example:
+
+```
+the new key was written to './prod.key'; envs does not save it anywhere else: keep it, or store 'prod' cannot be read again
+```
+
+### Remove store
+
+`d` on the stores screen opens a dialog for the selected store. It says that the store and all its variables are
+deleted and that this cannot be undone, and **Remove** works only once you have typed the store's name exactly:
+
+```
+  Remove store 'dev'? The store and all its variables are deleted. This cannot be undone.
+  Type dev to confirm:
+  ┌──────────────────────────────────────────┐
+  │ dev                                      │
+  └──────────────────────────────────────────┘
+   Remove      Cancel (esc)
+
+ ⏎ Remove  esc Cancel
+```
+
+Like `envs rm-store`, removing needs no key, also for an encrypted store.
+
+### Export
+
+`x` on the stores screen exports stores to a file, like `envs export`, in three steps:
+
+1. **Choose the stores in load order.** `Space` (or `Enter`) chooses the store under the cursor; each chosen store
+   shows its position, and the order you choose them in is the load order. Unchoosing a store renumbers the rest.
+   `Ctrl+S` goes on.
+
+   ```
+     Export, step 1 of 3: choose the stores in load order (later stores win unless first wins is chosen)
+      2  app   (plain)
+      1  base  (plain)
+         prod  (encrypted (keyfile))
+      Next (ctrl+s)      Cancel (esc)
+
+    space Choose  ^s Next  esc Cancel
+   ```
+
+2. **Choose the options**: the format (dotenv, JSON, TOML), **Nested** (`--nested`: one namespace per store instead
+   of merging) and **First wins** (`--first-wins`). First wins starts checked when the project file sets
+   `ordered_overwrite = false`. `Ctrl+S` goes on.
+3. **Enter the output path.** The path input completes paths (see [Path completion](#path-completion)), and a typed
+   extension (`.env`, `.json`, `.toml`) preselects the format, like `-t` on the command line; you can still change
+   it. `Enter` or `Ctrl+S` exports.
+
+   ```
+     Export, step 3 of 3: the output file (mode 0600)
+     ┌──────────────────────────────────────────┐
+     │ config.json                              │
+     └──────────────────────────────────────────┘
+     Format (follows the file extension)
+     ○ dotenv
+     ◉ JSON
+     ○ TOML
+      Export (ctrl+s)      Cancel (esc)
+
+    ⏎ Export  tab Complete path  ^s Export  esc Cancel
+   ```
+
+If the file exists, a confirmation asks `File 'config.json' exists already. Replace it?` (like `--force`). The keys of
+encrypted stores come from the usual sources (see [Encrypted stores](#encrypted-stores)); for a store without one
+the Unlock dialog opens. The file is written with mode `0600`, and a notification says `exported to 'config.json'`.
+`Esc` in any step ends the export without writing anything.
 
 ### Variables
 
@@ -158,8 +265,10 @@ Appears when you open an encrypted store and no key from the project file fits (
   └──────────────────────────────────────────────┘
        Unlock         Cancel (esc)
 
- ⏎ Unlock  esc Cancel
+ ⏎ Unlock  tab Complete path  esc Cancel
 ```
+
+The key file field completes paths (see [Path completion](#path-completion)).
 
 ### Confirm
 
@@ -174,6 +283,9 @@ stray Enter never confirms. Its footer reads `y Yes  n No  esc Cancel`; `Esc` an
 |---|---|
 | `↑` / `↓`, `Page Up` / `Page Down`, `Home` / `End` | Move through the list |
 | `Enter` | Open the selected store |
+| `a` | Create a store |
+| `d` | Remove the selected store (asks for its name) |
+| `x` | Export stores to a file |
 | `r` | Reload the list of stores |
 | `q` | Quit |
 
@@ -205,8 +317,51 @@ stray Enter never confirms. Its footer reads `y Yes  n No  esc Cancel`; `Esc` an
 | Key | Action |
 |---|---|
 | `Enter` in either field | Unlock |
+| `Tab` in the key file field | Accept the shown path suggestion; without one, move on |
 | `Tab` / `Shift+Tab` | Move between the fields and buttons |
 | `Esc` | Cancel and go back to the stores |
+
+### Create store dialog
+
+| Key | Action |
+|---|---|
+| `Enter` in any field, `Ctrl+S` | Create the store |
+| `↑` / `↓` in the encryption choice, then `Enter` or `Space` | Choose the encryption |
+| `Tab` in a key file path field | Accept the shown path suggestion; without one, move on |
+| `Tab` / `Shift+Tab` | Move between fields and buttons |
+| `Esc` | Cancel, nothing is created |
+
+### Remove store dialog
+
+| Key | Action |
+|---|---|
+| `Enter` | Remove the store, if the typed name matches exactly |
+| `Esc` | Cancel, nothing is removed |
+
+### Export dialogs
+
+| Key | Action |
+|---|---|
+| `Space` or `Enter` in the store list | Choose or unchoose the store under the cursor (step 1) |
+| `Ctrl+S` | Next step; in step 3, export |
+| `Enter` in the path field | Export (step 3) |
+| `Tab` in the path field | Accept the shown path suggestion; without one, move on |
+| `Tab` / `Shift+Tab` | Move between fields and buttons |
+| `Esc` | Cancel the export, nothing is written |
+
+### Path completion
+
+Every path input (the export path, the key file fields of the create store and unlock dialogs) suggests the first
+existing file or directory that completes what you typed, shown dimmed after the cursor:
+
+| Key | Action |
+|---|---|
+| `Tab` | Accept the suggestion, when one is shown and the cursor is at the end; otherwise move to the next field |
+| `→` | Accept the suggestion |
+
+`~` is expanded for the lookup and kept in the text, directories end in `/`, and matching is case-sensitive.
+Hidden files and directories are suggested only once you type a `.`. A directory that cannot be read suggests
+nothing.
 
 ### Confirm dialog
 
@@ -256,10 +411,24 @@ in the editor is stored exactly, with no trailing newline added or removed.
 
 Select it, press `d`, then `y`. `n` or `Esc` keeps it.
 
-### …create, rename or delete a store?
+### …create a store?
 
-Not in the TUI. Use [`envs create-store`, `envs mv-store` and `envs rm-store`](cli.md), then press `r` on the stores
-screen to see the change.
+On the stores screen press `a`, type the name, choose the encryption and fill in its fields, then press `Enter` or
+`Ctrl+S`. See [Create store](#create-store).
+
+### …remove a store?
+
+Select it, press `d`, type its name exactly and press `Enter`. `Esc` keeps it. See [Remove store](#remove-store).
+
+### …export stores to a file?
+
+On the stores screen press `x`, choose the stores in load order with `Space`, press `Ctrl+S`, choose the options,
+press `Ctrl+S`, type the path and press `Enter`. See [Export](#export).
+
+### …rename or copy a store?
+
+Not in the TUI. Use [`envs mv-store` and `envs cp-store`](cli.md), then press `r` on the stores screen to see the
+change.
 
 ## Encrypted stores
 
@@ -336,10 +505,11 @@ Press `y` to read the store again, then repeat your change. Nothing is ever over
 
 ## Limitations
 
-- **Variables only.** Store lifecycle (`create-store`, `rm-store`, `cp-store`, `mv-store`), `import`, `export`,
-  `encrypt`, `rekey` and `keygen` are CLI-only.
-- **One store at a time.** The TUI does not merge stores the way `envs ls base dev` does, and it ignores `stores`
-  and `ordered_overwrite` in the project file.
+- **Some commands are CLI-only.** `cp-store`, `mv-store`, `import`, `export-shell`, `encrypt`, `rekey` and `keygen`.
+  The TUI creates, removes and exports stores (to a file only), and edits variables.
+- **One store at a time.** The variables screen shows one store; it does not merge stores the way `envs ls base dev`
+  does. Only the export merges stores. The TUI ignores `stores` in the project file; `ordered_overwrite` only sets
+  the export dialog's default.
 - **One variable per write.** Each save or delete is its own write. To change many variables in one write, use
   `envs import`, or, for a plaintext store only, `envs set` with several `KEY=VALUE` pairs. Encrypted stores refuse
   `KEY=VALUE` pairs: `envs set` takes one `KEY` with its value piped in or typed at the hidden prompt.
@@ -376,5 +546,6 @@ with EnvironmentStore("json://envs") as store:
 | `store` | An open `EnvironmentStore`. You close it after the TUI ends. |
 | `key_paths` | Required, keyword-only. Store name → key or passphrase file, used like `[keys]` before asking. Pass `{}` to always ask in the Unlock dialog. |
 | `project_file` | Optional path of the project file, only used to name it in error messages. |
+| `ordered_overwrite` | Optional, default `True` (last wins). `False` checks **First wins** in the export dialog by default. |
 
 `run_tui` blocks until the user quits. After a crash it raises `SystemExit` with the app's non-zero return code.

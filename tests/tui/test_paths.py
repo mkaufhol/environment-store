@@ -2,6 +2,9 @@
 
 import asyncio
 import os
+import threading
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import ClassVar
 
@@ -10,6 +13,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Input
 
 from environment_store.core.errors import ValidationError
+from environment_store.tui import paths
 from environment_store.tui.paths import PathInput, PathSuggester, complete_path, expand_path
 
 
@@ -92,6 +96,61 @@ def test_complete_path_ignores_an_unreadable_directory(tree: Path) -> None:
         assert complete_path("locked/i") is None
     finally:
         locked.chmod(0o700)
+
+
+class _Entry:
+    """A directory entry that counts how often it is asked whether it is a directory."""
+
+    def __init__(self, name: str, *, directory: bool, asked: list[str]) -> None:
+        self.name = name
+        self._directory = directory
+        self._asked = asked
+
+    def is_dir(self) -> bool:
+        self._asked.append(self.name)
+        return self._directory
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected", "checked"),
+    [
+        ("d", "d2", ["d2"]),
+        ("dat", "data/", ["data"]),
+        ("data", "data/", ["data"]),
+        ("e", "e1", ["e", "e1"]),
+    ],
+)
+def test_complete_path_asks_only_the_chosen_entries_whether_they_are_directories(
+    monkeypatch: pytest.MonkeyPatch, typed: str, expected: str, checked: list[str]
+) -> None:
+    asked: list[str] = []
+    names = {"d9": False, "data": True, "d2": False, "e": False, "e1": False, "other": False}
+    entries = [_Entry(name, directory=directory, asked=asked) for name, directory in names.items()]
+
+    @contextmanager
+    def scandir(_directory: Path) -> Generator[list[_Entry]]:
+        yield entries
+
+    monkeypatch.setattr(paths.os, "scandir", scandir)
+
+    assert complete_path(typed) == expected
+    assert asked == checked
+
+
+def test_path_suggester_looks_up_paths_outside_the_event_loop_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    threads: list[threading.Thread] = []
+
+    def lookup(typed: str) -> str:
+        threads.append(threading.current_thread())
+        return f"{typed}/"
+
+    monkeypatch.setattr(paths, "complete_path", lookup)
+
+    assert asyncio.run(PathSuggester().get_suggestion("do")) == "do/"
+    assert threads
+    assert threads[0] is not threading.current_thread()
 
 
 def test_path_suggester_is_case_sensitive_and_uncached(tree: Path) -> None:

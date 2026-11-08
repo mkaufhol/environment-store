@@ -7,7 +7,9 @@ cannot be read suggests nothing. `PathInput` is an `Input` with that suggester w
 accepts a shown suggestion (`→` does too, as in every `Input`) and otherwise moves the focus.
 """
 
+import asyncio
 import os
+from collections.abc import Iterable
 from pathlib import Path
 from typing import ClassVar, override
 
@@ -38,20 +40,35 @@ def complete_path(typed: str) -> str | None:
     try:
         directory = Path(typed_directory or ".").expanduser()
         with os.scandir(directory) as entries:
-            candidates = sorted(
-                (entry.name, entry.is_dir())
-                for entry in entries
-                if entry.name.startswith(prefix)
-                and (prefix.startswith(".") or not entry.name.startswith("."))
-            )
+            name = _first_completion(entries, prefix)
     except (OSError, RuntimeError, ValueError):
         # Unreadable or missing directory, unknown "~user", or a NUL character.
         return None
-    for name, is_directory in candidates:
-        completion = f"{typed_directory}{name}{'/' if is_directory else ''}"
-        if len(completion) > len(typed):
-            return completion
-    return None
+    return None if name is None else f"{typed_directory}{name}"
+
+
+def _first_completion(entries: Iterable[os.DirEntry[str]], prefix: str) -> str | None:
+    """Return the first entry name (with `/` for a directory) that is longer than `prefix`.
+
+    One pass without sorting, and only the exact match and the chosen entry are asked whether
+    they are directories, so a large directory stays cheap on every keystroke (D57).
+    """
+    exact: os.DirEntry[str] | None = None
+    shortest: os.DirEntry[str] | None = None
+    for entry in entries:
+        name = entry.name
+        if not name.startswith(prefix) or (name.startswith(".") and not prefix.startswith(".")):
+            continue
+        if name == prefix:
+            exact = entry
+        elif shortest is None or name < shortest.name:
+            shortest = entry
+    # The exact match sorts first, but only completes as a directory ("docs" to "docs/").
+    if exact is not None and exact.is_dir():
+        return f"{exact.name}/"
+    if shortest is None:
+        return None
+    return f"{shortest.name}/" if shortest.is_dir() else shortest.name
 
 
 def expand_path(text: str, *, what: str) -> Path:
@@ -76,7 +93,11 @@ def expand_path(text: str, *, what: str) -> Path:
 
 
 class PathSuggester(Suggester):
-    """Suggests existing files and directories (D57); never cached, the disk changes."""
+    """Suggests existing files and directories (D57); never cached, the disk changes.
+
+    The lookup runs in a worker thread, so a slow or hung directory (a network mount, an
+    automount path) never blocks the event loop and freezes the TUI.
+    """
 
     def __init__(self) -> None:
         """Create the suggester: case-sensitive, without a cache."""
@@ -92,7 +113,7 @@ class PathSuggester(Suggester):
         Returns:
             The completed path, or `None`.
         """
-        return complete_path(value)
+        return await asyncio.to_thread(complete_path, value)
 
 
 class PathInput(Input):

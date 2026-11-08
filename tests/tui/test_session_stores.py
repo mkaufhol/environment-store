@@ -167,9 +167,7 @@ def test_create_store_keeps_a_generated_key_file_the_store_may_use(
     )
 
 
-def test_delete_store_needs_no_key(
-    session: StoreSession, store: EnvironmentStore, tmp_path: Path
-) -> None:
+def test_delete_store_needs_no_key(session: StoreSession, store: EnvironmentStore) -> None:
     store.create_store("a", encrypt=True, key=Passphrase(text="lost"))
 
     session.delete_store("a")
@@ -179,6 +177,9 @@ def test_delete_store_needs_no_key(
 
 def test_ordered_overwrite_defaults_to_last_wins(store: EnvironmentStore) -> None:
     assert StoreSession(store, key_paths={}).ordered_overwrite
+
+
+def test_ordered_overwrite_keeps_a_configured_first_wins(store: EnvironmentStore) -> None:
     assert not StoreSession(store, key_paths={}, ordered_overwrite=False).ordered_overwrite
 
 
