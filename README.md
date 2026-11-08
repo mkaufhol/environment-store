@@ -46,6 +46,14 @@ To try it without installing:
 [man page](https://github.com/mkaufhol/environment-store/blob/feature/v2/docs/man/share/man/man1/envs.1) and a
 [tldr page](https://github.com/mkaufhol/environment-store/blob/feature/v2/docs/tldr/envs.md).
 
+Tab completion is one line in your shell's start-up file (envs never edits it for you):
+
+```sh
+eval "$(envs completion zsh)"     # in ~/.zshrc, after compinit
+eval "$(envs completion bash)"    # in ~/.bashrc (bash 4.4 or newer; on macOS a Homebrew bash)
+envs completion fish > ~/.config/fish/completions/envs.fish
+```
+
 ## The CLI in 30 seconds
 
 After installing, in any directory:
@@ -107,11 +115,12 @@ are already set are kept unless you pass `overwrite=True`.
 - **Project file.** A `.envstore.toml` in your project names the connection, the default stores and the key files,
   so `envs run -- ./manage.py runserver` is all you type.
 - **Scriptable.** Data on stdout, messages on stderr, `--json` output, stable exit codes and `--noinput` for CI.
-- **Shell completion.** `eval "$(envs completion zsh)"` in `~/.zshrc` (or `bash`, 4.4 or newer; `fish` writes a
-  completions file) completes commands, options, existing store names, variable names of plaintext stores and
-  paths. It never asks for a key and never changes anything.
-- **Terminal UI.** `envs tui` lets you browse, create, remove and export stores and add, edit and delete variables,
-  with values masked, path completion and each screen's keys in its footer.
+- **Shell completion.** bash, zsh and fish complete commands, options, existing store names, variable names of
+  plaintext stores and paths. Completion only reads: it never asks for a key, never prints errors and never
+  changes anything. See [Shell completion](https://github.com/mkaufhol/environment-store/blob/feature/v2/docs/cli.md#shell-completion).
+- **Terminal UI.** `envs tui` lets you browse, create (with every encryption option), remove and export stores and
+  add, edit and delete variables, with values masked, path completion in every path input and each screen's keys
+  in its footer.
 
 ## Documentation
 

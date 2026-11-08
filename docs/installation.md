@@ -177,8 +177,7 @@ or with `uv run python -m environment_store.cli` in a uv project. After `uv tool
 tool's isolated environment, so plain `python` does not find it (`ModuleNotFoundError`); use `envs` there, or run
 `uv run --no-project --with 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2' python -m environment_store.cli --version`.
 
-Shell completion for bash (4.4 or newer), zsh and fish comes with `envs completion`; see the
-[CLI guide](cli.md) or `man envs`.
+Tab completion for both names is set up as described in [Enable shell completion](#enable-shell-completion).
 
 ## Check the installation
 
@@ -206,5 +205,27 @@ $ uv run python -c 'import environment_store; print(environment_store.__version_
 After `uv tool install` the library is in the tool's isolated environment, where plain `python` cannot import it.
 Without a project, use
 `uv run --no-project --with 'environment-store @ git+https://github.com/mkaufhol/environment-store@feature/v2' python -c 'import environment_store; print(environment_store.__version__)'`.
+
+## Enable shell completion
+
+`envs` completes commands, options, store names and the variable names of plaintext stores in bash, zsh and fish.
+envs never edits your shell's start-up files; add one line yourself and open a new shell:
+
+```sh
+eval "$(envs completion zsh)"     # in ~/.zshrc, after compinit
+eval "$(envs completion bash)"    # in ~/.bashrc (bash 4.4 or newer)
+envs completion fish > ~/.config/fish/completions/envs.fish
+```
+
+- zsh needs its completion system loaded first: put the line after `compinit` (frameworks such as Oh My Zsh run
+  it for you).
+- bash needs version 4.4 or newer. The `/bin/bash` of macOS is 3.2 and cannot run the script; install a current
+  bash with Homebrew (`brew install bash`) and use it as your shell.
+- The command must be on your `PATH` when you press Tab: after `uv tool install` or in an activated virtual
+  environment it is. `uv run envs ...` is not completed.
+- If you call the long name, generate the script with it: `eval "$(environment-store completion zsh)"`.
+
+Completion only reads: it never asks for a key, never prints errors and never creates or changes anything. The
+[Shell completion](cli.md#shell-completion) section of the CLI guide lists what completes and what does not.
 
 Next: the [Quickstart](quickstart.md).

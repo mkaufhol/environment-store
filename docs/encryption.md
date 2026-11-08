@@ -513,13 +513,13 @@ Delete the encrypted original afterwards with `envs rm-store dev -y` if you no l
 
 | Command | Key needed |
 |---|---|
-| `ls-store`, `rm-store`, `keygen`, `migrate` | no |
+| `ls-store`, `rm-store`, `keygen`, `migrate`, `completion` | no |
 | `create-store -e` | a new one |
 | `ls`, `get`, `export`, `export-shell`, `run` | yes, for each encrypted store you load |
 | `set`, `rm`, `import` | yes |
 | `cp-store`, `mv-store` | the source store's key (and optionally a new one) |
 | `encrypt` | a new one (`--new-key`, `--generate-key` or `--passphrase`; no `-k`, no `[keys]`) |
-| `tui` | yes, to open an encrypted store: from `ENV_STORE_KEY_<STORE>`, else `[keys]`, else the Unlock dialog (no `-k`) |
+| `tui` | yes, to open or export an encrypted store: from `ENV_STORE_KEY_<STORE>`, else `[keys]`, else the Unlock dialog (no `-k`); a new one to create an encrypted store; none to remove a store |
 | `rekey` | the old one and a new one |
 
 Note that `ls` needs the key even without `-v`: the variable names are encrypted too.

@@ -105,12 +105,32 @@ read from stdin (`-k -` on `create-store`, `--new-key -`, piped `--passphrase`) 
 `envs`: after success stderr warns `envs does not save this key; keep it, or store 'x' cannot be read
 again` (`passphrase` for a passphrase).
 
+## Shell completion
+
+`envs completion bash|zsh|fish` prints a completion script on stdout and exits 0; like `keygen` it reads
+neither the connection nor the project file. It is for the user's interactive shell, not for agents:
+never add it to a start-up file unless the user asked. The lines to give the user (envs never edits these
+files itself):
+
+```sh
+eval "$(envs completion zsh)"     # ~/.zshrc, after compinit
+eval "$(envs completion bash)"    # ~/.bashrc; bash 4.4 or newer (macOS /bin/bash 3.2 fails: use a Homebrew bash)
+envs completion fish > ~/.config/fish/completions/envs.fish
+```
+
+Run as `environment-store completion SHELL`, the script completes that name instead. It completes
+commands, options, fixed values (`-t`, the shells), existing store names (never a new name: not for
+`create-store` or the `cp-store`/`mv-store` target), variable names of plaintext stores for `get`, `rm`,
+`set` (never of encrypted stores: no key is read) and paths. It never prompts, never writes to stderr,
+never creates a file, directory or schema, and offers nothing when the backend is missing, broken or slow.
+Any other shell name is a usage error (exit 1).
+
 ## Project file `.envstore.toml`
 
 - Found by walking up from the current directory; the first regular file wins.
 - Ignored with a warning when not owned by you or root, or world-writable.
 - `envs` never writes it: add `[keys]` entries yourself after `create-store -e` or `encrypt`.
-- Only keys `connection`, `stores`, `ordered_overwrite`, `[keys]`; anything else is an error (exit 1) that breaks every command except `keygen`, `-h`/`--help` and `--version` (they do not read the file).
+- Only keys `connection`, `stores`, `ordered_overwrite`, `[keys]`; anything else is an error (exit 1) that breaks every command except `keygen`, `completion`, `-h`/`--help` and `--version` (they do not read the file).
 - Relative `json://`, `toml://`, `sqlite:///` connections and `[keys]` paths are relative to the project file's directory.
 - `[keys]` holds paths only, never key material. A `[keys]` entry for a plaintext store that a command loads is an error.
 - A password in `connection` prints a warning on every command that reads the file; put such connections in `ENV_STORE_CONNECTION`.

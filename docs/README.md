@@ -12,13 +12,13 @@ against the real CLI.
 | Guide | Read it when you want to… |
 |---|---|
 | [Quickstart](quickstart.md) | try the tool from scratch: plain and encrypted stores, `.env` export, `envs run`, Python |
-| [Installation](installation.md) | install the CLI, the library, PostgreSQL support or the TUI |
-| [CLI reference](cli.md) | look up a command, an option, an output format or an exit code |
+| [Installation](installation.md) | install the CLI, the library, PostgreSQL support or the TUI, and enable shell completion |
+| [CLI reference](cli.md) | look up a command, an option, an output format, an exit code or what shell completion offers |
 | [Python library](python.md) | load stores from Python or manage them programmatically |
 | [Configuration](configuration.md) | choose a backend, write `.envstore.toml`, use `ENV_STORE_CONNECTION` in CI |
 | [Encryption and keys](encryption.md) | encrypt a store, use key files or passphrases, rotate or remove encryption |
 | [Deploying with encrypted stores](deployment.md) | give a deployed app its keys on Heroku, Kubernetes, in containers or CI, as `ENV_STORE_KEY_<STORE>` or a mounted file; rotate them |
-| [Terminal UI](tui.md) | browse and edit variables interactively with `envs tui` |
+| [Terminal UI](tui.md) | create, remove and export stores and browse and edit variables interactively with `envs tui` |
 | [Agent skill](../.claude/skills/environment-store-cli/SKILL.md) | let a coding agent use the `envs` CLI safely |
 
 ## How do I…
@@ -28,6 +28,7 @@ against the real CLI.
 | install it? | [Installation](installation.md) (with uv; 2.0 is not on PyPI yet, so install from the repository) |
 | know which extra I need? | [Optional extras](installation.md#optional-extras) |
 | read the man page or the tldr page? | [Reference pages](cli.md#reference-pages-man-and-tldr) |
+| get Tab completion in bash, zsh or fish? | [Enable shell completion](installation.md#enable-shell-completion), [what completes](cli.md#shell-completion) |
 | create a store and add variables? | [Quickstart](quickstart.md#2-create-a-plain-store), [`envs set`](cli.md#envs-set--set-variables) |
 | bring in an existing `.env`, JSON or TOML file? | [`envs import`](cli.md#envs-import--fill-a-store-from-a-file) |
 | keep secrets encrypted? | [Quickstart](quickstart.md#4-create-an-encrypted-store), [Encryption and keys](encryption.md) |
@@ -43,6 +44,7 @@ against the real CLI.
 | stop typing `-c` and `-k` every time? | [Quickstart](quickstart.md#9-save-your-settings-in-a-project-file), [Configuration](configuration.md#the-project-file-envstoretoml) |
 | use PostgreSQL? | [Installation](installation.md#optional-extras), [Configuration](configuration.md#postgresql) |
 | create or upgrade the SQL schema? | [`envs migrate`](configuration.md#upgrade-the-sql-schema-envs-migrate) |
+| create, remove or export stores without typing commands? | TUI: [Create store](tui.md#create-store), [Remove store](tui.md#remove-store), [Export](tui.md#export), [path completion](tui.md#path-completion) |
 | deploy to Heroku, Kubernetes or a container? | [Deploying with encrypted stores](deployment.md) |
 | give an app its key without a key file? | [`ENV_STORE_KEY_<STORE>`](deployment.md#the-key-variable-env_store_key_store) |
 | run it in CI without prompts? | [CI recipe](cli.md#ci-no-prompts-key-from-a-secret), [CLI reference](cli.md#exit-codes) (`--noinput`, exit codes) |

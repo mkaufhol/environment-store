@@ -29,6 +29,7 @@ All examples on this page were run against `environment-store 2.0.0.dev0`. The o
   - [Keys and encryption: `keygen`, `encrypt`, `rekey`](#keys-and-encryption-commands)
   - [Terminal UI: `tui`](#terminal-ui-tui)
   - [Database schema: `migrate`](#database-schema-migrate)
+- [Shell completion](#shell-completion)
 - [Output modes](#output-modes)
 - [Exit codes](#exit-codes)
 - [Recipes](#recipes)
@@ -325,13 +326,13 @@ Only the text before the first `=` that is a valid store name counts as a store,
 
 | Command | Key needed |
 |---|---|
-| `ls-store`, `rm-store`, `keygen`, `migrate` | none |
+| `ls-store`, `rm-store`, `keygen`, `migrate`, `completion` | none |
 | `create-store` | none for a plain store; a new secret with `-e` (see below) |
 | `ls`, `get`, `set`, `rm`, `import`, `export`, `export-shell`, `run` | the key of each encrypted store involved |
 | `cp-store`, `mv-store` | the source store's key |
 | `rekey` | the old key and a new secret |
 | `encrypt` | a new secret |
-| `tui` | the key from `ENV_STORE_KEY_<STORE>` or `[keys]` in the project file, or typed in the Unlock dialog when you open an encrypted store |
+| `tui` | the key from `ENV_STORE_KEY_<STORE>` or `[keys]` in the project file, or typed in the Unlock dialog, when you open or export an encrypted store; a new one to create an encrypted store; none to remove one |
 
 #### Choosing a new secret
 
@@ -470,7 +471,7 @@ Things to know:
   Error: no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, or set 'connection' in .envstore.toml
   ```
 
-- The file is read by every command except `keygen`, `-h`/`--help` and `--version`. A broken project file makes every other command fail until you fix it or pass `--no-project`.
+- The file is read by every command except `keygen`, `completion`, `-h`/`--help` and `--version`. A broken project file makes every other command fail until you fix it or pass `--no-project`.
 
 ---
 
@@ -502,14 +503,14 @@ When stdin is not a terminal (in a pipe or CI), `envs` already behaves as if `--
 | `ENV_STORE_ORDERED_OVERWRITE` | `true` (last store wins) or `false` (first store wins). Also accepts `1`/`0`/`yes`/`no`, any case. Empty counts as unset. |
 | `ENV_STORE_KEY_<STORE>` | Key line or passphrase of an existing encrypted store, e.g. `ENV_STORE_KEY_CUSTOMER_A` for `customer-a`. Used when `-k` is not given, before `[keys]` and the prompt. Never used for new keys; `envs run` removes these variables from the command's environment. See [Deployment](deployment.md). |
 
-An invalid value stops every command except `keygen`, which reads no settings:
+An invalid value stops every command except `keygen` and `completion`, which read no settings:
 
 ```console
 $ ENV_STORE_ORDERED_OVERWRITE=maybe envs ls
 Error: invalid value 'maybe' for ENV_STORE_ORDERED_OVERWRITE: use true/false/1/0/yes/no
 ```
 
-Running `envs` with no command prints the help and exits with code 1. Shell completion for bash (4.4 or newer), zsh and fish: add `eval "$(envs completion zsh)"` (or `bash`) to your shell's start-up file, or write `envs completion fish` to `~/.config/fish/completions/envs.fish`; see `man envs`.
+Running `envs` with no command prints the help and exits with code 1. Tab completion for bash, zsh and fish is one line in your shell's start-up file; see [Shell completion](#shell-completion).
 
 ---
 
@@ -1174,15 +1175,20 @@ Error: store 'base' is not encrypted: use 'envs encrypt -s base'
 envs tui
 ```
 
-Needs the `tui` extra. The full guide is [tui.md](tui.md). It opens a full-screen browser for your stores, using the same connection, project file, `ENV_STORE_KEY_<STORE>` variables and `[keys]` as every other command. In the TUI you can view, add, edit and delete variables. Creating, copying, importing, exporting and key changes stay on the command line.
+Needs the `tui` extra. The full guide is [tui.md](tui.md). It opens a full-screen browser for your stores, using the same connection, project file, `ENV_STORE_KEY_<STORE>` variables and `[keys]` as every other command. In the TUI you can create, remove and export stores and view, add, edit and delete variables. Copying, moving, importing, `export-shell` and key changes (`encrypt`, `rekey`, `keygen`) stay on the command line.
 
 | Screen | Keys |
 |---|---|
-| Stores | arrows to move, **Enter** open, **r** reload, **q** quit |
+| Stores | arrows to move, **Enter** open, **a** create a store, **d** remove the selected store, **x** export stores to a file, **r** reload, **q** quit |
+| Create store (like `create-store`) | the name, then the encryption: none, a new generated key file (`--generate-key`), an existing key file (`-k`) or a passphrase typed twice; **Enter** or **Ctrl+S** create, **Esc** cancel |
+| Remove store (like `rm-store`) | type the store's name exactly, then **Enter**; needs no key; **Esc** cancel |
+| Export (like `export`, three steps) | **Space** chooses the stores in load order, **Ctrl+S** next; the format, `--nested` and `--first-wins`, **Ctrl+S** next; the path, **Enter** export. An existing file is only replaced after a confirmation; the file gets mode `0600` |
 | Unlock (for an encrypted store without a usable key from `ENV_STORE_KEY_<STORE>` or `[keys]`) | enter a key or passphrase file path, or type the passphrase; **Enter** unlock, **Esc** cancel |
 | Variables (values masked as `••••••••`) | **v** show/hide values, **a** add, **e** or **Enter** edit, **d** delete (asks first), **r** reload, **Esc** back |
 | Add / Edit | **Ctrl+S** save, **Esc** cancel |
 | Confirm | **y** yes, **n** or **Esc** no |
+
+Every path input (the export path, the key file fields of the create and unlock dialogs) suggests an existing file or directory as you type; **Tab** or **→** accepts it, and a leading `~` is expanded. Each screen's footer lists the keys that work there.
 
 The key you type in the Unlock dialog is forgotten when you leave the store. If someone else changed the store in the meantime, nothing is written and the TUI offers to reload.
 
@@ -1227,6 +1233,52 @@ What happens when `envs` connects to a database:
 | other tables, not ours | refused | refused |
 
 A refusal exits with code 1 and writes nothing.
+
+---
+
+## Shell completion
+
+`envs completion SHELL` prints a completion script for `bash`, `zsh` or `fish`. `envs` never edits your shell's start-up files: you add one line yourself, then open a new shell.
+
+```sh
+eval "$(envs completion zsh)"     # in ~/.zshrc, after compinit
+eval "$(envs completion bash)"    # in ~/.bashrc (bash 4.4 or newer)
+envs completion fish > ~/.config/fish/completions/envs.fish
+```
+
+- **zsh**: the line must come after `compinit`, which loads zsh's completion system. Frameworks such as Oh My Zsh run `compinit` for you; put the line after the framework is loaded. Without `compinit`, the line fails with `command not found: compdef`.
+- **bash**: the script needs **bash 4.4 or newer**. The `/bin/bash` of macOS is version 3.2 and cannot run it (`complete: nosort: invalid option name`). On macOS, install a current bash with Homebrew (`brew install bash`), make it your login shell, and put the line in `~/.bashrc`. Check the version with `echo $BASH_VERSION`.
+- **fish**: fish loads the file on its own; there is nothing to `eval`. Run the command again after upgrading Environment Store.
+
+The `completion` command, like `keygen`, reads neither the connection nor the project file, so it works anywhere.
+
+**`environment-store` as the command name.** The script completes the name it was run as. If you call the long name, generate the script with it:
+
+```sh
+eval "$(environment-store completion zsh)"
+environment-store completion fish > ~/.config/fish/completions/environment-store.fish
+```
+
+**What completes:**
+
+| You type | Completion offers |
+|---|---|
+| `envs <Tab>`, `envs export -<Tab>` | commands; the options of the command |
+| `envs export -t <Tab>`, `envs completion <Tab>` | the fixed values: `dotenv`, `json`, `toml`; `bash`, `zsh`, `fish` |
+| `envs ls <Tab>`, `envs set -s <Tab>`, `envs rm-store <Tab>` | existing store names, wherever an existing store is expected: the stores of `ls`, `get`, `export`, `export-shell` and `run`, `-s`, the store of `rm-store` and the source of `cp-store` and `mv-store` |
+| `envs ls -k <Tab>` | `STORE=` for each store, and paths; after `-k prod=` the path |
+| `envs get <Tab>`, `envs set -s base <Tab>`, `envs rm -s base <Tab>` | the variable names of plaintext stores: `-s` for `set` and `rm`, the project file's `stores` for `get` |
+| `envs keygen <Tab>`, `-f`, `--new-key`, `--generate-key` | paths, by your shell's own file completion |
+| `envs run base -- <Tab>` | whatever your shell completes for the command you run |
+
+**What never completes:**
+
+- **Variable names of encrypted stores.** Listing them would need the key, and completion never reads one: no `-k`, no `ENV_STORE_KEY_<STORE>`, no `[keys]`, no prompt.
+- **New names.** `create-store NAME` and the target of `cp-store` and `mv-store` offer nothing, because the name you want does not exist yet.
+
+The stores come from the same backend the command would use: `-c` on the line you are typing, else `ENV_STORE_CONNECTION`, else `connection` in `.envstore.toml` (`--no-project` on the line ignores the file).
+
+**Completion is read-only and silent.** It never prompts, never prints anything to stderr, and never creates or changes anything: no file, directory or database schema, so pressing Tab with a mistyped `-c json://typo` does not create `typo/`. When the backend is missing, unreachable, refuses the connection or is slow (PostgreSQL gets a 2-second connection timeout), or the project file is broken, completion simply offers nothing. If store names do not complete, run the command itself (for example `envs ls-store`) to see the error.
 
 ---
 

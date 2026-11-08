@@ -131,7 +131,26 @@ it looked at.
 ```
 
 The name is checked as you type: an invalid name or the name of a listed store shows the problem below the field.
-Choosing an encryption shows its fields:
+Choosing an encryption (`↑` / `↓`, then `Enter` or `Space`) shows its fields. With **New key file (generated)** the
+key file path appears below the choice, and the footer adds `tab Complete path` while that field has the focus:
+
+```
+  Create a store
+  ┌──────────────────────────────────────────┐
+  │ prod                                     │
+  └──────────────────────────────────────────┘
+  Encryption
+  ○ None
+  ◉ New key file (generated)
+  ○ Existing key file
+  ○ Passphrase
+  ┌──────────────────────────────────────────┐
+  │ ./prod.key                               │
+  └──────────────────────────────────────────┘
+   Create (ctrl+s)      Cancel (esc)
+
+ ⏎ Create  tab Complete path  ^s Create  esc Cancel
+```
 
 | Encryption | Like | Fields |
 |---|---|---|
@@ -167,7 +186,9 @@ deleted and that this cannot be undone, and **Remove** works only once you have 
  ⏎ Remove  esc Cancel
 ```
 
-Like `envs rm-store`, removing needs no key, also for an encrypted store.
+If the typed name does not match, nothing is removed, the dialog stays open and says
+`type the store name 'dev' exactly to remove it`. Like `envs rm-store`, removing needs no key, also for an
+encrypted store.
 
 ### Export
 
@@ -348,6 +369,26 @@ stray Enter never confirms. Its footer reads `y Yes  n No  esc Cancel`; `Esc` an
 | `Tab` in the path field | Accept the shown path suggestion; without one, move on |
 | `Tab` / `Shift+Tab` | Move between fields and buttons |
 | `Esc` | Cancel the export, nothing is written |
+
+### Footers
+
+The footer changes with the screen and with the field that has the focus. These are all of them:
+
+| Where | Footer |
+|---|---|
+| Stores screen | `⏎ Open  a Add  d Remove  x Export  r Reload  q Quit` |
+| Variables screen | `⏎ Edit  v Show / hide values  a Add  e Edit  d Delete  r Reload  esc Back  q Quit` |
+| Create store: name or passphrase field | `⏎ Create  ^s Create  esc Cancel` |
+| Create store: encryption choice | `^s Create  esc Cancel` |
+| Create store: a key file path field | `⏎ Create  tab Complete path  ^s Create  esc Cancel` |
+| Remove store | `⏎ Remove  esc Cancel` |
+| Export, step 1 (stores) | `space Choose  ^s Next  esc Cancel` |
+| Export, step 2 (options) | `^s Next  esc Cancel` |
+| Export, step 3 (path) | `⏎ Export  tab Complete path  ^s Export  esc Cancel` |
+| Unlock: key file field | `⏎ Unlock  tab Complete path  esc Cancel` |
+| Unlock: passphrase field | `⏎ Unlock  esc Cancel` |
+| Edit / Add | `^s Save  esc Cancel` |
+| Confirm | `y Yes  n No  esc Cancel` |
 
 ### Path completion
 

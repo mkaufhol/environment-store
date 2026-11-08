@@ -45,7 +45,7 @@ $ envs ls-store
 Error: no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, or set 'connection' in .envstore.toml
 ```
 
-`envs keygen`, `envs -h` / `envs --help` and `envs --version` work without a connection. They do not read the project file
+`envs keygen`, `envs completion`, `envs -h` / `envs --help` and `envs --version` work without a connection. They do not read the project file
 either, so a broken `.envstore.toml` cannot stop them.
 
 A connection with a typo in the path is not an error: it simply points at an empty backend. `ls-store` then says on
@@ -336,7 +336,7 @@ Where no key file can be shipped, as on Heroku, set `ENV_STORE_KEY_PROD` to the 
 drop the `-k`. [Deploying with encrypted stores](deployment.md) covers Heroku, Kubernetes, containers and CI, and
 what encryption protects when the key and the connection live in the same configuration.
 
-An invalid value fails every command except `keygen` (exit code 1):
+An invalid value fails every command except `keygen` and `completion` (exit code 1):
 
 ```console
 $ ENV_STORE_ORDERED_OVERWRITE=maybe envs ls-store
@@ -411,7 +411,7 @@ the store, and update it after `envs rekey` (see [Encryption and keys](encryptio
 >
 > Put the passphrase in a file (mode `0600`, outside the repository) and list the path of that file.
 
-A broken project file makes every command fail except `envs keygen`, `envs -h` / `--help` and `envs --version`, which do not
+A broken project file makes every command fail except `envs keygen`, `envs completion`, `envs -h` / `--help` and `envs --version`, which do not
 read it. Use `--no-project` to work around it, or fix the file.
 
 ### Writing commands do not use `stores`

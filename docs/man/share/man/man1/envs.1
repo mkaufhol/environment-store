@@ -633,11 +633,13 @@ Print the shell completion script; envs never edits shell start\-up files.
 Add
 .B eval \(dq$(envs completion zsh)\(dq
 to
-.IR ~/.zshrc ,
+.I ~/.zshrc
+(after
+.BR compinit ),
 .B eval \(dq$(envs completion bash)\(dq
 to
 .I ~/.bashrc
-(bash 4.4 or newer; the bash 3.2 of macOS cannot run it), or write
+(bash 4.4 or newer; the bash 3.2 of macOS cannot run it, a Homebrew bash can), or write
 .B envs completion fish
 to
 .IR ~/.config/fish/completions/envs.fish .
