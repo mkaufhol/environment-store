@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Two variables are enough for a deployment**: `ENV_STORE_CONNECTION` and the new `ENV_STORE_LOAD`. The load
+  specification in `ENV_STORE_LOAD` names the stores in load order and holds the key or passphrase of every
+  encrypted one, as one line (`envstore-load-v1:` and URL-safe base64). With both set, `load()` without store
+  names, `envs run` and every reading command load those stores with nothing else configured.
+  - Its store list is the default when no stores are named, ahead of `stores` in the project file.
+  - Its keys are an environment key source in every frontend, next to `ENV_STORE_KEY_<STORE>`: explicit key >
+    environment > `[keys]` > prompt. A store with a key in both variables is refused, because it is unclear which
+    one is meant.
+  - An invalid value stops every command except `keygen` and `completion`, and no message contains it.
+    `envs run` removes `ENV_STORE_LOAD` from the child's environment, like the key variables.
+- **`envs export-credentials [STORES]...`** prints both variables as dotenv lines, or one JSON document with
+  `--json`. Stores and keys are found like those of `ls` or `run`, and every store is decrypted first, so a wrong
+  key fails here rather than in the deployment. A relative file path in the connection string is made absolute,
+  and a first-wins merge order is printed as a third line, `ENV_STORE_ORDERED_OVERWRITE=false`.
+- **Python**: `LoadSpec` builds, encodes and decodes the value; `EnvironmentStore.load_spec(sources)` resolves the
+  keys like `load()`, decrypts every store and returns the specification; `EnvironmentStore.environment_key_source(store)`
+  names the variable a store's key comes from. `EnvironmentStore.environment_secret()` also reads `ENV_STORE_LOAD`.
+
 ## [2.0.0] - 2026-11-08
 
 Version 2 is a rewrite and not compatible with 0.1: the data model, the Python API and the command line all

@@ -1,3 +1,4 @@
+import dataclasses
 import os
 from pathlib import Path
 from types import MappingProxyType
@@ -5,6 +6,7 @@ from typing import Final
 
 import pytest
 
+from environment_store.config.load_spec import LoadSpec
 from environment_store.config.project import PROJECT_FILE_NAME, ProjectFileCandidate
 from environment_store.config.settings import (
     ENV_CONNECTION,
@@ -16,6 +18,7 @@ from environment_store.config.settings import (
 )
 from environment_store.core.errors import ConfigurationError, ValidationError
 from environment_store.core.merge import MergeOrder
+from environment_store.core.secrets import Passphrase
 
 _HIDDEN: Final = "hunter2-very-secret"
 _FILE_CONNECTION: Final = "postgresql://file-host/db"
@@ -219,6 +222,49 @@ def test_no_project_file_gives_empty_defaults(tmp_path: Path) -> None:
     assert settings.ordered_overwrite is True
 
 
+# --- load specification (ENV_STORE_LOAD) ----------------------------------------------------------
+
+
+def test_load_spec_gives_the_default_stores(tmp_path: Path) -> None:
+    spec = LoadSpec(stores=("base", "app"), keys={"app": Passphrase(text=_HIDDEN)})
+
+    settings = _resolve(tmp_path, environ={"ENV_STORE_LOAD": spec.encode()})
+
+    assert settings.load_spec == spec
+    assert settings.default_stores == ("base", "app")
+    assert settings.stores == ()
+    assert _HIDDEN not in repr(settings)
+
+
+def test_load_spec_stores_win_over_the_project_file_stores(tmp_path: Path) -> None:
+    _project(tmp_path, 'stores = ["from-file"]\n')
+    spec = LoadSpec(stores=("from-env",))
+
+    settings = _resolve(tmp_path, environ={"ENV_STORE_LOAD": spec.encode()})
+
+    assert settings.default_stores == ("from-env",)
+    assert settings.stores == ("from-file",)
+
+
+@pytest.mark.parametrize("environ", [{}, {"ENV_STORE_LOAD": ""}])
+def test_without_a_load_spec_the_project_file_gives_the_default_stores(
+    tmp_path: Path, environ: dict[str, str]
+) -> None:
+    _project(tmp_path, 'stores = ["from-file"]\n')
+
+    settings = _resolve(tmp_path, environ=environ)
+
+    assert settings.load_spec is None
+    assert settings.default_stores == ("from-file",)
+
+
+def test_malformed_load_spec_is_a_configuration_error(tmp_path: Path) -> None:
+    with pytest.raises(ConfigurationError, match=r"^ENV_STORE_LOAD is not a valid") as caught:
+        _resolve(tmp_path, environ={"ENV_STORE_LOAD": _HIDDEN})
+
+    assert _HIDDEN not in str(caught.value)
+
+
 def test_broken_project_file_is_a_configuration_error(tmp_path: Path) -> None:
     _project(tmp_path, "stores = \n")
 
@@ -256,19 +302,18 @@ def test_project_file_is_parsed_from_the_bytes_read_at_discovery(
     ],
 )
 def test_settings_validate_their_invariants(fields: dict[str, object]) -> None:
-    arguments: dict[str, object] = {
-        "connection": None,
-        "connection_source": None,
-        "ordered_overwrite": True,
-        "stores": (),
-        "key_paths": {},
-        "project_file": None,
-        "warnings": (),
-        **fields,
-    }
+    valid = Settings(
+        connection=None,
+        connection_source=None,
+        ordered_overwrite=True,
+        stores=(),
+        key_paths={},
+        project_file=None,
+        warnings=(),
+    )
 
     with pytest.raises(ValidationError):
-        Settings(**arguments)
+        dataclasses.replace(valid, **fields)
 
 
 # --- password warning --------------------------------------------------------------------------

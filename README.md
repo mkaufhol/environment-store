@@ -105,8 +105,10 @@ are already set are kept unless you pass `overwrite=True`.
 - **Optional encryption per store.** AES-256-GCM with a random key file or an Argon2id passphrase. Names and
   values are encrypted together. Keys are never stored, cached or accepted as literal command line text.
 - **Ready to deploy.** On Heroku, Kubernetes or in CI, an encrypted store takes its key from
-  `ENV_STORE_KEY_<STORE>` or from a mounted key file, and `envs run` keeps the key out of your program's
-  environment. See [Deploying with encrypted stores](https://github.com/mkaufhol/environment-store/blob/main/docs/deployment.md).
+  `ENV_STORE_KEY_<STORE>` or from a mounted key file. Or set just two variables: `envs export-credentials` prints
+  `ENV_STORE_CONNECTION` and `ENV_STORE_LOAD`, which names the stores and holds their keys, and `envs run` or
+  `load()` needs nothing else. `envs run` keeps the keys out of your program's environment.
+  See [Deploying with encrypted stores](https://github.com/mkaufhol/environment-store/blob/main/docs/deployment.md).
 - **Load anywhere.** `envs run` starts a command with the variables, `eval "$(envs export-shell ...)"` loads them
   into a POSIX shell, `envs export` writes dotenv, JSON or TOML, and `environment_store.load()` fills `os.environ`.
 - **Safe dotenv files.** Exported `.env` files read back exactly with both python-dotenv and Docker Compose; values
@@ -131,7 +133,7 @@ are already set are kept unless you pass `overwrite=True`.
 | [Python library](https://github.com/mkaufhol/environment-store/blob/main/docs/python.md) | `load()`, `EnvironmentStore`, `Environment`, keys and errors |
 | [Configuration](https://github.com/mkaufhol/environment-store/blob/main/docs/configuration.md) | Connection strings, `.envstore.toml`, environment variables, merge order |
 | [Encryption and keys](https://github.com/mkaufhol/environment-store/blob/main/docs/encryption.md) | Key files, passphrases, `rekey`, `encrypt`, decrypting with `cp-store --plain` |
-| [Deploying with encrypted stores](https://github.com/mkaufhol/environment-store/blob/main/docs/deployment.md) | Keys on Heroku, Kubernetes, in containers and CI: `ENV_STORE_KEY_<STORE>` or a mounted key file, and what encryption protects there |
+| [Deploying with encrypted stores](https://github.com/mkaufhol/environment-store/blob/main/docs/deployment.md) | Keys on Heroku, Kubernetes, in containers and CI: `ENV_STORE_KEY_<STORE>`, a mounted key file or `ENV_STORE_LOAD`, and what encryption protects there |
 | [Terminal UI](https://github.com/mkaufhol/environment-store/blob/main/docs/tui.md) | `envs tui` screens and key bindings |
 | [Agent skill](https://github.com/mkaufhol/environment-store/blob/main/.claude/skills/environment-store-cli/SKILL.md) | Instructions for coding agents that use the `envs` CLI |
 

@@ -53,7 +53,8 @@ StoresArg = Annotated[
     list[str] | None,
     typer.Argument(
         metavar="[STORES]...",
-        help="Stores in load order; the last one wins (default: 'stores' in .envstore.toml).",
+        help="Stores in load order; the last one wins (default: the stores of ENV_STORE_LOAD, "
+        "else 'stores' in .envstore.toml).",
         show_default=False,
         autocompletion=complete_stores,
     ),
@@ -75,8 +76,8 @@ ReadKeysOpt = Annotated[
         "--key",
         metavar="STORE=PATH",
         help="Key or passphrase file of a store, '-' for stdin; repeatable. With one store, "
-        "-k PATH is enough. Default: ENV_STORE_KEY_<STORE>, else [keys] in .envstore.toml, "
-        "else a prompt on a terminal.",
+        "-k PATH is enough. Default: ENV_STORE_KEY_<STORE> or ENV_STORE_LOAD, else [keys] in "
+        ".envstore.toml, else a prompt on a terminal.",
         show_default=False,
         click_type=ReadKeyType(),
     ),
@@ -87,8 +88,8 @@ WriteKeyOpt = Annotated[
         "-k",
         "--key",
         metavar="PATH|-",
-        help="Key or passphrase file of the store, '-' for stdin. Default: ENV_STORE_KEY_<STORE>, "
-        "else [keys] in .envstore.toml, else a prompt on a terminal.",
+        help="Key or passphrase file of the store, '-' for stdin. Default: ENV_STORE_KEY_<STORE> "
+        "or ENV_STORE_LOAD, else [keys] in .envstore.toml, else a prompt on a terminal.",
         show_default=False,
         click_type=PathType(),
     ),

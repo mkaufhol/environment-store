@@ -1,8 +1,8 @@
 """`EnvironmentStoreApp` and `run_tui`: the Textual app on the library facade.
 
 Browse, create and remove stores, export them to a file, unlock encrypted ones
-(`ENV_STORE_KEY_<STORE>`, then project `[keys]`), view masked values and add, edit or delete
-variables. Copying, moving, import and the key lifecycle stay in the CLI.
+(`ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, then project `[keys]`), view masked values and add,
+edit or delete variables. Copying, moving, import and the key lifecycle stay in the CLI.
 """
 
 from collections.abc import Mapping

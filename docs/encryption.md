@@ -84,8 +84,8 @@ More details:
 - The same message appears if someone tampered with the stored data. GCM authentication detects that.
 - The tool never stores, caches or remembers a key. You cannot type a key directly on the command line, because it
   would end up in your shell history and in `ps` output. For deployments, an existing store's key may come from the
-  environment variable `ENV_STORE_KEY_<STORE>` ([below](#from-an-environment-variable-env_store_key_store)); then
-  anyone who can read the deployment's configuration has the key.
+  environment variable `ENV_STORE_KEY_<STORE>` ([below](#from-an-environment-variable-env_store_key_store)) or
+  from the load specification in `ENV_STORE_LOAD`; then anyone who can read the deployment's configuration has the key.
 - Error messages never contain values, keys or passphrases, with one exception you cause yourself: text in
   `[keys]` that is not a key-file line is treated as a path and printed in the "cannot read key or passphrase
   file" error. So never put a passphrase in `[keys]` (see [below](#in-the-project-file-keys)).
@@ -207,7 +207,8 @@ Every command that reads or writes the contents of an encrypted store needs its 
 order:
 
 1. `-k` on the command line
-2. the environment variable `ENV_STORE_KEY_<STORE>`
+2. the environment: the variable `ENV_STORE_KEY_<STORE>` or the store's key in `ENV_STORE_LOAD` (a key in both is an
+   error, exit code 1)
 3. `[keys]` in the project file `.envstore.toml`
 4. a hidden prompt, if stdin is a terminal and `--noinput` is not set
 5. otherwise the command fails with exit code 4
@@ -236,7 +237,7 @@ API_URL=https://a.example.com
 
 ### Several stores: `-k STORE=PATH`
 
-When a reading command (`ls`, `get`, `export`, `export-shell`, `run`) loads several stores, bind each key to its
+When a reading command (`ls`, `get`, `export`, `export-shell`, `run`, `export-credentials`) loads several stores, bind each key to its
 store by name. Repeat `-k` for each encrypted store; plain stores need nothing.
 
 ```console
@@ -303,8 +304,8 @@ DB_PASSWORD=hunter2  prod
 - **Never put a passphrase in `[keys]`.** It is not detected: it is treated as a file name, and the error shows it
   on stderr (`Error: cannot read key or passphrase file '/…/correct horse battery staple': No such file or
   directory`). Put the passphrase in a file with mode `0600` and list the path of that file.
-- A `-k` on the command line, and the store's `ENV_STORE_KEY_<STORE>` variable, beat the `[keys]` entry for that
-  store.
+- A `-k` on the command line, and the store's key from the environment (`ENV_STORE_KEY_<STORE>` or
+  `ENV_STORE_LOAD`), beat the `[keys]` entry for that store.
 - An entry for a store that is not encrypted is an error once a command loads that store, and that includes every
   write to it (`set`, `rm`, `import`):
   `names a key for store 'base', which is not encrypted: remove the entry`.
@@ -334,7 +335,7 @@ DB_PASSWORD=hunter2
   is set, unless `-k` gives the key of both.
 - New keys never come from the environment (`create-store -e`, `encrypt`, `rekey --new-key`, the new-key options of
   `cp-store` / `mv-store`). The old key of `rekey` may.
-- `envs run` removes every `ENV_STORE_KEY_*` variable from the command it starts. The Python library leaves
+- `envs run` removes every `ENV_STORE_KEY_*` variable, and `ENV_STORE_LOAD`, from the command it starts. The Python library leaves
   `os.environ` alone apart from the variables it loads, so the key variable stays in your process.
 - The key line is already plain text: put the content of the key file into the variable as it is, not
   base64-encoded.
@@ -345,9 +346,15 @@ encryption still protects the backend and its backups, but not against them. A k
 passed with `-k` or `[keys]` keeps the key out of the process environment.
 [Deploying with encrypted stores](deployment.md) shows Heroku, Kubernetes, container and CI setups, both ways.
 
+**One variable for all stores: `ENV_STORE_LOAD`.** Instead of one key variable per store, a deployment can set
+`ENV_STORE_LOAD`, which names the stores to load and holds the key or passphrase of every encrypted one.
+`envs export-credentials` prints it, after checking every key. Its keys rank like `ENV_STORE_KEY_<STORE>`, and an
+encrypted store with a key in both variables is refused with exit code 1, unless `-k` gives the key. See
+[Two variables for everything](deployment.md#two-variables-for-everything-env_store_load).
+
 ### The prompt, and `--noinput` for scripts and CI
 
-On a terminal, without `-k`, a key variable or `[keys]`, `envs` asks with a hidden prompt on stderr:
+On a terminal, without `-k`, a key from the environment or `[keys]`, `envs` asks with a hidden prompt on stderr:
 
 ```text
 Key or passphrase for store 'prod':
@@ -441,7 +448,7 @@ the values. If the secrets were exposed in plain form, rotate them at their sour
 
 ### Rotate a key: `envs rekey`
 
-`rekey` re-encrypts a store with a new secret. It needs the old key (`-k`, `ENV_STORE_KEY_<STORE>`, `[keys]` or the
+`rekey` re-encrypts a store with a new secret. It needs the old key (`-k`, `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, `[keys]` or the
 prompt) and one new secret, which never comes from the environment or `[keys]`:
 
 ```console
@@ -461,8 +468,8 @@ Error: give the new secret: --new-key, --generate-key or --passphrase
   with `-k dev.pass`.
 - A passphrase always gets a new salt.
 - The old key stops working immediately, as the `ls dev -k dev.key` line shows.
-  Update `[keys]` and every place that holds the old key (CI secrets, `ENV_STORE_KEY_<STORE>` in deployments,
-  password manager) right after rekeying; [Deployment](deployment.md#security-notes) shows the order.
+  Update `[keys]` and every place that holds the old key (CI secrets, `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD` in
+  deployments, password manager) right after rekeying; [Deployment](deployment.md#security-notes) shows the order.
 - `rekey` on a plain store points you to `envs encrypt`.
 
 ### Copy or move an encrypted store: `cp-store`, `mv-store`
@@ -515,11 +522,11 @@ Delete the encrypted original afterwards with `envs rm-store dev -y` if you no l
 |---|---|
 | `ls-store`, `rm-store`, `keygen`, `migrate`, `completion` | no |
 | `create-store -e` | a new one |
-| `ls`, `get`, `export`, `export-shell`, `run` | yes, for each encrypted store you load |
+| `ls`, `get`, `export`, `export-shell`, `run`, `export-credentials` | yes, for each encrypted store you load |
 | `set`, `rm`, `import` | yes |
 | `cp-store`, `mv-store` | the source store's key (and optionally a new one) |
 | `encrypt` | a new one (`--new-key`, `--generate-key` or `--passphrase`; no `-k`, no `[keys]`) |
-| `tui` | yes, to open or export an encrypted store: from `ENV_STORE_KEY_<STORE>`, else `[keys]`, else the Unlock dialog (no `-k`); a new one to create an encrypted store; none to remove a store |
+| `tui` | yes, to open or export an encrypted store: from `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, else `[keys]`, else the Unlock dialog (no `-k`); a new one to create an encrypted store; none to remove a store |
 | `rekey` | the old one and a new one |
 
 Note that `ls` needs the key even without `-v`: the variable names are encrypted too.
@@ -534,6 +541,9 @@ Note that `ls` needs the key even without `-v`: the variable names are encrypted
 | key variable of a key file store holds no key line (for example base64-encoded) | `ENV_STORE_KEY_PROD does not hold a usable key for store 'prod': not a valid key file: …` | 4 |
 | key text in the key variable of a passphrase store | `ENV_STORE_KEY_DEV holds key text, but store 'dev' uses a passphrase` | 4 |
 | two encrypted stores share a set key variable | `encrypted stores 'my-app', 'my_app' all take their key from ENV_STORE_KEY_MY_APP, …` | 1 |
+| an encrypted store has a key in both `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` | `store 'app' gets a key from both ENV_STORE_KEY_APP and ENV_STORE_LOAD, so it is unclear which one is meant: set only one of them` | 1 |
+| `ENV_STORE_LOAD` holds the wrong kind of secret for a store | `ENV_STORE_LOAD holds key text for store 'dev', which uses a passphrase` (or `holds a passphrase for store 'prod', which uses a key file`) | 4 |
+| `ENV_STORE_LOAD` is not a load specification | `ENV_STORE_LOAD is not a valid load specification: …` | 1 |
 | key file for a passphrase store | `store 'dev' uses a passphrase, but a key file was given: pass the passphrase file with -k (or -k - for stdin), or switch the store to the key file with 'envs rekey -s dev --new-key <path>'` | 4 |
 | passphrase file for a key file store | `not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen` | 4 |
 | key file missing or unreadable | `cannot read key or passphrase file 'missing.key': No such file or directory` | 4 |

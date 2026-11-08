@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 
 from environment_store.cli.app import app as envs
 from environment_store.cli.app import build_app
+from environment_store.config.load_spec import LoadSpec
 from environment_store.config.settings import ENV_CONNECTION
 from environment_store.core.adapter import Adapter, SetupMode
 from environment_store.core.errors import BackendError, MissingExtraError
@@ -25,6 +26,7 @@ _COMMANDS: Final = {
     "create-store",
     "encrypt",
     "export",
+    "export-credentials",
     "export-shell",
     "get",
     "import",
@@ -300,6 +302,20 @@ def test_get_completes_the_names_of_every_plaintext_store_of_the_project_file(
     cli_json.project_file("stores = ['alpha', 'beta']")
 
     assert _values(cli_json, "get") == ["DEBUG", "HOST"]
+
+
+def test_get_completes_the_names_of_the_load_spec_stores_before_the_project_file(
+    cli_json: CliHarness,
+) -> None:
+    _stores(cli_json, "alpha", "beta")
+    cli_json.store().set("alpha", "FROM_PROJECT", "h")
+    cli_json.store().set("beta", "FROM_SPEC", "x")
+    cli_json.project_file("stores = ['alpha']")
+    env = {"ENV_STORE_LOAD": LoadSpec(stores=("beta",)).encode()}
+
+    items = parse(complete(cli_json, "get", env=env), "bash")
+
+    assert [item.value for item in items] == ["FROM_SPEC"]
 
 
 @pytest.mark.parametrize("args", [("get",), ("rm", "-s", "vault"), ("set", "-s", "vault")])

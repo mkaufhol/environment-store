@@ -190,6 +190,11 @@ Public signatures carry no `Any`. Their docstrings are user documentation.
   file's directory.
 - **The name.** Every `ENV_STORE_*` variable that `src/` reads must be named in `CHANGELOG.md`.
   `test_changelog_names_every_environment_variable_the_package_reads` greps for them.
+- **A variable that holds secrets,** like `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD`:
+  - `envs run` must remove it from the command's environment (`cli/exporting/run.py`);
+  - the autouse fixture `_no_key_variables` in `tests/conftest.py` must remove it, so a
+    developer's shell can't leak it into a test;
+  - its error messages name the variable, never its value.
 - **Documentation:**
   - `docs/configuration.md`;
   - the `ENVIRONMENT` section of the man page, plus the variable in `_ENVIRONMENT` in

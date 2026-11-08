@@ -1,7 +1,8 @@
 """`load()`: the one-liner that resolves configuration like the CLI and fills `os.environ`.
 
 Like python-dotenv's `load_dotenv()`: connection, project file, stores and keys are resolved
-exactly as the CLI does (keys: `keys=` > `ENV_STORE_KEY_<STORE>` > `[keys]` > prompt),
+exactly as the CLI does (stores: the arguments > `ENV_STORE_LOAD` > `stores` in the project
+file; keys: `keys=` > `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD` > `[keys]` > prompt),
 encrypted stores are prompted for on a terminal (never with `noinput`) and variables already
 in the environment are kept unless `overwrite` is set. `load_with` is the same with every
 boundary injected.
@@ -51,10 +52,12 @@ def load(  # noqa: PLR0913 - keyword-only options, like the CLI's
     """Load stores into `os.environ`, configured like the CLI.
 
     Args:
-        *stores: Stores in load order; none uses the project file's `stores`.
+        *stores: Stores in load order; none uses the stores of `ENV_STORE_LOAD`, else the
+            project file's `stores`.
         connection: The connection string; `None` uses `ENV_STORE_CONNECTION`, then the
             project file.
-        keys: Store name → key; beats `ENV_STORE_KEY_<STORE>` and the project file's `[keys]`.
+        keys: Store name → key; beats the environment (`ENV_STORE_KEY_<STORE>`,
+            `ENV_STORE_LOAD`) and the project file's `[keys]`.
         first_wins: The first store wins instead of the last (beats every other setting).
         overwrite: Replace variables already in `os.environ`.
         nested: Set prefixed names (`STORE__NAME`) instead of merging.
@@ -65,7 +68,8 @@ def load(  # noqa: PLR0913 - keyword-only options, like the CLI's
         The loaded stores.
 
     Raises:
-        ConfigurationError: No connection, no stores, or a broken project file.
+        ConfigurationError: No connection, no stores, a broken project file or an invalid
+            `ENV_STORE_LOAD`.
         KeyRequiredError: An encrypted store has no key and prompting is not possible.
     """
     stdin = sys.stdin
@@ -108,7 +112,7 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
     """`load` with its boundaries injected.
 
     Args:
-        stores: Stores in load order; empty uses the project file's `stores`.
+        stores: Stores in load order; empty uses `ENV_STORE_LOAD`'s, else the project file's.
         connection: As for `load`.
         keys: As for `load`.
         first_wins: As for `load`.
@@ -175,11 +179,11 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
 
 
 def _store_names(stores: Sequence[str], settings: Settings) -> tuple[str, ...]:
-    names = tuple(stores) or settings.stores
+    names = tuple(stores) or settings.default_stores
     if not names:
         message = (
-            "no stores to load: name them, e.g. load('base_conf'), or set 'stores' in "
-            ".envstore.toml"
+            "no stores to load: name them, e.g. load('base_conf'), set ENV_STORE_LOAD, or set "
+            "'stores' in .envstore.toml"
         )
         raise ConfigurationError(message)
     for name in names:

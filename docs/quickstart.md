@@ -322,5 +322,7 @@ Where to go next:
 - [CLI reference](cli.md): every command, `--json` output, exit codes
 - [Encryption and keys](encryption.md): passphrases, `rekey`, `encrypt`, decrypting a copy
 - [Configuration](configuration.md): backends, PostgreSQL, project file rules, CI with `--noinput`
+- [Deploying with encrypted stores](deployment.md): give a deployed app its stores and keys, for example as the two
+  variables `ENV_STORE_CONNECTION` and `ENV_STORE_LOAD` that `envs export-credentials` prints
 - [Python library](python.md): `EnvironmentStore`, `Environment`, errors
 - [Terminal UI](tui.md): `envs tui`

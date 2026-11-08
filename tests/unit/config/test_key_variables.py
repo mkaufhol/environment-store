@@ -323,10 +323,10 @@ def test_a_project_key_file_that_cannot_be_read_is_a_key_source_error(
         (None, {"ENV_STORE_KEY_OTHER": "x"}, False),
     ],
 )
-def test_uses_key_variable_tells_whether_the_variable_would_be_consulted(
+def test_uses_environment_key_tells_whether_the_variable_would_be_consulted(
     inspector: Inspector, source: KeySource | None, environ: dict[str, str], *, expected: bool
 ) -> None:
-    assert _resolver(inspector, environ).uses_key_variable("keyed", source) is expected
+    assert _resolver(inspector, environ).uses_environment_key("keyed", source) is expected
 
 
 # --- collisions -----------------------------------------------------------------------------------

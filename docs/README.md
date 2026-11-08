@@ -17,7 +17,7 @@ against the real CLI.
 | [Python library](python.md) | load stores from Python or manage them programmatically |
 | [Configuration](configuration.md) | choose a backend, write `.envstore.toml`, use `ENV_STORE_CONNECTION` in CI |
 | [Encryption and keys](encryption.md) | encrypt a store, use key files or passphrases, rotate or remove encryption |
-| [Deploying with encrypted stores](deployment.md) | give a deployed app its keys on Heroku, Kubernetes, in containers or CI, as `ENV_STORE_KEY_<STORE>` or a mounted file; rotate them |
+| [Deploying with encrypted stores](deployment.md) | give a deployed app its keys on Heroku, Kubernetes, in containers or CI, as `ENV_STORE_KEY_<STORE>`, a mounted file or `ENV_STORE_LOAD`; rotate them |
 | [Terminal UI](tui.md) | create, remove and export stores and browse and edit variables interactively with `envs tui` |
 | [Agent skill](../.claude/skills/environment-store-cli/SKILL.md) | let a coding agent use the `envs` CLI safely |
 | [Developer guide](development/README.md) | change or extend Environment Store itself: architecture, conventions, tests, tools, new adapters |
@@ -48,6 +48,7 @@ against the real CLI.
 | create, remove or export stores without typing commands? | TUI: [Create store](tui.md#create-store), [Remove store](tui.md#remove-store), [Export](tui.md#export), [path completion](tui.md#path-completion) |
 | deploy to Heroku, Kubernetes or a container? | [Deploying with encrypted stores](deployment.md) |
 | give an app its key without a key file? | [`ENV_STORE_KEY_<STORE>`](deployment.md#the-key-variable-env_store_key_store) |
+| configure a deployment with just two variables? | [`ENV_STORE_LOAD` and `envs export-credentials`](deployment.md#two-variables-for-everything-env_store_load) |
 | run it in CI without prompts? | [CI recipe](cli.md#ci-no-prompts-key-from-a-secret), [CLI reference](cli.md#exit-codes) (`--noinput`, exit codes) |
 
 ## Concepts in one minute

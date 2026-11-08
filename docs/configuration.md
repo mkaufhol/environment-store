@@ -1,6 +1,6 @@
 # Configuration
 
-This page covers everything you can configure: where your stores live (the **connection string**), the two
+This page covers everything you can configure: where your stores live (the **connection string**), the
 environment variables the tool reads, the project file `.envstore.toml`, and the rules for store names, variable
 names and values.
 
@@ -316,14 +316,16 @@ After an upgrade it prints `upgraded schema from vN to vM`.
 
 ## Environment variables
 
-`envs` reads these environment variables. Keys and passphrases come from `ENV_STORE_KEY_<STORE>` only for existing
-stores, never for new ones (see [Encryption and keys](encryption.md) and [Deployment](deployment.md)).
+`envs` reads these environment variables. Keys and passphrases come from the environment, `ENV_STORE_KEY_<STORE>` or
+`ENV_STORE_LOAD`, only for existing stores, never for new ones (see [Encryption and keys](encryption.md) and
+[Deployment](deployment.md)).
 
 | Variable | Meaning | Values |
 |---|---|---|
 | `ENV_STORE_CONNECTION` | the connection string | any connection string; empty counts as unset |
 | `ENV_STORE_ORDERED_OVERWRITE` | merge order when you read several stores | `true` (default): the last store wins. `false`: the first store wins. Also `1/0/yes/no`, any case. Empty counts as unset |
 | `ENV_STORE_KEY_<STORE>` | the key or passphrase of an existing encrypted store: the store name in upper case, `-` as `_`, e.g. `ENV_STORE_KEY_CUSTOMER_A` for `customer-a` | the key line (`envstore-key-v1:…`, not base64-encoded) or the passphrase; one trailing newline removed. `-k` wins over it, it wins over `[keys]`. Empty or invalid is an error (exit code 4). Ignored for plain stores and for stores the command does not use; never used for new keys; `envs run` removes it from the command's environment |
+| `ENV_STORE_LOAD` | a load specification: the stores to load, in load order, and the key or passphrase of every encrypted one. Print it with [`envs export-credentials`](deployment.md#two-variables-for-everything-env_store_load) | one line, `envstore-load-v1:` and URL-safe base64; treat it as opaque and as secret as all its keys together. Its stores are the default store list of the reading commands and of `load()` when no stores are named; its keys rank like `ENV_STORE_KEY_<STORE>`, and an encrypted store with a key in both is an error (exit code 1) unless `-k` gives its key. Its keys of plain stores and of stores the command does not use are ignored. Empty counts as unset; invalid is an error (exit code 1); `envs run` removes it from the command's environment |
 
 A typical CI setup:
 
@@ -333,14 +335,20 @@ envs --noinput run base prod -k prod=/run/secrets/prod.key -- ./deploy.sh
 ```
 
 Where no key file can be shipped, as on Heroku, set `ENV_STORE_KEY_PROD` to the content of the key file instead and
-drop the `-k`. [Deploying with encrypted stores](deployment.md) covers Heroku, Kubernetes, containers and CI, and
-what encryption protects when the key and the connection live in the same configuration.
+drop the `-k`. Or replace everything but the connection with one variable: `ENV_STORE_LOAD` names the stores and holds
+their keys, so `envs --noinput run -- ./deploy.sh` is enough
+([Two variables for everything](deployment.md#two-variables-for-everything-env_store_load)).
+[Deploying with encrypted stores](deployment.md) covers Heroku, Kubernetes, containers and CI, and what encryption
+protects when the key and the connection live in the same configuration.
 
-An invalid value fails every command except `keygen` and `completion` (exit code 1):
+An invalid value fails every command except `keygen` and `completion` (exit code 1). The message for
+`ENV_STORE_LOAD` says what is wrong but never shows the value, because it holds keys:
 
 ```console
 $ ENV_STORE_ORDERED_OVERWRITE=maybe envs ls-store
 Error: invalid value 'maybe' for ENV_STORE_ORDERED_OVERWRITE: use true/false/1/0/yes/no
+$ ENV_STORE_LOAD=garbage envs ls-store
+Error: ENV_STORE_LOAD is not a valid load specification: it must start with 'envstore-load-v1:'
 ```
 
 ## The project file `.envstore.toml`
@@ -374,7 +382,7 @@ hunter2
 | Key | Type | What it does |
 |---|---|---|
 | `connection` | string | The connection string. Relative `json://`, `toml://` and `sqlite:///` paths are resolved from the **project file's directory**, not the current directory, so the file works from any subdirectory. Absolute paths, `~` paths and PostgreSQL strings are used as written |
-| `stores` | list of store names | The default load order for the reading commands `ls`, `get`, `export`, `export-shell` and `run`. Stores you name on the command line **replace** this list; they are not added to it |
+| `stores` | list of store names | The default load order for the reading commands `ls`, `get`, `export`, `export-shell`, `run` and `export-credentials`. Stores you name on the command line **replace** this list; they are not added to it. The stores of `ENV_STORE_LOAD` replace it too |
 | `ordered_overwrite` | `true` / `false` | `true` (default): the last store wins. `false`: the first store wins |
 | `[keys]` | table: store name → path | The key file or passphrase file for each encrypted store. Relative paths are resolved from the project file's directory; `~` is expanded. A key-file line (`envstore-key-v1:…`) is refused; any other text is taken as a path, so never put a passphrase here, only the path of a passphrase file |
 
@@ -418,7 +426,8 @@ read it. Use `--no-project` to work around it, or fix the file.
 
 `set`, `rm`, `import`, `rekey` and `encrypt` change exactly one store, and you always name it with `-s`. They never
 pick it from the `stores` list. They all use `connection`. `set`, `rm`, `import` and `rekey` also take the store's
-current key from `[keys]`, unless `-k` or `ENV_STORE_KEY_<STORE>` gives it. `encrypt` does not read `[keys]` at all: you give the new key with `--new-key`,
+current key from `[keys]`, unless `-k` or the environment (`ENV_STORE_KEY_<STORE>`, `ENV_STORE_LOAD`) gives it. The
+store list of `ENV_STORE_LOAD` does not pick their store either. `encrypt` does not read `[keys]` at all: you give the new key with `--new-key`,
 `--generate-key` or `--passphrase`.
 
 ```sh
@@ -481,9 +490,9 @@ The same goes for keys: commit the `[keys]` **paths** if you like, but never the
 | Setting | Highest priority first |
 |---|---|
 | Connection | `-c` / `--connection` → `ENV_STORE_CONNECTION` → `connection` in `.envstore.toml` → error |
-| Store list (reading commands) | stores named on the command line → `stores` in `.envstore.toml` → error |
+| Store list (reading commands) | stores named on the command line → the stores of `ENV_STORE_LOAD` → `stores` in `.envstore.toml` → error |
 | Merge order (which value wins) | `--first-wins` → `ENV_STORE_ORDERED_OVERWRITE` → `ordered_overwrite` → last store wins |
-| Key of an existing encrypted store | `-k` → `ENV_STORE_KEY_<STORE>` → `[keys]` in `.envstore.toml` → hidden prompt on a terminal → error, exit code 4 |
+| Key of an existing encrypted store | `-k` → the environment: `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD` (a key in both is an error, exit code 1) → `[keys]` in `.envstore.toml` → hidden prompt on a terminal → error, exit code 4 |
 | New secret (`create-store -e`, `encrypt`, `rekey`, `cp-store` / `mv-store`) | only the command's own options (`-k`, `--new-key`, `--generate-key`, `--passphrase`); never the environment or `[keys]` |
 
 For example, with `connection = "json://envs"` in the project file, `ENV_STORE_CONNECTION=json://elsewhere` makes
@@ -492,11 +501,11 @@ For example, with `connection = "json://envs"` in the project file, `ENV_STORE_C
 There is no `--last-wins` flag: "last wins" is the default, and `--first-wins` is the only override on the command
 line.
 
-With no store named and no `stores` in the project file:
+With no store named, no `ENV_STORE_LOAD` and no `stores` in the project file:
 
 ```console
 $ envs ls
-Error: no stores given: name stores, or set 'stores' in .envstore.toml
+Error: no stores given: name stores, set ENV_STORE_LOAD, or set 'stores' in .envstore.toml
 ```
 
 ## Names and values

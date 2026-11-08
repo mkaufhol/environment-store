@@ -1,4 +1,4 @@
-"""`load_for_reading`: the store list, keys and prompts of reading commands.
+"""`load_for_reading` and `reading_sources`: the store list, keys and prompts of reading commands.
 
 Order of work: validate the store names and `-k`, check that every store exists (one listing),
 refuse stores that share a set key variable, resolve the secrets in load order (each
@@ -21,15 +21,18 @@ from environment_store.core.names import key_variable
 from environment_store.core.validation import validate_store_name
 from environment_store.library.environment import Environment
 from environment_store.library.sources import Source
+from environment_store.library.store import EnvironmentStore
 
 if TYPE_CHECKING:
     from environment_store.core.secrets import Secret
 
-__all__ = ["load_for_reading", "store_list"]
+__all__ = ["load_for_reading", "reading_sources", "store_list"]
 
 
 def store_list(stores: Sequence[str] | None, settings: Settings) -> tuple[str, ...]:
-    """Return the effective store list: positional stores replace the project file's.
+    """Return the effective store list.
+
+    Positional stores win, then the stores of `ENV_STORE_LOAD`, then the project file's.
 
     Args:
         stores: The positional stores, or `None` / empty.
@@ -41,9 +44,11 @@ def store_list(stores: Sequence[str] | None, settings: Settings) -> tuple[str, .
     Raises:
         ValidationError: No stores anywhere, or an invalid name.
     """
-    names = tuple(stores) if stores else settings.stores
+    names = tuple(stores) if stores else settings.default_stores
     if not names:
-        message = "no stores given: name stores, or set 'stores' in .envstore.toml"
+        message = (
+            "no stores given: name stores, set ENV_STORE_LOAD, or set 'stores' in .envstore.toml"
+        )
         raise ValidationError(message)
     for name in names:
         validate_store_name(name)
@@ -61,7 +66,7 @@ def load_for_reading(
 
     Args:
         ctx: The command's context.
-        stores: The positional stores; `None` or empty for the project file's list.
+        stores: The positional stores; `None` or empty for the default list (`store_list`).
         keys: The `-k` values.
         first_wins: Whether `--first-wins` was given.
 
@@ -69,15 +74,38 @@ def load_for_reading(
         The loaded stores, merged by the resolved merge order.
 
     Raises:
+        ValidationError: As for `reading_sources`.
+        StoreNotFoundError: As for `reading_sources`.
+        CryptoError: As for `reading_sources`, or a wrong key.
+    """
+    environment, sources = reading_sources(ctx, stores=stores, keys=keys)
+    order = get_state(ctx).settings().merge_order(first_wins=first_wins)
+    return environment.load(sources, order=order)
+
+
+def reading_sources(
+    ctx: typer.Context, *, stores: Sequence[str] | None, keys: Sequence[str] | None
+) -> tuple[EnvironmentStore, list[Source]]:
+    """Resolve the stores of a reading command and the key of every encrypted one.
+
+    Args:
+        ctx: The command's context.
+        stores: The positional stores; `None` or empty for the default list (`store_list`).
+        keys: The `-k` values.
+
+    Returns:
+        The open store and the sources in load order, each encrypted one with its secret.
+
+    Raises:
         ValidationError: Bad names or `-k` values, keys for plaintext stores, stores that
-            share a set `ENV_STORE_KEY_<STORE>` without `-k` for each.
+            share a set `ENV_STORE_KEY_<STORE>` without `-k` for each, or a key in both
+            `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD`.
         StoreNotFoundError: Stores that do not exist (all named).
-        CryptoError: Missing or wrong keys; with several stores, a missing key's hint names
-            the store-bound form `-k <store>=<path>`.
+        CryptoError: Missing keys or keys that do not fit the store; with several stores, a
+            missing key's hint names the store-bound form `-k <store>=<path>`.
     """
     state = get_state(ctx)
-    settings = state.settings()
-    names = store_list(stores, settings)
+    names = store_list(stores, state.settings())
     sources = parse_reading_keys(keys or (), names)
     environment = state.open_store(ctx)
     missing: list[str] = []
@@ -106,7 +134,4 @@ def load_for_reading(
                 f"with -k {name}=<path> (or -k {name}=- for stdin), or set {key_variable(name)}"
             )
             raise KeyRequiredError(message) from error
-    return environment.load(
-        [Source(name, key=secrets[name]) for name in names],
-        order=settings.merge_order(first_wins=first_wins),
-    )
+    return environment, [Source(name, key=secrets[name]) for name in names]

@@ -18,6 +18,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
+    from environment_store.config.load_spec import LoadSpec
     from environment_store.config.settings import CredentialsInProjectFileWarning
     from environment_store.core.adapter import MigrationReport, SetupMode
     from environment_store.core.errors import (
@@ -70,6 +71,7 @@ _DEFINITIONS: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
         "environment_store.library.keys",
         ("generate_key_file", "generate_key_text", "parse_key_text"),
     ),
+    ("environment_store.config.load_spec", ("LoadSpec",)),
     ("environment_store.config.settings", ("CredentialsInProjectFileWarning",)),
     ("environment_store.core.secrets", ("KeyMaterial", "Passphrase", "Secret")),
     ("environment_store.core.models", ("KeyMode", "StoreInfo")),
@@ -131,6 +133,7 @@ __all__ = [
     "KeyModeMismatchError",
     "KeyRequiredError",
     "KeySourceError",
+    "LoadSpec",
     "MergeOrder",
     "MigrationReport",
     "MissingExtraError",

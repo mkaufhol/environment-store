@@ -1,4 +1,4 @@
-"""`envs` has exactly its nineteen commands, and the help lists each of them."""
+"""`envs` has exactly its twenty commands, and the help lists each of them."""
 
 from typing import Final
 
@@ -22,6 +22,7 @@ _COMMANDS: Final = frozenset(
         "import",
         "export",
         "export-shell",
+        "export-credentials",
         "run",
         "keygen",
         "rekey",
@@ -39,8 +40,8 @@ def _registered_commands() -> set[str]:
     return set(group.commands)
 
 
-def test_expected_commands_are_nineteen() -> None:
-    assert len(_COMMANDS) == 19
+def test_expected_commands_are_twenty() -> None:
+    assert len(_COMMANDS) == 20
 
 
 def test_registered_commands_are_exactly_the_expected_commands() -> None:

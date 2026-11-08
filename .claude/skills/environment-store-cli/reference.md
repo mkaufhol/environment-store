@@ -24,45 +24,59 @@ Environment variables:
 | `ENV_STORE_CONNECTION` | connection string; empty = unset |
 | `ENV_STORE_ORDERED_OVERWRITE` | `true` (last store wins, default) or `false` (first wins); also `1/0/yes/no`, case-insensitive |
 | `ENV_STORE_KEY_<STORE>` | key line (`envstore-key-v1:...`, not base64) or passphrase of an existing encrypted store; `<STORE>` = store name upper-cased, `-` as `_`. One trailing newline stripped. Empty/invalid -> exit 4 (message names the variable, not the value). Ignored for plain and unused stores; never a new key. Two encrypted stores of one command mapping to one set variable (`my-app`, `my_app`) -> exit 1 unless `-k` covers both. `run` removes all `ENV_STORE_KEY_*` from the child |
+| `ENV_STORE_LOAD` | load specification, one opaque line `envstore-load-v1:...` (print it with `export-credentials`): the stores in load order and the key or passphrase of every encrypted one; as secret as all its keys. Empty = unset. Its stores are the default store list of reading commands. Invalid -> exit 1 for every command except `keygen` and `completion` (message gives the reason, never the value). A key for the same store as a set `ENV_STORE_KEY_<STORE>` -> exit 1 unless `-k` covers the store; a key of the wrong kind -> exit 4. Ignored for plain and unused stores; never a new key. `run` removes it from the child |
 
-Key precedence for an existing store: `-k` > `ENV_STORE_KEY_<STORE>` > `[keys]` > prompt (not with `--noinput`) > exit 4.
+Key precedence for an existing store: `-k` > `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD` > `[keys]` > prompt (not with `--noinput`) > exit 4.
+
+Store list precedence for reading commands: positional `STORES...` > the stores of `ENV_STORE_LOAD` > `stores` in `.envstore.toml`.
 
 Merge order precedence: `--first-wins` > `ENV_STORE_ORDERED_OVERWRITE` > `ordered_overwrite` > last wins.
 There is no `--last-wins` flag.
 
 ## Per-command options
 
-### Reading: `ls`, `get`, `export`, `export-shell`, `run`
+### Reading: `ls`, `get`, `export`, `export-shell`, `run`, `export-credentials`
 
-Positional `STORES...` in load order (default: `stores` in `.envstore.toml`; positional stores replace it).
+Positional `STORES...` in load order (default: the stores of `ENV_STORE_LOAD`, else `stores` in `.envstore.toml`; positional stores replace both).
 
 Merged output order: store by store in load order, names sorted within a store, a name shared by
 several stores at its first position with the winning value (`store-a`: `ENV`, `DEBUG`; `store-b`: `ENV`,
 `DB_NAME` -> `DEBUG`, `ENV`, `DB_NAME`). Applies to `ls` (also `--json`), `export` (every format),
 `export-shell` and `run`.
 
-| Option | `ls` | `get` | `export` | `export-shell` | `run` | Meaning |
-|---|---|---|---|---|---|---|
-| `-k, --key STORE=PATH` | yes | yes | yes | yes | yes | Key/passphrase file per store, `STORE=-` for stdin; repeatable; bare `PATH` only with one store |
-| `--first-wins` | yes | yes | yes | yes | yes | First store wins |
-| `-v, --values` | yes | | | | | Show values (non-printable ones as JSON strings, e.g. `MULTI="a\nb"`) |
-| `--source` | yes | | | | | Show the winning store |
-| `--json` | yes | yes | | | | One JSON document |
-| `-f, --file PATH\|-` | | | yes | | | Output file (mode 0600, created exclusively) |
-| `-t, --type` | | | yes | | | `dotenv` (default on stdout), `json`, `toml`; else inferred from `-f` name |
-| `--force` | | | yes | | | Replace an existing output file (atomically) |
-| `--nested` | | | yes | yes | yes | No merge; `STORE__NAME` or one table per store |
-| `-o, --overwrite` | | | | yes | yes | Override variables already set in the environment |
+| Option | `ls` | `get` | `export` | `export-shell` | `run` | `export-credentials` | Meaning |
+|---|---|---|---|---|---|---|---|
+| `-k, --key STORE=PATH` | yes | yes | yes | yes | yes | yes | Key/passphrase file per store, `STORE=-` for stdin; repeatable; bare `PATH` only with one store |
+| `--first-wins` | yes | yes | yes | yes | yes | | First store wins |
+| `-v, --values` | yes | | | | | | Show values (non-printable ones as JSON strings, e.g. `MULTI="a\nb"`) |
+| `--source` | yes | | | | | | Show the winning store |
+| `--json` | yes | yes | | | | yes | One JSON document |
+| `-f, --file PATH\|-` | | | yes | | | | Output file (mode 0600, created exclusively) |
+| `-t, --type` | | | yes | | | | `dotenv` (default on stdout), `json`, `toml`; else inferred from `-f` name |
+| `--force` | | | yes | | | | Replace an existing output file (atomically) |
+| `--nested` | | | yes | yes | yes | | No merge; `STORE__NAME` or one table per store |
+| `-o, --overwrite` | | | | yes | yes | | Override variables already set in the environment |
 
 `run`: everything after the first `--` is the command, executed without a shell. The store
 variables are added to the current environment; variables already set there win unless `-o`.
-On POSIX `envs` replaces itself with the command. Every `ENV_STORE_KEY_*` variable is removed
-from the command's environment. Options may come after the positional stores.
+On POSIX `envs` replaces itself with the command. Every `ENV_STORE_KEY_*` variable and
+`ENV_STORE_LOAD` are removed from the command's environment (`ENV_STORE_CONNECTION` is kept). Options may come after the positional stores.
 
 Encrypted stores need their key for every reading command, including names-only `ls`.
 
 `get --json` prints an indented object (`name`, `store`, `value`) and a trailing newline; raw
 `get` prints the value with no trailing newline when stdout is not a terminal.
+
+`export-credentials` prints `ENV_STORE_CONNECTION` and `ENV_STORE_LOAD` for a deployment, as two
+dotenv lines (`ENV_STORE_CONNECTION=json:///home/me/project/stores`,
+`ENV_STORE_LOAD=envstore-load-v1:...`) or, with `--json`, one object with both keys. Stores and
+keys are resolved like `ls` (prompts go to stderr); every store is decrypted before anything is
+printed, so a wrong or missing key exits 4 with empty stdout. A relative `json://`, `toml://` or
+`sqlite:///` path is printed absolute (relative to the current directory). A connection string
+that a dotenv line cannot hold (e.g. with `${`) exits 1 with `use --json`. The output holds the
+raw connection string and every key: it belongs in a secret manager, never in a file under
+version control. With both variables set, `envs run -- CMD` loads those stores with nothing else
+configured.
 
 `export-shell` prints one line per variable, values single-quoted for POSIX `sh` when needed
 (`'it'"'"'s'`). Without `-o`: `[ -n "${A+x}" ] || export A=1` (keeps an existing `A`); with `-o`:
@@ -93,7 +107,7 @@ Encrypted stores need their key for every reading command, including names-only 
 | `rm-store NAME` | `-y/--yes`; needs no key |
 | `cp-store SRC DST` / `mv-store SRC DST` | `--to URL` (other backend; DST may equal SRC there), `-k PATH\|-` (source key), and at most one of `--plain`, `--new-key PATH\|-`, `--generate-key PATH`, `--passphrase`. Default: same encryption and secret as the source |
 | `encrypt -s STORE` | exactly one of `--new-key PATH` (existing key file), `--generate-key PATH` (new file), `--passphrase`. Rewrites the store in place; already encrypted -> exit 1, use `rekey`. Does not touch `.envstore.toml` |
-| `rekey -s STORE` | `-k OLD` (else `ENV_STORE_KEY_<STORE>`, `[keys]`, prompt), plus exactly one of `--new-key`, `--generate-key`, `--passphrase` (can switch keyfile <-> passphrase; passphrases get a new salt) |
+| `rekey -s STORE` | `-k OLD` (else `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, `[keys]`, prompt), plus exactly one of `--new-key`, `--generate-key`, `--passphrase` (can switch keyfile <-> passphrase; passphrases get a new salt) |
 | `keygen PATH\|-` | writes a key file (0600, never overwrites) or prints the key with `-`; reads neither the connection nor the project file |
 | `migrate` | SQL only; prints `created schema v1`, `upgraded schema from vN to vM` or `schema is up to date (v1)` |
 

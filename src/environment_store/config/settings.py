@@ -1,7 +1,8 @@
 """Settings resolution: CLI option > environment variable > project file > default.
 
-`resolve_settings` is the one place where the connection, the merge order, the project file's
-store list and key paths come together, for the CLI, the TUI and the library one-liner alike.
+`resolve_settings` is the one place where the connection, the merge order, the load
+specification in `ENV_STORE_LOAD`, the project file's store list and key paths come together,
+for the CLI, the TUI and the library one-liner alike.
 """
 
 from collections.abc import Mapping
@@ -11,6 +12,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final
 
+from environment_store.config.load_spec import LoadSpec, load_spec_from_environment
 from environment_store.config.project import (
     PROJECT_FILE_NAME,
     ProjectFile,
@@ -74,6 +76,7 @@ class Settings:
         connection_source: Where `connection` came from.
         ordered_overwrite: The merge order setting without `--first-wins` (env > file > true).
         stores: The project file's default store list.
+        load_spec: The load specification in `ENV_STORE_LOAD`, or `None` if it is unset.
         key_paths: The project file's `[keys]` (read-only).
         project_file: The project file that was read, or `None`.
         warnings: Messages for the user (password in the project file, ignored project file).
@@ -86,6 +89,7 @@ class Settings:
     key_paths: Mapping[str, Path]
     project_file: Path | None
     warnings: tuple[str, ...]
+    load_spec: LoadSpec | None = None
 
     def __post_init__(self) -> None:
         """Freeze the collections and check the store names and key paths.
@@ -99,6 +103,15 @@ class Settings:
         for store in self.stores:
             validate_store_name(store)
         check_key_paths(self.key_paths)
+
+    @property
+    def default_stores(self) -> tuple[str, ...]:
+        """The stores to read when none are named: `ENV_STORE_LOAD`'s, else the project file's.
+
+        Returns:
+            The store names in load order; empty when neither gives any.
+        """
+        return self.stores if self.load_spec is None else self.load_spec.stores
 
     def require_connection(self) -> str:
         """Return the connection string.
@@ -152,8 +165,8 @@ def resolve_settings(  # noqa: PLR0913 - every input is a keyword-only boundary 
         The settings.
 
     Raises:
-        ConfigurationError: An empty `-c`, a broken project file or an invalid
-            `ENV_STORE_ORDERED_OVERWRITE`.
+        ConfigurationError: An empty `-c`, a broken project file, an invalid
+            `ENV_STORE_ORDERED_OVERWRITE` or an invalid `ENV_STORE_LOAD`.
     """
     if connection == "":
         message = "the connection option (-c/--connection) must not be empty"
@@ -175,6 +188,7 @@ def resolve_settings(  # noqa: PLR0913 - every input is a keyword-only boundary 
         key_paths={} if project is None else project.keys,
         project_file=None if project is None else project.path,
         warnings=tuple(warnings),
+        load_spec=load_spec_from_environment(environ),
     )
 
 

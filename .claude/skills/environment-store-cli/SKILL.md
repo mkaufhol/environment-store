@@ -39,12 +39,16 @@ Check with `envs --version` (must be `2.0.0` or later; the old 0.1 line has no `
 6. **Confirm with the user first** before `rm`, `rm-store`, `mv-store`, `rekey`, `encrypt`,
    before `set -o` / `import -o` (overwrite), before `cp-store --plain` / `mv-store --plain`
    (writes a decrypted, unencrypted copy into the backend), and before `keygen -` (prints key
-   material to stdout). Pass `-y` to `rm-store` only after the user said yes.
+   material to stdout), and before `export-credentials` (prints the connection string and every
+   key). Pass `-y` to `rm-store` only after the user said yes.
    `rm` has no prompt at all: it deletes immediately. `encrypt` rewrites the store in place; the
    only way back is `cp-store --plain` into a new store.
 7. **Never pass a key or passphrase literally.** Keys are files (`-k path`) or stdin (`-k -`).
-   Never write a key into `ENV_STORE_KEY_<STORE>=...` on a command line, and never print, `echo` or
-   `env`-dump `ENV_STORE_KEY_*` variables. If one is already set (deployments, CI), `envs` uses it.
+   Never write a key into `ENV_STORE_KEY_<STORE>=...` or `ENV_STORE_LOAD=...` on a command line,
+   and never print, `echo` or `env`-dump `ENV_STORE_KEY_*` variables or `ENV_STORE_LOAD` (it holds
+   the keys of all its stores). If one is already set (deployments, CI), `envs` uses it. The output
+   of `export-credentials` is just as secret: never show it in your reply or write it to a file;
+   let the user paste it into their secret manager.
 
 ## Find the connection and the stores
 
@@ -70,6 +74,12 @@ prod = "keys/prod.key"
 
 With that file, `envs --noinput ls` and `envs --noinput get DB_HOST` work from any subdirectory
 and use the `[keys]` entry for `prod`. `--no-project` ignores the file.
+
+Store list of reading commands: positional stores > the stores of `ENV_STORE_LOAD` > `stores` in
+`.envstore.toml`. `ENV_STORE_LOAD` is a load specification, one opaque line
+(`envstore-load-v1:...`) with the stores in load order and the key or passphrase of every
+encrypted one; deployments set it next to `ENV_STORE_CONNECTION`. To check whether it is set
+without printing it: `[ -n "${ENV_STORE_LOAD:-}" ] && echo set`.
 
 Relative paths: a relative connection in `.envstore.toml` (`toml://data`, `sqlite:///envs.db`) and
 its `[keys]` paths resolve against **the project file's directory**. A relative connection from
@@ -99,7 +109,7 @@ compare that location with what the user meant before assuming there are none.
 
 | Command kind | Key option |
 |---|---|
-| Reading: `ls`, `get`, `export`, `export-shell`, `run` | `-k STORE=PATH` (repeatable); `-k PATH` only when exactly one store is read; `-k STORE=-` reads stdin |
+| Reading: `ls`, `get`, `export`, `export-shell`, `run`, `export-credentials` | `-k STORE=PATH` (repeatable); `-k PATH` only when exactly one store is read; `-k STORE=-` reads stdin |
 | Writing: `set`, `rm`, `import`, `rekey` (old key), `cp-store`/`mv-store` (source key) | `-k PATH` or `-k -` |
 | Not needed: `ls-store`, `rm-store`, `keygen`, `completion` | none |
 
@@ -108,10 +118,13 @@ together. Only `ls-store`, `rm-store` and `keygen` work without it.
 
 The store's mode decides how the file is read: a key file (`envstore-key-v1:...`) for keyfile
 stores, a UTF-8 passphrase file (one trailing newline stripped) for passphrase stores. Order of key
-sources: `-k` > `ENV_STORE_KEY_<STORE>` (store name upper-cased, `-` as `_`; existing stores only) >
-`[keys]` in the project file > prompt (never with `--noinput`) > exit 4. `envs run` strips
-`ENV_STORE_KEY_*` from the child. The variable holds the key line or passphrase itself (not
-base64); it is ignored for plain stores and unused stores, and never supplies a new key
+sources: `-k` > the environment: `ENV_STORE_KEY_<STORE>` (store name upper-cased, `-` as `_`;
+existing stores only) or `ENV_STORE_LOAD` > `[keys]` in the project file > prompt (never with
+`--noinput`) > exit 4. If both variables have a key for the same store, the command fails with
+exit 1 (`store 'app' gets a key from both ENV_STORE_KEY_APP and ENV_STORE_LOAD, ...`); `-k` skips
+that check. `envs run` strips `ENV_STORE_KEY_*` and `ENV_STORE_LOAD` from the child. The key
+variable holds the key line or passphrase itself (not base64); both variables are ignored for
+plain stores and unused stores, and never supply a new key
 (`create-store -e`, `encrypt`, `rekey --new-key`, `cp-store`/`mv-store` new-key options). To check
 whether one is set without printing it: `env | grep -o '^ENV_STORE_KEY_[A-Z0-9_]*'`.
 `ls-store` shows each store's mode: `plain`, `encrypted (keyfile)`, `encrypted (passphrase)`.
@@ -132,6 +145,7 @@ envs --noinput import -s STORE [-f FILE|-] [-t dotenv|json|toml] [-o] [-k PATH]
 envs --noinput export [STORES...] [-f FILE] [-t dotenv|json|toml] [--force] [--first-wins] [--nested] [-k STORE=PATH]...
 envs --noinput export-shell [STORES...] [-o] [--first-wins] [--nested] [-k STORE=PATH]...   # prints values!
 envs --noinput run [STORES...] [-o] [--first-wins] [--nested] [-k STORE=PATH]... -- CMD [ARGS...]
+envs --noinput export-credentials [STORES...] [--json] [-k STORE=PATH]...   # prints the connection and every key!
 envs --noinput create-store NAME [-e (-k PATH | --generate-key PATH | --passphrase)]
 envs --noinput rm-store NAME -y                       # only after the user confirmed
 envs --noinput cp-store SRC DST [--to URL] [-k PATH] [--plain | --new-key PATH | --generate-key PATH | --passphrase]
@@ -159,7 +173,8 @@ Notes that trip agents up:
   from stdin (it was empty)`) and writes nothing. To set an empty value on purpose, pipe a newline
   (`echo | envs --noinput set -s STORE KEY`) or, for a plaintext store, use `KEY=`. Exactly one
   trailing newline is stripped; to keep a trailing newline use `import`.
-- Positional stores on reading commands **replace** the project file's `stores`.
+- Positional stores on reading commands **replace** the stores of `ENV_STORE_LOAD` and the
+  project file's `stores`.
 - `--passphrase` reads the passphrase from stdin when piped: `envs --noinput create-store customer-a -e --passphrase < customer-a.pass`.
 - A **new** key or passphrase read from stdin (`create-store -e -k -`, `--passphrase` piped,
   `--new-key -`) is saved nowhere by `envs`; after success stderr says `Warning: envs does not save
@@ -233,6 +248,20 @@ $ envs --noinput export-shell base            $ envs --noinput export-shell base
 [ -n "${SP+x}" ] || export SP='a b'           export SP='a b'
 ```
 
+Hand stores to a deployment (CI, Kubernetes, Heroku) only when the user asked for it.
+`export-credentials` resolves stores and keys like `ls`, decrypts every store first (a wrong key
+exits 4 with nothing on stdout), and prints two dotenv lines, `ENV_STORE_CONNECTION=...` and
+`ENV_STORE_LOAD=envstore-load-v1:...` (`--json`: one object with both). A relative `json://`,
+`toml://` or `sqlite:///` path is printed absolute. The output holds the connection string and
+every key: prefer giving the user the command to run in their own terminal, and never put the
+output in your reply, a file or git:
+
+```sh
+envs --noinput export-credentials base app -k app=keys/app.key
+# in the deployment, with both variables set as secrets:
+envs --noinput run -- ./server
+```
+
 Each agent tool call usually starts a fresh shell, so variables loaded with `eval` are gone by the
 next call. Prefer `envs run ... -- CMD`, or chain `eval` and the command in the same call as above.
 
@@ -285,7 +314,7 @@ two stores producing the same flat name (`customer-a` and `customer_a`), is an e
 | 1 | usage, validation, configuration or backend error; missing confirmation under `--noinput` | Read the `Error:` line. No connection: find or ask for one. Missing confirmation: ask the user, then add `-y`. |
 | 2 | store or variable not found (a missing store is reported first) | Read the `Error:` line to tell which. Check names with `ls-store` / `ls`. Do not create the store unless the user asked. |
 | 3 | already exists | Ask before adding `-o` (variables) or choosing another store name. |
-| 4 | key problem: missing, wrong, unreadable, or wrong kind (key file vs passphrase); also an empty or invalid `ENV_STORE_KEY_<STORE>` | Ask the user for the key file path; check the `[keys]` entry and whether a stale `ENV_STORE_KEY_<STORE>` is set. Never guess or generate a new key for an existing store. |
+| 4 | key problem: missing, wrong, unreadable, or wrong kind (key file vs passphrase); also an empty or invalid `ENV_STORE_KEY_<STORE>`, or a key of the wrong kind in `ENV_STORE_LOAD` | Ask the user for the key file path; check the `[keys]` entry and whether a stale `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD` is set. Never guess or generate a new key for an existing store. |
 | 5 | concurrent modification; nothing was written | Run the same command again. |
 | 126 / 127 | `run` only: command not executable / not found | Fix the command after `--`. |
 | other | `run` passes the command's own exit code through | Treat as the command's result. |
@@ -296,9 +325,13 @@ two stores producing the same flat name (`customer-a` and `customer_a`), is an e
 |---|---|
 | `no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, ...` | Find the connection (above) or ask; never invent one. |
 | `No such option: -c; -c is a global option: put it before the command, ...` | Move `-c`/`--noinput`/`--no-project` before the command name. |
-| `Missing option '-s' / '--store'. writing commands never take the store from the project file's 'stores'; ...` (1) | Add `-s STORE`. |
+| `Missing option '-s' / '--store'. writing commands never take the store from ENV_STORE_LOAD or the project file's 'stores'; ...` (1) | Add `-s STORE`. |
 | `no value was read from stdin (it was empty); ...` (1) | Pipe the value; for an empty value pipe a newline or use `KEY=`. |
-| `no stores given: name stores, or set 'stores' in .envstore.toml` (1) | Name the stores positionally (`ls base dev`), or check `stores` in `.envstore.toml`. |
+| `no stores given: name stores, set ENV_STORE_LOAD, or set 'stores' in .envstore.toml` (1) | Name the stores positionally (`ls base dev`), or check `stores` in `.envstore.toml`. |
+| `ENV_STORE_LOAD is not a valid load specification: ...` / `ENV_STORE_LOAD is not valid UTF-8` (1) | The variable in the environment is broken and stops every command except `keygen` and `completion`; tell the user. Never print it. |
+| `store 'app' gets a key from both ENV_STORE_KEY_APP and ENV_STORE_LOAD, ...` (1) | Pass `-k app=PATH`, or ask the user to unset one of the variables. |
+| `ENV_STORE_LOAD holds key text for store 'x', which uses a passphrase` / `... holds a passphrase for store 'x', which uses a key file` (4) | The load specification is stale; tell the user. `-k PATH` overrides it for one command. |
+| `the connection string cannot be written as a dotenv line: use --json` (1) | Rerun `export-credentials` with `--json`. |
 | `store 'prod' is encrypted and no key or passphrase was given: pass it with -k prod=<path> ..., or set ENV_STORE_KEY_PROD` (4) | Add `-k prod=PATH` (or `-k PATH` with one store). Do not set the variable yourself. |
 | `ENV_STORE_KEY_PROD, the key or passphrase of store 'prod', is empty` / `ENV_STORE_KEY_PROD does not hold a usable key for store 'prod': ...` (4) | The variable in the environment is broken; tell the user. `-k PATH` overrides it for one command. |
 | `encrypted stores 'my-app', 'my_app' all take their key from ENV_STORE_KEY_MY_APP, ...` (1) | Pass `-k STORE=PATH` for both stores, or ask the user to unset the variable. |

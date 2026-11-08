@@ -49,12 +49,13 @@ envs -c json://envs tui
 | Setting | Where it comes from |
 |---|---|
 | Connection | `-c/--connection`, else `ENV_STORE_CONNECTION`, else `connection` in `.envstore.toml` |
-| Keys for encrypted stores | `ENV_STORE_KEY_<STORE>`, else the `[keys]` table in `.envstore.toml`, else the Unlock dialog |
+| Keys for encrypted stores | the environment (`ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`), else the `[keys]` table in `.envstore.toml`, else the Unlock dialog |
 | Project file | `.envstore.toml` in the current directory or a parent; `--no-project` ignores it |
 | Default of **First wins** in the export dialog | `ENV_STORE_ORDERED_OVERWRITE`, else `ordered_overwrite` in `.envstore.toml`, else unchecked |
 
 So in a project with an `.envstore.toml` that sets `connection`, a plain `envs tui` is enough. The project file's
-`stores` list plays no role in the TUI: it always shows every store in the backend. The merge order setting
+`stores` list, and the store list of `ENV_STORE_LOAD`, play no role in the TUI: it always shows every store in the
+backend. The merge order setting
 (`ENV_STORE_ORDERED_OVERWRITE`, else `ordered_overwrite`) only sets the default of **First wins** in the export
 dialog: `false` checks it, and the environment variable wins over the file. See
 [Configuration](configuration.md) for the project file.
@@ -274,7 +275,8 @@ starts in the value; when you add, you type the name first.
 
 ### Unlock
 
-Appears when an encrypted store has no working key from `ENV_STORE_KEY_<STORE>` or the project file's `[keys]`:
+Appears when an encrypted store has no working key from the environment (`ENV_STORE_KEY_<STORE>` or
+`ENV_STORE_LOAD`) or the project file's `[keys]`:
 when you open it, and during an export for every chosen encrypted store (see
 [Encrypted stores](#encrypted-stores)):
 
@@ -480,9 +482,16 @@ change.
 
 When you open an encrypted store, the TUI looks for its key in this order:
 
-1. **The variable `ENV_STORE_KEY_<STORE>`** (`ENV_STORE_KEY_CUSTOMER_A` for `customer-a`). When it is set, it alone
-   is tried; if it does not work, the TUI shows the error, naming the variable but never its value, and opens the
-   Unlock dialog. See [Deployment](deployment.md).
+1. **The environment: the variable `ENV_STORE_KEY_<STORE>`** (`ENV_STORE_KEY_CUSTOMER_A` for `customer-a`) **or
+   the store's key in `ENV_STORE_LOAD`.** When one of them has a key, it alone is tried; if it does not work, the
+   TUI shows the error, naming the variable but never its value, and opens the Unlock dialog:
+
+   ```
+   unlocking with ENV_STORE_LOAD failed: cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified
+   ```
+
+   A key in both variables is such an error too, because it is unclear which one is meant. See
+   [Deployment](deployment.md#two-variables-for-everything-env_store_load).
 2. **The `[keys]` table of `.envstore.toml`.** If the project file names a key or passphrase file for the store, the
    store opens without asking:
 
@@ -530,7 +539,7 @@ Unlocking a passphrase store takes a moment: the passphrase goes through Argon2i
 purpose.
 
 **The key is kept only while the store is open.** When you press `Esc` to go back to the stores, the key is
-forgotten; opening the store again uses `[keys]` or asks again. The TUI never saves or caches keys.
+forgotten; opening the store again uses the environment or `[keys]`, or asks again. The TUI never saves or caches keys.
 
 Values you add or edit in an encrypted store are encrypted with the key you unlocked it with. Typing a secret into
 the TUI keeps it out of your shell history, just like `envs set -s prod NAME` with the hidden prompt.
@@ -574,8 +583,8 @@ Press `y` to read the store again, then repeat your change. Nothing is ever over
   You can still view and delete such a variable. Change it with `envs set` or `envs import`.
 - **Interactive only.** No `--noinput`, no redirected stdin or stdout. For scripts and CI use the [CLI](cli.md) or
   the [Python library](python.md).
-- **Keys like the CLI.** The TUI takes a store's key from `ENV_STORE_KEY_<STORE>`, else from `[keys]`, else from
-  what you type.
+- **Keys like the CLI.** The TUI takes a store's key from `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, else from
+  `[keys]`, else from what you type.
 
 ## Starting the TUI from Python
 

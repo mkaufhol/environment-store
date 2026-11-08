@@ -192,7 +192,9 @@ Key or passphrase file of the source store,
 .B \-
 for stdin.
 Default:
-.BI ENV_STORE_KEY_ STORE\fR,
+.BI ENV_STORE_KEY_ STORE
+or
+.BR ENV_STORE_LOAD ,
 then
 .B [keys]
 in the project file, else a prompt on a terminal.
@@ -268,6 +270,13 @@ for stdin; repeatable.
 With one store,
 .BI \-k " PATH"
 is enough.
+Default:
+.BI ENV_STORE_KEY_ STORE
+or
+.BR ENV_STORE_LOAD ,
+then
+.B [keys]
+in the project file, else a prompt on a terminal.
 .TP
 .B \-\-json
 Print one JSON document.
@@ -331,7 +340,9 @@ Key or passphrase file of the store,
 .B \-
 for stdin.
 Default:
-.BI ENV_STORE_KEY_ STORE\fR,
+.BI ENV_STORE_KEY_ STORE
+or
+.BR ENV_STORE_LOAD ,
 then
 .B [keys]
 in the project file, else a prompt on a terminal.
@@ -352,6 +363,13 @@ The store to change (required).
 Key or passphrase file of the store,
 .B \-
 for stdin.
+Default:
+.BI ENV_STORE_KEY_ STORE
+or
+.BR ENV_STORE_LOAD ,
+then
+.B [keys]
+in the project file, else a prompt on a terminal.
 .SS import
 .B envs import
 .B \-s
@@ -389,6 +407,13 @@ is written.
 Key or passphrase file of the store,
 .B \-
 for stdin.
+Default:
+.BI ENV_STORE_KEY_ STORE
+or
+.BR ENV_STORE_LOAD ,
+then
+.B [keys]
+in the project file, else a prompt on a terminal.
 .SS export
 .B envs export
 .RB [ \-f
@@ -496,8 +521,18 @@ signals reach the command directly.
 Works in every shell, including fish and PowerShell.
 Every
 .B ENV_STORE_KEY_*
-variable is removed from the command's environment, so it never inherits
-a key.
+variable and
+.B ENV_STORE_LOAD
+are removed from the command's environment, so it never inherits a key.
+With
+.B ENV_STORE_CONNECTION
+and
+.B ENV_STORE_LOAD
+set,
+.B envs run \-\- \fICMD\fP
+loads the stores of
+.B ENV_STORE_LOAD
+with their keys and needs nothing else.
 .TP
 .BR \-o ", " \-\-overwrite
 Store values overwrite variables already set in the environment.
@@ -511,6 +546,76 @@ The first store wins instead of the last.
 .TP
 .BR \-k ", " \-\-key " \fISTORE\fP=\fIPATH\fP"
 Key or passphrase file of a store; repeatable.
+.SS export-credentials
+.B envs export\-credentials
+.RB [ \-k
+.IR STORE = PATH ]...
+.RB [ \-\-json ]
+.RI [ STORE ...]
+.PP
+Print
+.B ENV_STORE_CONNECTION
+and
+.B ENV_STORE_LOAD
+for a deployment.
+With these two variables set,
+.B run
+and the library's
+.B load()
+load the stores, encrypted ones included, with nothing else configured.
+Stores and keys are resolved as for
+.BR ls ;
+prompts go to stderr.
+Every store is decrypted before anything is printed, so a wrong key exits
+with code 4 and an empty stdout.
+The output is dotenv on stdout:
+.PP
+.RS
+.nf
+ENV_STORE_CONNECTION=json:///home/me/project/stores
+ENV_STORE_LOAD=envstore\-load\-v1:eyJzdG9yZXMiOlsiYmFzZSIsImFwcCJd...
+.fi
+.RE
+.PP
+A relative path in a
+.BR json:// ,
+.B toml://
+or
+.B sqlite:///
+connection string is printed as an absolute path, relative to the current
+directory.
+A first-wins merge order is printed as a third variable,
+.BR ENV_STORE_ORDERED_OVERWRITE=false ,
+so the deployment merges the stores the same way.
+A connection string that a dotenv line cannot hold, for example one that
+contains
+.BR ${ ,
+fails with exit code 1 and a hint to use
+.BR \-\-json .
+The output holds the connection string and every key: keep it in a secret
+manager, never in a file under version control (see
+.BR SECURITY ).
+.TP
+.BR \-k ", " \-\-key " \fISTORE\fP=\fIPATH\fP"
+Key or passphrase file of a store,
+.B \-
+for stdin; repeatable.
+With one store,
+.BI \-k " PATH"
+is enough.
+Default:
+.BI ENV_STORE_KEY_ STORE
+or
+.BR ENV_STORE_LOAD ,
+then
+.B [keys]
+in the project file, else a prompt on a terminal.
+.TP
+.B \-\-json
+Print one JSON document: an object with the keys
+.B ENV_STORE_CONNECTION
+and
+.BR ENV_STORE_LOAD .
 .SS keygen
 .B envs keygen
 .IR PATH | \-
@@ -545,7 +650,9 @@ The current key or passphrase file,
 .B \-
 for stdin.
 Default:
-.BI ENV_STORE_KEY_ STORE\fR,
+.BI ENV_STORE_KEY_ STORE
+or
+.BR ENV_STORE_LOAD ,
 then
 .B [keys]
 in the project file, else a prompt on a terminal.
@@ -697,11 +804,19 @@ Reading commands
 .BR get ,
 .BR export ,
 .BR export\-shell ,
-.BR run )
+.BR run ,
+.BR export\-credentials )
 take the stores as positional arguments; left to right is the load order.
-Without stores they use
+Without stores they use the stores of
+.BR ENV_STORE_LOAD ,
+else
 .B stores
 from the project file.
+Precedence: stores on the command line >
+.B ENV_STORE_LOAD
+>
+.B stores
+in the project file.
 Their keys are bound by store name:
 .BI \-k " STORE" = PATH\fR,
 repeatable;
@@ -718,7 +833,9 @@ Writing commands
 .BR encrypt )
 act on exactly one store, named with
 .BR \-s ;
-they never take it from the project file.
+they never take it from
+.B ENV_STORE_LOAD
+or the project file.
 Their key is
 .BI \-k " PATH"
 or
@@ -737,12 +854,27 @@ For a passphrase store the file given to
 holds the passphrase; one trailing newline is stripped.
 Without
 .BR \-k ,
-an encrypted store's key comes from
-.BI ENV_STORE_KEY_ STORE\fR,
+an encrypted store's key comes from the environment,
+.BI ENV_STORE_KEY_ STORE
+or
+.BR ENV_STORE_LOAD ,
 else from
 .B [keys]
 in the project file (see
 .BR ENVIRONMENT ).
+Precedence:
+.B \-k
+>
+.BI ENV_STORE_KEY_ STORE
+or
+.B ENV_STORE_LOAD
+>
+.B [keys]
+> the prompt.
+An encrypted store that gets a key from both variables is an error (exit
+code 1) unless
+.B \-k
+gives its key.
 An encrypted store without a key is asked for with a hidden prompt on a
 terminal, once per store; without a terminal, or with
 .BR \-\-noinput ,
@@ -847,9 +979,16 @@ One trailing newline is stripped.
 The value is the key file's content as it is, not base64\-encoded.
 Precedence:
 .B \-k
-> this variable >
+> this variable or
+.B ENV_STORE_LOAD
+>
 .B [keys]
 in the project file > the prompt.
+An encrypted store that gets a key from both this variable and
+.B ENV_STORE_LOAD
+is an error (exit code 1) unless
+.B \-k
+gives its key: set only one of them.
 It is ignored for plain stores and for stores the command does not use,
 and never used for new keys.
 Two encrypted stores of one command that share the variable are an error
@@ -861,6 +1000,37 @@ that names the variable, never its value.
 removes every
 .B ENV_STORE_KEY_*
 variable from the command's environment.
+.TP
+.B ENV_STORE_LOAD
+A load specification: the stores to load, in load order, and the key or
+passphrase of every encrypted one, in a single line that starts with
+.BR envstore\-load\-v1: .
+Treat the value as opaque and write it with
+.BR export\-credentials ;
+it is as secret as all its keys together.
+With
+.B ENV_STORE_CONNECTION
+and this variable set, every reading command and
+.B envs run \-\- \fICMD\fP
+load its stores with their keys and nothing else configured.
+Its stores are the default store list of reading commands (stores on the
+command line win; the project file's
+.B stores
+is used only without this variable); writing commands still need
+.BR \-s .
+Its keys take part in key precedence like
+.BI ENV_STORE_KEY_ STORE\fR;
+keys of plain stores and of stores the command does not use are ignored.
+A key of the wrong kind (key text for a passphrase store, or the reverse) is
+a key error (exit code 4).
+An empty value counts as unset.
+An invalid value stops every command except
+.B keygen
+and
+.B completion
+with exit code 1 and a message that says why, never the value.
+.B run
+removes it from the command's environment.
 .SH FILES
 .TP
 .B .envstore.toml
@@ -879,10 +1049,14 @@ expanded; paths only, never key material),
 (boolean) and
 .B connection
 (a connection string; a password in it causes a warning).
-Stores given on the command line replace the file's list;
+Stores given on the command line, and the stores of
+.BR ENV_STORE_LOAD ,
+replace the file's list;
 .B \-k
-on the command line, and
-.BI ENV_STORE_KEY_ STORE\fR,
+on the command line,
+.BI ENV_STORE_KEY_ STORE
+and
+.B ENV_STORE_LOAD
 override the file's key for that store.
 .RS
 .PP
@@ -907,8 +1081,13 @@ Directories are created with mode 0700, store files with mode 0600.
 Success.
 .TP
 .B 1
-Usage or validation error, including a refused schema setup and a missing
-confirmation.
+Usage or validation error, including a refused schema setup, a missing
+confirmation, an invalid
+.B ENV_STORE_LOAD
+and an encrypted store that gets a key from both
+.BI ENV_STORE_KEY_ STORE
+and
+.BR ENV_STORE_LOAD .
 .TP
 .B 2
 Not found: a store or a variable.
@@ -918,8 +1097,10 @@ Already exists.
 .TP
 .B 4
 Decryption or key error: wrong key, a missing key in non\-interactive use,
-or an empty or invalid
-.BI ENV_STORE_KEY_ STORE\fR.
+an empty or invalid
+.BI ENV_STORE_KEY_ STORE\fR,
+or a key of the wrong kind in
+.BR ENV_STORE_LOAD .
 .TP
 .B 5
 Concurrent modification: the store changed since it was read; nothing was
@@ -990,6 +1171,16 @@ export ENV_STORE_KEY_CUSTOMER_A="$(cat a.key)"
 envs \-\-noinput run base_conf customer_a \-\- gunicorn app.wsgi
 .fi
 .RE
+.PP
+Print the two variables a deployment needs, keep them in the platform's secret
+settings, and start the program there with nothing else configured:
+.PP
+.RS
+.nf
+envs export\-credentials base_conf customer_a \-k customer_a=a.key
+envs \-\-noinput run \-\- gunicorn app.wsgi
+.fi
+.RE
 .SH SECURITY
 Encryption covers the whole store: names and values.
 Only the store name and metadata stay visible, so
@@ -1002,6 +1193,9 @@ An existing store's key may come from
 .BI ENV_STORE_KEY_ STORE\fR;
 encryption then protects the backend and its backups, not against someone who
 can read the deployment's configuration.
+The same holds for
+.BR ENV_STORE_LOAD ,
+which is as secret as all its keys together.
 A key file mounted and passed with
 .B \-k
 or
@@ -1026,6 +1220,11 @@ overwritten.
 Exported dotenv files and the output of
 .B export\-shell
 contain plaintext secrets.
+.B export\-credentials
+prints the connection string, including any password in it, and every key
+of its stores: it is the one command that prints the connection string, on
+purpose; errors never show it.
+Keep its output in a secret manager, never in a file under version control.
 Do not commit a project file whose
 .B connection
 contains a password; set

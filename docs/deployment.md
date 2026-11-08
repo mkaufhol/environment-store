@@ -2,31 +2,35 @@
 
 A deployed app has to read its encrypted stores without anyone typing a key. This guide shows how to hand the key
 over on Heroku, on Kubernetes, and in other containers or CI systems: as the environment variable
-`ENV_STORE_KEY_<STORE>`, or as a mounted key file passed with `-k` or `[keys]`. It ends with what encryption still
+`ENV_STORE_KEY_<STORE>`, as a mounted key file passed with `-k` or `[keys]`, or together with the store list in the
+one variable `ENV_STORE_LOAD`. It ends with what encryption still
 protects once the key sits in the deployment's configuration, and how to rotate the key.
 
 The `envs` commands and their output on this page were run against the real CLI. The Heroku, Kubernetes, Docker and
 CI snippets could not be run for this guide; they use only standard commands and fields, but adapt them to your
 setup.
 
-- [Two ways to hand over the key](#two-ways-to-hand-over-the-key)
+- [Three ways to hand over the key](#three-ways-to-hand-over-the-key)
 - [The key variable `ENV_STORE_KEY_<STORE>`](#the-key-variable-env_store_key_store)
+- [Two variables for everything: `ENV_STORE_LOAD`](#two-variables-for-everything-env_store_load)
 - [The key is already text: no base64 needed](#the-key-is-already-text-no-base64-needed)
 - [Heroku](#heroku)
 - [Kubernetes](#kubernetes)
 - [Other containers and CI](#other-containers-and-ci)
 - [Security notes](#security-notes)
 
-## Two ways to hand over the key
+## Three ways to hand over the key
 
-| | Key variable `ENV_STORE_KEY_<STORE>` | Key file, `-k STORE=PATH` or `[keys]` |
-|---|---|---|
-| Works on | every platform, including Heroku, which cannot mount files | Kubernetes, Docker, CI systems with secret files |
-| Where the key lives at run time | in the environment of the `envs` process (or of your app, with the Python library) | in a file, readable only by the app's user |
-| Recommended | when files are not an option | yes: the key stays out of the process environment |
+| | Key variable `ENV_STORE_KEY_<STORE>` | Key file, `-k STORE=PATH` or `[keys]` | Load specification `ENV_STORE_LOAD` |
+|---|---|---|---|
+| Works on | every platform, including Heroku, which cannot mount files | Kubernetes, Docker, CI systems with secret files | every platform |
+| Where the key lives at run time | in the environment of the `envs` process (or of your app, with the Python library) | in a file, readable only by the app's user | in the environment, like the key variable |
+| What else the deployment needs | the store names in its command, one variable per encrypted store | the store names and the key paths | nothing but `ENV_STORE_CONNECTION` |
+| Recommended | when files are not an option | yes: the key stays out of the process environment | when files are not an option and you want one secret to manage |
 
-Both work the same for the CLI, the Python library and the TUI. A `-k` given on the command line always wins over
-the variable, and the variable wins over `[keys]` in the project file.
+All three give keys to the CLI, the Python library and the TUI alike (the store list of `ENV_STORE_LOAD` serves
+the reading commands and `load()` only). A `-k` given on the command line always wins over the environment, and
+the environment wins over `[keys]` in the project file.
 
 The examples use a plain store `base` and a store `prod` encrypted with the key file `prod.key`:
 
@@ -106,6 +110,149 @@ instead of waiting for input, and the message names the variable:
 $ envs --noinput run base prod -- true
 Error: store 'prod' is encrypted and no key or passphrase was given: pass it with -k prod=<path> (or -k prod=- for stdin), or set ENV_STORE_KEY_PROD
 ```
+
+## Two variables for everything: `ENV_STORE_LOAD`
+
+With key variables, a deployment needs the connection, one `ENV_STORE_KEY_<STORE>` per encrypted store and the
+store names in every command. `ENV_STORE_LOAD` holds a **load specification**: the stores to load, in load order,
+and the key or passphrase of every encrypted one. A deployment then needs exactly two variables,
+`ENV_STORE_CONNECTION` and `ENV_STORE_LOAD`. With both set, `envs run -- CMD`, every reading command (`ls`, `get`,
+`export`, `export-shell`, `run`, `export-credentials`) and the library's `load()` without store names load those
+stores with their keys. No store names, no `-k` and no project file are needed.
+
+The value is one line, `envstore-load-v1:` followed by URL-safe base64. Treat it as opaque, and as secret as all
+the keys in it together. You do not write it by hand: `envs export-credentials` prints it.
+
+### Print both variables: `envs export-credentials`
+
+Name the stores in load order, and give their keys as for `ls` or `run`:
+
+```console
+$ envs export-credentials base prod -k prod=prod.key
+ENV_STORE_CONNECTION=json:///home/me/project/envs
+ENV_STORE_LOAD=envstore-load-v1:eyJzdG9yZXMiOlsiYmFzZSIsInByb2QiXSwia2V5cyI6…
+```
+
+- **Stores and keys are found like those of `ls` or `run`.** Without store names it takes the stores of
+  `ENV_STORE_LOAD`, else `stores` in `.envstore.toml`; so in a project whose project file names the stores and their
+  `[keys]`, a plain `envs export-credentials` is enough. A key comes from `-k`, the environment, `[keys]` or a hidden
+  prompt on a terminal (on stderr, so stdout holds only the two lines).
+- **Every key is checked first.** `envs export-credentials` decrypts every store before it prints anything, so a
+  wrong key fails here, not in the deployment, and stdout stays empty. A wrong or missing key exits with code 4:
+
+  ```console
+  $ envs --noinput export-credentials base prod -k prod=old.key
+  Error: cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified
+  ```
+
+- **Relative paths become absolute.** A relative `json://`, `toml://` or `sqlite:///` path in the connection string
+  is printed as an absolute path, resolved from the current directory, because the deployment runs elsewhere.
+- **A first-wins merge order comes along.** If the project file or `ENV_STORE_ORDERED_OVERWRITE` makes the first
+  store win, a third line `ENV_STORE_ORDERED_OVERWRITE=false` is printed; set it in the deployment too.
+- **`--json`** prints one JSON object instead of the dotenv lines:
+
+  ```console
+  $ envs export-credentials base prod -k prod=prod.key --json
+  {
+    "ENV_STORE_CONNECTION": "json:///home/me/project/envs",
+    "ENV_STORE_LOAD": "envstore-load-v1:eyJzdG9yZXMiOlsiYmFzZSIsInByb2QiXSwia2V5cyI6…"
+  }
+  ```
+
+  A connection string that a dotenv line cannot hold, for example one that contains `${`, needs it; without
+  `--json` the command fails with exit code 1:
+  `Error: the connection string cannot be written as a dotenv line: use --json`.
+- **It prints the connection string as it is, password included.** Every other command keeps the password out of
+  its output; this one exists to hand the connection over, and it never shows it in an error either. The output
+  holds the connection and every key: paste it into a secret manager or the platform's secret settings, and never
+  write it to a file under version control.
+
+### Use them in the deployment
+
+**Heroku.** If the stores live in the app's Heroku Postgres database, keep taking the connection from `DATABASE_URL`
+([why](#heroku)) and set only `ENV_STORE_LOAD`:
+
+```sh
+heroku config:set ENV_STORE_LOAD="$(envs export-credentials base prod -k prod=prod.key | sed -n 's/^ENV_STORE_LOAD=//p')"
+```
+
+```text
+web: envs -c "$DATABASE_URL" --noinput run -- gunicorn myproject.wsgi
+```
+
+**Kubernetes.** Put both lines into one Secret and take them with `envFrom`; the command names no stores:
+
+```sh
+envs export-credentials base prod -k prod=prod.key | kubectl create secret generic envs-env --from-env-file=/dev/stdin
+```
+
+```yaml
+      command: ["envs", "--noinput", "run", "--", "gunicorn", "myproject.wsgi"]
+      envFrom:
+        - secretRef:
+            name: envs-env
+```
+
+kubectl takes the values of an env file literally. `envs export-credentials` quotes a value with characters other
+than letters, digits and `_./:@%+,-`, for example a PostgreSQL connection string with `?sslmode=require`, and
+kubectl would keep those quotes. In that case create the Secret with `--from-literal=ENV_STORE_CONNECTION=…` and
+`--from-literal=ENV_STORE_LOAD=…` instead (`ENV_STORE_LOAD` is never quoted).
+
+**CI.** Store both values, without quotes, as masked secrets, for example in GitHub Actions:
+
+```yaml
+    steps:
+      - run: envs --noinput run -- ./deploy.sh
+        env:
+          ENV_STORE_CONNECTION: ${{ secrets.ENV_STORE_CONNECTION }}
+          ENV_STORE_LOAD: ${{ secrets.ENV_STORE_LOAD }}
+```
+
+**Python.** `load()` without store names reads both variables. `use_project=False` keeps a project file in the image
+from adding anything, and `noinput=True` makes a missing key raise instead of prompting:
+
+```python
+import os
+
+from environment_store import load
+
+load(use_project=False, noinput=True)
+os.environ.pop("ENV_STORE_LOAD", None)  # subprocesses of the app do not need the keys
+```
+
+In Django's `settings.py`, keep the `ENV_STORE_LOADED` guard of the [Heroku example](#heroku).
+
+### How it fits with the other key sources
+
+- **Order.** `ENV_STORE_LOAD` ranks like `ENV_STORE_KEY_<STORE>`: `-k` (library: `key=`, `keys=`,
+  `Source(key=…)`) > the environment > `[keys]` > the hidden prompt. Stores named on the command line (or passed to
+  `load()`) replace its store list, and its list replaces `stores` in the project file.
+- **One store, one environment key.** If both `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` hold a key for an
+  encrypted store the command uses, it is unclear which one is meant, and the command stops with exit code 1
+  unless `-k` gives the key:
+
+  ```console
+  $ ENV_STORE_KEY_PROD="$(cat prod.key)" envs --noinput ls -v
+  Error: store 'prod' gets a key from both ENV_STORE_KEY_PROD and ENV_STORE_LOAD, so it is unclear which one is meant: set only one of them
+  ```
+
+- **Ignored when it does not apply.** Keys of stores the command does not use, and keys of plain stores, are ignored.
+  A secret of the wrong kind for an encrypted store is a key error with exit code 4, for example
+  `ENV_STORE_LOAD holds key text for store 'dev', which uses a passphrase`.
+- **Writing commands** take a store's current key from it, but never their store: `set`, `rm`, `import` and `rekey`
+  still need `-s`.
+- **An invalid value stops every command** except `keygen` and `completion`, with exit code 1. The message says what
+  is wrong, never the value:
+
+  ```console
+  $ ENV_STORE_LOAD=garbage envs ls-store
+  Error: ENV_STORE_LOAD is not a valid load specification: it must start with 'envstore-load-v1:'
+  ```
+
+- **Not passed on by `envs run`**, like the key variables ([Security notes](#security-notes)). `ENV_STORE_CONNECTION`
+  is passed on.
+- **Rotating a key** changes the value: run `envs export-credentials` again after `envs rekey` and replace
+  `ENV_STORE_LOAD` in the deployment.
 
 ## The key is already text: no base64 needed
 
@@ -359,9 +506,9 @@ If the CI system can write secrets to files, prefer those with `-k`; the
 
 ## Security notes
 
-**`envs run` strips the key variables.** It removes every `ENV_STORE_KEY_*` variable from the environment of the
-command it starts, so your program never inherits a key (on POSIX, `envs` replaces itself with the command, so no
-process with the key remains):
+**`envs run` strips the key variables.** It removes every `ENV_STORE_KEY_*` variable and `ENV_STORE_LOAD` from the
+environment of the command it starts, so your program never inherits a key (on POSIX, `envs` replaces itself with
+the command, so no process with the key remains):
 
 ```console
 $ ENV_STORE_KEY_PROD="$(cat prod.key)" envs --noinput run base prod -- env | grep -E 'ENV_STORE_KEY|DB_'
@@ -396,8 +543,8 @@ hunter2
 
 The old key stops working at once, so update the deployment right away:
 `heroku config:set ENV_STORE_KEY_PROD="$(cat prod-2027.key)"` (which restarts the dynos), or update the Secret and
-restart the pods. Processes that are already running keep the values they loaded. With `envs run`, processes that
-start between the `rekey` and the update fail with exit code 4. With the Python library, every new process that
+restart the pods. With `ENV_STORE_LOAD`, print the new value with `envs export-credentials` and set that instead.
+Processes that are already running keep the values they loaded. With `envs run`, processes that start between the `rekey` and the update fail with exit code 4. With the Python library, every new process that
 calls `load()` with the old key fails at import time with a `DecryptionError` traceback instead, and that includes
 new workers inside a dyno or pod that is already running: gunicorn without `--preload` loads the stores in each
 worker it starts, for example after a timeout or `--max-requests`. Then delete the old key file and replace it in every other place

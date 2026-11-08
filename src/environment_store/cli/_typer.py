@@ -49,7 +49,8 @@ _SEPARATOR: Final = "--"
 _PROGRAM: Final = "envs"
 _STORE_PARAMETER: Final = "store"
 _STORE_HINT: Final = (
-    "writing commands never take the store from the project file's 'stores'; name it with -s STORE"
+    "writing commands never take the store from ENV_STORE_LOAD or the project file's 'stores'; "
+    "name it with -s STORE"
 )
 
 
@@ -157,13 +158,14 @@ class EnvsCommand(TyperCommand):
         return f"{name} is a global option: put it before the command, e.g. {example}"
 
     def _store_hint(self, ctx: "ClickContext", error: typer.TyperException) -> str | None:
-        # A missing -s while the project file lists stores: the user expected them to apply.
+        # A missing -s while ENV_STORE_LOAD or the project file lists stores: the user expected
+        # them to apply.
         parameter = getattr(error, "param", None)
         if not isinstance(parameter, TyperOption) or parameter.name != _STORE_PARAMETER:
             return None
         try:
             # Every context typer creates is a typer.Context at runtime.
-            stores = get_state(cast("typer.Context", ctx)).settings().stores
+            stores = get_state(cast("typer.Context", ctx)).settings().default_stores
         except EnvironmentStoreError:
             # The usage error is the one to report; the command never ran.
             return None

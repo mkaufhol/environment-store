@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings
 
+from environment_store.config.load_spec import LoadSpec
 from environment_store.core.secrets import Passphrase
 from tests.support.cli import CliHarness, RecordingPrompter, assert_exit, temporary_cli
 from tests.support.strategies import values
@@ -226,7 +227,20 @@ def test_set_never_takes_the_store_from_the_project_file(cli_json: CliHarness) -
     result = cli_json.invoke("set", "A=1")
 
     assert_exit(result, 1)
-    assert "writing commands never take the store from the project file" in result.stderr
+    assert (
+        "writing commands never take the store from ENV_STORE_LOAD or the project" in result.stderr
+    )
+    assert cli_json.store().variables("a") == {}
+
+
+def test_set_never_takes_the_store_from_the_load_spec(cli_json: CliHarness) -> None:
+    cli_json.store().create_store("a")
+    spec = LoadSpec(stores=("a",)).encode()
+
+    result = cli_json.invoke("set", "A=1", env={"ENV_STORE_LOAD": spec})
+
+    assert_exit(result, 1)
+    assert "never take the store from ENV_STORE_LOAD" in result.stderr
     assert cli_json.store().variables("a") == {}
 
 
