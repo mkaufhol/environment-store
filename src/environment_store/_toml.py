@@ -1,7 +1,7 @@
 """Minimal TOML writer for the subset Environment Store writes.
 
 The standard library can read TOML (`tomllib`) but not write it, and the core depends on
-`cryptography` only, so the TOML file adapter and project files use this writer.
+`cryptography` only, so the TOML file adapter and the TOML export format use this writer.
 
 Supported values are `str`, `int`, `bool`, timezone-aware `datetime` and mappings of those.
 Mappings at the top level become `[table]`s, deeper mappings inline tables. Datetimes are written

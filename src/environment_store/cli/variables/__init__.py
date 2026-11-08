@@ -13,7 +13,7 @@ __all__ = ["register"]
 def register(app: typer.Typer) -> None:
     """Register the commands of this package on the `envs` app.
 
-    Every command is registered with `cls=EnvsCommand` (`PassthroughCommand` for `run`).
+    Every command is registered with `cls=EnvsCommand`.
 
     Args:
         app: The `envs` app.

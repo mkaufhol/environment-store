@@ -1,8 +1,8 @@
 """Connection strings: the scheme registry and `open_adapter()`.
 
 The registry names every adapter by import path, so the core never imports an adapter (or its
-optional dependencies) until a connection string asks for it, and an adapter package never needs
-to edit this file.
+optional dependencies) until a connection string asks for it. A new backend adds its scheme to
+`ADAPTER_FACTORIES` here; there is no plugin or entry-point registry.
 """
 
 import importlib
