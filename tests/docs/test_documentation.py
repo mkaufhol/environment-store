@@ -1,9 +1,11 @@
 """The user documentation and the agent skill stay in sync with the CLI and with each other."""
 
 import re
+import shlex
 import tomllib
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 import pytest
 from typer.main import get_command
@@ -244,13 +246,20 @@ def test_testpypi_check_installs_only_the_package_from_testpypi() -> None:
     # PyPI has the old 0.1 line, and anyone can upload look-alike dependencies to TestPyPI: take
     # only environment-store from TestPyPI, pinned so that uv fails instead of falling back.
     contributing = _prose(_ROOT / "CONTRIBUTING.md")
-    commands = [span for span in _CODE_SPAN.findall(contributing) if "test.pypi.org" in span]
+    commands = [
+        words
+        for words in map(shlex.split, _CODE_SPAN.findall(contributing))
+        if any(urlsplit(word).hostname == "test.pypi.org" for word in words)
+    ]
 
     assert commands
-    for command in commands:
-        assert "--find-links https://test.pypi.org/simple/environment-store/" in command
-        assert "'environment-store[cli]==X.Y.Z'" in command
-        assert "-index" not in command
+    for words in commands:
+        links = [
+            words[index + 1] for index, word in enumerate(words[:-1]) if word == "--find-links"
+        ]
+        assert links == ["https://test.pypi.org/simple/environment-store/"]
+        assert "environment-store[cli]==X.Y.Z" in words
+        assert not any("-index" in word for word in words)
 
 
 def test_readme_tells_0_1_users_to_uninstall_it_first() -> None:
