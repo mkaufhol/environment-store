@@ -92,17 +92,6 @@ def test_secret_from_file_uses_the_injected_reader(store: EnvironmentStore) -> N
     assert secret == Passphrase(text="pw")
 
 
-def test_secret_from_file_expands_the_home_directory(
-    store: EnvironmentStore, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, key: Path
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    store.create_store("a", encrypt=True, key=key)
-
-    secret = StoreSession(store, key_paths={}).secret_from_file("a", Path("~/a.key"))
-
-    assert isinstance(secret, KeyMaterial)
-
-
 def test_secret_from_a_missing_file_raises_key_source_error(
     store: EnvironmentStore, tmp_path: Path
 ) -> None:
@@ -110,18 +99,6 @@ def test_secret_from_a_missing_file_raises_key_source_error(
 
     with pytest.raises(KeySourceError):
         StoreSession(store, key_paths={}).secret_from_file("a", tmp_path / "missing")
-
-
-def test_secret_from_a_path_with_an_unknown_home_directory_raises_key_source_error(
-    store: EnvironmentStore,
-) -> None:
-    store.create_store("a", encrypt=True, key=Passphrase(text="pw"))
-
-    with pytest.raises(KeySourceError, match="unknown home directory") as raised:
-        StoreSession(store, key_paths={}).secret_from_file("a", Path("~nosuchuser_zz/a.key"))
-
-    assert "~nosuchuser_zz/a.key" in str(raised.value)
-    assert isinstance(raised.value.__cause__, RuntimeError)
 
 
 @pytest.mark.parametrize(

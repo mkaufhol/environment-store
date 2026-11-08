@@ -17,7 +17,6 @@ from environment_store.core.errors import (
     BackendError,
     ConcurrentModificationError,
     EnvironmentStoreError,
-    KeySourceError,
     NotEncryptedError,
     StoreExistsError,
 )
@@ -136,7 +135,9 @@ class StoreSession:
 
         Args:
             name: The store name.
-            path: The file; `~` is expanded.
+            path: The file, used as given: `~` is already expanded by the caller (the unlock
+                dialog's path input, or the project file's `[keys]`), since only the typed text
+                tells a leading `~` from `./~` (D57).
 
         Returns:
             The secret.
@@ -145,12 +146,7 @@ class StoreSession:
             KeySourceError: The file cannot be read or is empty.
             CryptoError: The text does not fit the store's key mode.
         """
-        try:
-            expanded = path.expanduser()
-        except RuntimeError as err:
-            message = f"key file path '{path}' names an unknown home directory"
-            raise KeySourceError(message) from err
-        return self._store.parse_secret(name, self._read_key_file(expanded))
+        return self._store.parse_secret(name, self._read_key_file(path))
 
     def secret_from_text(self, name: str, text: str) -> Secret:
         """Interpret typed text (a passphrase) by the store's key mode (D3).

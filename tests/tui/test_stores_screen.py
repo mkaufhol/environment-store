@@ -234,6 +234,43 @@ def test_unlock_with_an_unknown_home_directory_notifies_and_stays_locked(
     run_app(encrypted, scenario)
 
 
+def test_unlock_expands_a_tilde_only_at_the_start(
+    encrypted: EnvironmentStore,
+    key: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The key is at ~/a.key, but "./~/a.key" names a directory called "~" (like `-k` does).
+    monkeypatch.setenv("HOME", str(key.parent))
+    monkeypatch.chdir(tmp_path)
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        await set_input(pilot, "#path", "./~/a.key")
+        await pilot.click("#unlock")
+        await pilot.pause()
+        assert isinstance(app.screen, UnlockScreen)
+        [message] = notifications(app)
+        assert message.startswith("unlocking with the key file './~/a.key' failed: ")
+
+    run_app(encrypted, scenario)
+
+
+def test_unlock_expands_the_home_directory(
+    encrypted: EnvironmentStore, key: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(key.parent))
+
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        await set_input(pilot, "#path", "~/a.key")
+        await pilot.click("#unlock")
+        await pilot.pause()
+        assert isinstance(app.screen, VariablesScreen)
+
+    run_app(encrypted, scenario)
+
+
 def test_encrypted_store_without_project_key_asks_for_a_key(encrypted: EnvironmentStore) -> None:
     async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
         await _open_first(pilot)

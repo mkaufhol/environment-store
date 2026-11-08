@@ -81,6 +81,17 @@ def test_complete_path_expands_the_home_directory_and_keeps_the_tilde(
     assert complete_path("~") == "~/"
 
 
+def test_complete_path_expands_a_tilde_only_at_the_start(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Like `-k` on the command line: "./~/x" names a directory called "~", not the home.
+    monkeypatch.setenv("HOME", str(tree))
+    assert complete_path("./~/con") is None
+    (tree / "~").mkdir()
+    (tree / "~" / "literal.key").write_text("")
+    assert complete_path("./~/l") == "./~/literal.key"
+
+
 @pytest.mark.parametrize("typed", ["~nosuchuser_zz/a", "~nosuchuser_zz", "a\0b/c"])
 def test_complete_path_ignores_unknown_users_and_invalid_paths(tree: Path, typed: str) -> None:
     assert complete_path(typed) is None
@@ -168,6 +179,14 @@ def test_expand_path_expands_the_home_directory(
     monkeypatch.setenv("HOME", str(tmp_path))
     assert expand_path("~/a.key", what="key file") == tmp_path / "a.key"
     assert expand_path(" ./b.env ", what="output file") == Path("b.env")
+
+
+def test_expand_path_expands_a_tilde_only_at_the_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # A relative path to a directory called "~", as `-k ./~/a.key` reads on the command line.
+    assert expand_path("./~/a.key", what="key file") == Path("~") / "a.key"
 
 
 def test_expand_path_names_an_unknown_home_directory(tmp_path: Path) -> None:

@@ -359,7 +359,8 @@ existing file or directory that completes what you typed, shown dimmed after the
 | `Tab` | Accept the suggestion, when one is shown and the cursor is at the end; otherwise move to the next field |
 | `→` | Accept the suggestion |
 
-`~` is expanded for the lookup and kept in the text, directories end in `/`, and matching is case-sensitive.
+A leading `~` is expanded for the lookup and kept in the text (as with `-k` on the command line, `./~/a`
+names a directory called `~`), directories end in `/`, and matching is case-sensitive.
 Hidden files and directories are suggested only once you type a `.`. A directory that cannot be read suggests
 nothing.
 

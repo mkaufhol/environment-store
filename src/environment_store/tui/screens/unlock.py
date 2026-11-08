@@ -6,7 +6,6 @@ keeps the store locked and the dialog open; the key is never remembered beyond t
 (D3).
 """
 
-from pathlib import Path
 from typing import ClassVar, override
 
 from textual.app import ComposeResult
@@ -19,7 +18,7 @@ from environment_store.core.errors import EnvironmentStoreError
 from environment_store.core.models import StoreInfo
 from environment_store.core.secrets import Secret
 from environment_store.tui.messages import message_for, notify_problem
-from environment_store.tui.paths import PathInput
+from environment_store.tui.paths import PathInput, expand_path
 from environment_store.tui.session import OpenedStore, StoreSession
 
 __all__ = ["UnlockScreen", "describe_encryption"]
@@ -130,5 +129,5 @@ class UnlockScreen(ModalScreen[OpenedStore | None]):
     def _secret(self, path: str, passphrase: str) -> Secret:
         name = self._info.name
         if path:
-            return self._session.secret_from_file(name, Path(path))
+            return self._session.secret_from_file(name, expand_path(path, what="key file"))
         return self._session.secret_from_text(name, passphrase)

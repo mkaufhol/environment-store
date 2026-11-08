@@ -1,7 +1,8 @@
 """Path completion for every path input of the TUI (D57).
 
 `PathSuggester` suggests the first existing file or directory that completes what was typed:
-`~` is expanded for the lookup but kept in the suggestion, directories end in `/`, matching is
+`~` is expanded for the lookup but kept in the suggestion (only at the start, like the CLI's
+`-k`: `./~/a` names a directory called `~`), directories end in `/`, matching is
 case-sensitive, hidden entries are suggested only once a `.` is typed, and a directory that
 cannot be read suggests nothing. `PathInput` is an `Input` with that suggester whose `Tab`
 accepts a shown suggestion (`→` does too, as in every `Input`) and otherwise moves the focus.
@@ -38,7 +39,7 @@ def complete_path(typed: str) -> str | None:
         return "~/" if typed == "~" else None
     typed_directory = f"{head}/" if separator else ""
     try:
-        directory = Path(typed_directory or ".").expanduser()
+        directory = _expand_home(typed_directory or ".")
         with os.scandir(directory) as entries:
             name = _first_completion(entries, prefix)
     except (OSError, RuntimeError, ValueError):
@@ -72,7 +73,7 @@ def _first_completion(entries: Iterable[os.DirEntry[str]], prefix: str) -> str |
 
 
 def expand_path(text: str, *, what: str) -> Path:
-    """Turn the text of a path input into a path: trimmed, with `~` expanded.
+    """Turn the text of a path input into a path: trimmed, with a leading `~` expanded.
 
     Args:
         text: The typed path.
@@ -86,10 +87,23 @@ def expand_path(text: str, *, what: str) -> Path:
     """
     stripped = text.strip()
     try:
-        return Path(stripped).expanduser()
+        return _expand_home(stripped)
     except RuntimeError as err:
         message = f"{what} path '{stripped}' names an unknown home directory"
         raise ValidationError(message) from err
+
+
+def _expand_home(text: str) -> Path:
+    """Expand a leading `~`, as `-k` of the CLI does (D57, D53).
+
+    Checked on the text: `Path` drops a leading `./`, so `Path("./~/a")` is `Path("~/a")`
+    and `expanduser` would wrongly read it as the home directory.
+
+    Raises:
+        RuntimeError: The text names an unknown user's home directory.
+    """
+    path = Path(text)
+    return path.expanduser() if text.startswith("~") else path
 
 
 class PathSuggester(Suggester):
