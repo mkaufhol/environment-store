@@ -9,6 +9,7 @@ from typing import Annotated, Final
 
 import typer
 
+from environment_store.cli.completion.candidates import PathType
 from environment_store.cli.output import err, out
 from environment_store.core.errors import ValidationError
 from environment_store.library.keys import generate_key_file, generate_key_text
@@ -23,6 +24,7 @@ KeyPathArg = Annotated[
         metavar="PATH|-",
         help="Where to create the key file (mode 0600, never overwritten); '-' prints the key.",
         show_default=False,
+        click_type=PathType(),
     ),
 ]
 

@@ -103,7 +103,7 @@ compare that location with what the user meant before assuming there are none.
 |---|---|
 | Reading: `ls`, `get`, `export`, `export-shell`, `run` | `-k STORE=PATH` (repeatable); `-k PATH` only when exactly one store is read; `-k STORE=-` reads stdin |
 | Writing: `set`, `rm`, `import`, `rekey` (old key), `cp-store`/`mv-store` (source key) | `-k PATH` or `-k -` |
-| Not needed: `ls-store`, `rm-store`, `keygen` | none |
+| Not needed: `ls-store`, `rm-store`, `keygen`, `completion` | none |
 
 An encrypted store needs its key even for a names-only `ls`: names and values are encrypted
 together. Only `ls-store`, `rm-store` and `keygen` work without it.
@@ -141,6 +141,7 @@ envs --noinput mv-store SRC DST [same options as cp-store]
 envs --noinput encrypt -s STORE (--new-key PATH | --generate-key PATH | --passphrase)
 envs --noinput rekey -s STORE -k OLD (--new-key PATH | --generate-key PATH | --passphrase)
 envs keygen PATH            # new key file, mode 0600, never overwrites; reads no connection or project file
+envs completion zsh         # prints the shell completion script (bash|zsh|fish); reads no connection or project file
 envs --noinput migrate      # PostgreSQL only in practice: SQLite/JSON/TOML set themselves up
 ```
 

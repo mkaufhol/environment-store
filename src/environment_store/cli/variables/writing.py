@@ -9,6 +9,7 @@ from typing import Annotated, Final
 
 import typer
 
+from environment_store.cli.completion.candidates import complete_variables
 from environment_store.cli.options import OverwriteOpt, StoreOpt, WriteKeyOpt
 from environment_store.cli.output import err
 from environment_store.cli.secrets import existing_secret
@@ -32,11 +33,17 @@ AssignmentsArg = Annotated[
         help="KEY=VALUE pairs (plaintext stores only), or one KEY whose value is read from "
         "stdin when piped, else asked twice (hidden).",
         show_default=False,
+        autocompletion=complete_variables,
     ),
 ]
 NamesArg = Annotated[
     list[str],
-    typer.Argument(metavar="KEYS...", help="The variables to delete.", show_default=False),
+    typer.Argument(
+        metavar="KEYS...",
+        help="The variables to delete.",
+        show_default=False,
+        autocompletion=complete_variables,
+    ),
 ]
 
 

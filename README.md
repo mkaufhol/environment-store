@@ -107,6 +107,9 @@ are already set are kept unless you pass `overwrite=True`.
 - **Project file.** A `.envstore.toml` in your project names the connection, the default stores and the key files,
   so `envs run -- ./manage.py runserver` is all you type.
 - **Scriptable.** Data on stdout, messages on stderr, `--json` output, stable exit codes and `--noinput` for CI.
+- **Shell completion.** `eval "$(envs completion zsh)"` in `~/.zshrc` (or `bash`, 4.4 or newer; `fish` writes a
+  completions file) completes commands, options, existing store names, variable names of plaintext stores and
+  paths. It never asks for a key and never changes anything.
 - **Terminal UI.** `envs tui` lets you browse stores and add, edit and delete variables, with values masked and
   each screen's keys in its footer.
 

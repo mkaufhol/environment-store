@@ -11,7 +11,9 @@ Use them as annotations of keyword-only parameters (ruff FBT), e.g.::
         as_json: JsonOpt = False,
     ) -> None: ...
 
-Defaults belong in the signature: `None` for optional values and lists, `False` for flags.
+Store parameters complete existing store names and path parameters let the shell complete
+files (D54). Defaults belong in the signature: `None` for optional values and lists, `False`
+for flags.
 `StoreOpt` has no default: `-s` is required. Paths that may be `-` (stdin / stdout) are
 strings; parse them with `key_options.parse_writing_key` or compare with `"-"`.
 """
@@ -21,6 +23,7 @@ from typing import Annotated
 
 import typer
 
+from environment_store.cli.completion.candidates import PathType, ReadKeyType, complete_stores
 from environment_store.core.errors import ValidationError
 from environment_store.formats.infer import Format, infer_format
 
@@ -52,10 +55,18 @@ StoresArg = Annotated[
         metavar="[STORES]...",
         help="Stores in load order; the last one wins (default: 'stores' in .envstore.toml).",
         show_default=False,
+        autocompletion=complete_stores,
     ),
 ]
 StoreOpt = Annotated[
-    str, typer.Option("-s", "--store", metavar="STORE", help="The store to change.")
+    str,
+    typer.Option(
+        "-s",
+        "--store",
+        metavar="STORE",
+        help="The store to change.",
+        autocompletion=complete_stores,
+    ),
 ]
 ReadKeysOpt = Annotated[
     list[str] | None,
@@ -67,6 +78,7 @@ ReadKeysOpt = Annotated[
         "-k PATH is enough. Default: ENV_STORE_KEY_<STORE>, else [keys] in .envstore.toml, "
         "else a prompt on a terminal.",
         show_default=False,
+        click_type=ReadKeyType(),
     ),
 ]
 WriteKeyOpt = Annotated[
@@ -78,6 +90,7 @@ WriteKeyOpt = Annotated[
         help="Key or passphrase file of the store, '-' for stdin. Default: ENV_STORE_KEY_<STORE>, "
         "else [keys] in .envstore.toml, else a prompt on a terminal.",
         show_default=False,
+        click_type=PathType(),
     ),
 ]
 CreateKeyOpt = Annotated[
@@ -88,6 +101,7 @@ CreateKeyOpt = Annotated[
         metavar="PATH|-",
         help="Encrypt with this existing key file ('-' for stdin); needs -e.",
         show_default=False,
+        click_type=PathType(),
     ),
 ]
 NewKeyOpt = Annotated[
@@ -97,6 +111,7 @@ NewKeyOpt = Annotated[
         metavar="PATH|-",
         help="Encrypt with this existing key file ('-' for stdin).",
         show_default=False,
+        click_type=PathType(),
     ),
 ]
 GenerateKeyOpt = Annotated[
@@ -106,6 +121,7 @@ GenerateKeyOpt = Annotated[
         metavar="PATH",
         help="Encrypt with a new key file written to PATH (mode 0600, never overwritten).",
         show_default=False,
+        click_type=PathType(),
     ),
 ]
 PassphraseOpt = Annotated[
@@ -142,12 +158,22 @@ JsonOpt = Annotated[bool, typer.Option("--json", help="Print one JSON document."
 YesOpt = Annotated[bool, typer.Option("-y", "--yes", help="Do not ask for confirmation.")]
 InputFileOpt = Annotated[
     str | None,
-    typer.Option("-f", "--file", metavar="PATH|-", help="Input file; '-' or none reads stdin."),
+    typer.Option(
+        "-f",
+        "--file",
+        metavar="PATH|-",
+        help="Input file; '-' or none reads stdin.",
+        click_type=PathType(),
+    ),
 ]
 OutputFileOpt = Annotated[
     str | None,
     typer.Option(
-        "-f", "--file", metavar="PATH|-", help="Output file; '-' or none writes to stdout."
+        "-f",
+        "--file",
+        metavar="PATH|-",
+        help="Output file; '-' or none writes to stdout.",
+        click_type=PathType(),
     ),
 ]
 TypeOpt = Annotated[

@@ -17,6 +17,7 @@ from importlib.metadata import version
 
 from environment_store.cli import encryption, exporting, migrate, stores, tui_command, variables
 from environment_store.cli._typer import EnvsGroup
+from environment_store.cli.completion import command as completion_command
 from environment_store.cli.output import out
 from environment_store.cli.runtime import Runtime
 from environment_store.cli.state import CliState
@@ -116,6 +117,7 @@ def build_app() -> typer.Typer:
     exporting.register(app)
     encryption.register(app)
     tui_command.register(app)
+    completion_command.register(app)
     return app
 
 

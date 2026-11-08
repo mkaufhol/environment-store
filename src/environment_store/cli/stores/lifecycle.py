@@ -4,6 +4,7 @@ from typing import Annotated
 
 import typer
 
+from environment_store.cli.completion.candidates import complete_stores
 from environment_store.cli.confirm import require_confirmation
 from environment_store.cli.options import CreateKeyOpt, GenerateKeyOpt, PassphraseOpt, YesOpt
 from environment_store.cli.output import err
@@ -12,9 +13,20 @@ from environment_store.cli.state import get_state
 from environment_store.core.errors import ValidationError
 from environment_store.core.validation import validate_store_name
 
-__all__ = ["NameArg", "create_store", "rm_store"]
+__all__ = ["ExistingNameArg", "NameArg", "create_store", "rm_store"]
 
 NameArg = Annotated[str, typer.Argument(metavar="NAME", help="The store name.", show_default=False)]
+"""A new store's name: never completed (D54)."""
+ExistingNameArg = Annotated[
+    str,
+    typer.Argument(
+        metavar="NAME",
+        help="The store name.",
+        show_default=False,
+        autocompletion=complete_stores,
+    ),
+]
+"""An existing store's name: completes the stores of the backend (D54)."""
 EncryptOpt = Annotated[
     bool,
     typer.Option(
@@ -51,7 +63,7 @@ def create_store(  # noqa: PLR0913 - one parameter per documented option (spec Â
     err(f"created store {name!r}")
 
 
-def rm_store(ctx: typer.Context, name: NameArg, *, yes: YesOpt = False) -> None:
+def rm_store(ctx: typer.Context, name: ExistingNameArg, *, yes: YesOpt = False) -> None:
     """Delete a store; needs no key, also when it is encrypted."""
     store = get_state(ctx).open_store(ctx)
     # A missing store fails with 2 before anyone is asked (D21: no key, only the name).
