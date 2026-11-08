@@ -26,7 +26,7 @@ class TestPostgresContract(AdapterContract):
     @classmethod
     @override
     def make_backend(cls, postgres_server: PostgresServer) -> BackendFactory:
-        # A fresh database per test and per Hypothesis example (IMPLEMENTATION-PLAN.md §5 A3),
+        # A fresh database per test and per Hypothesis example,
         # used through the default schema `environment_store`.
         @contextmanager
         def backend() -> Generator[PostgresBackend]:

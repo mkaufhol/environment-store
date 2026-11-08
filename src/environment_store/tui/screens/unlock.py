@@ -1,10 +1,10 @@
-"""`UnlockScreen`: ask for the key of an encrypted store (D3, PD 29).
+"""`UnlockScreen`: ask for the key of an encrypted store.
 
-The user types the path of a key or passphrase file (with path completion, D57), or the key
+The user types the path of a key or passphrase file (with path completion), or the key
 text or passphrase itself into a hidden field; both are worded for the store's key mode. Key
 text typed into the visible path field is refused and wiped. The store is read with the secret
 before the dialog closes, so a wrong key keeps the store locked and the dialog open; the key is
-never remembered beyond the shown store (D3).
+never remembered beyond the shown store.
 """
 
 from dataclasses import dataclass
@@ -111,7 +111,7 @@ class _KeyInput(Input):
 
 
 class _KeyPathInput(PathInput):
-    """The key file path (with path completion, D57); its enter unlocks."""
+    """The key file path (with path completion); its enter unlocks."""
 
     BINDINGS: ClassVar[list[BindingType]] = [Binding("enter", "submit", "Unlock")]
 

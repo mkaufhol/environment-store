@@ -1,4 +1,4 @@
-"""The man page and the tldr page stay in step with the commands of the CLI (D49)."""
+"""The man page and the tldr page stay in step with the commands of the CLI."""
 
 import re
 import shutil
@@ -16,7 +16,7 @@ from environment_store.core.merge import merge
 
 _ROOT: Final = Path(__file__).parents[2]
 _PYPROJECT: Final = _ROOT / "pyproject.toml"
-# uv_build installs the contents of the data directory at the install prefix (D49).
+# uv_build installs the contents of the data directory at the install prefix.
 _MAN_DATA: Final = "docs/man"
 _MAN_DIR: Final = _ROOT / _MAN_DATA / "share" / "man" / "man1"
 _MAN_PAGE: Final = _MAN_DIR / "envs.1"
@@ -38,12 +38,12 @@ _SECTIONS: Final = (
     "SECURITY",
     "SEE ALSO",
 )
-_EXIT_CODES: Final = range(6)  # D24
+_EXIT_CODES: Final = range(6)  # the exit codes 0-5 of envs
 _ENVIRONMENT: Final = (
     "ENV_STORE_CONNECTION",
     "ENV_STORE_ORDERED_OVERWRITE",
     "ENV_STORE_KEY_",
-)  # D53
+)
 _TLDR_MAX_EXAMPLES: Final = 8
 _FONT_ESCAPE: Final = re.compile(r"\\f[BIRP]")
 _SECTION_HEADING: Final = re.compile(r'^\.SH\s+"?([^"\n]+?)"?\s*$', re.MULTILINE)
@@ -51,7 +51,7 @@ _SUBSECTION_HEADING: Final = re.compile(r'^\.SS\s+"?([^"\n]+?)"?\s*$', re.MULTIL
 # An option name as the page or an example writes it: -x or --long-name, not the
 # hyphen inside a word such as ls-store.
 _FLAG: Final = re.compile(r"(?<![\w-])(--?[A-Za-z][\w-]*)")
-_HELP_OPTIONS: Final = ("-h", "--help")  # D48
+_HELP_OPTIONS: Final = ("-h", "--help")
 
 
 def _group() -> EnvsGroup:
@@ -84,7 +84,7 @@ def _value_options(command_name: str | None) -> set[str]:
     return {
         name
         for parameter in command.params
-        # Duck-typed: tests import neither click nor typer's vendored copy (plan §6.3).
+        # Duck-typed: typer vendors click privately, so tests import neither click nor typer._click.
         if parameter.param_type_name == "option" and not getattr(parameter, "is_flag", False)
         for name in parameter.opts
     }
@@ -231,7 +231,7 @@ def test_man_page_names_both_executables() -> None:
 
 @pytest.mark.parametrize("section", ["DESCRIPTION", "EXAMPLES"])
 def test_man_page_install_commands_name_the_repository_until_2_0_is_on_pypi(section: str) -> None:
-    # D50: PyPI still serves 0.1, which has no envs command; the plain PyPI form must
+    # PyPI still serves 0.1, which has no envs command; the plain PyPI form must
     # not stand alone wherever the page shows how to install or run envs.
     text = _plain(_man_sections()[section])
 
@@ -250,7 +250,7 @@ def test_man_page_documents_every_option_of_every_command(command: str, option: 
 @pytest.mark.parametrize(("command", "option"), _documented_command_options())
 def test_man_page_documents_only_options_the_command_has(command: str, option: str) -> None:
     # The reverse of the test above: a removed or renamed option must not stay
-    # documented (D49).
+    # documented.
     assert option in [*_option_names(command), *_HELP_OPTIONS]
 
 
@@ -270,13 +270,13 @@ def test_man_page_gives_a_synopsis_for_every_command(command: str) -> None:
 
 
 def test_documented_help_options_are_the_help_options_of_the_cli() -> None:
-    # The man page follows the merged CLI: -h is the shorthand of --help (D48).
+    # The man page follows the merged CLI: -h is the shorthand of --help.
     assert tuple(_group().context_settings["help_option_names"]) == _HELP_OPTIONS
 
 
 @pytest.mark.parametrize("option", [*_option_names(None), *_HELP_OPTIONS])
 def test_man_page_documents_every_global_option(option: str) -> None:
-    # -h is the shorthand of --help on envs and on every command (D48).
+    # -h is the shorthand of --help on envs and on every command.
     assert _mentions(_man_sections()["GLOBAL OPTIONS"], option)
 
 
@@ -291,7 +291,7 @@ def test_man_page_documents_only_global_options_envs_has(option: str) -> None:
 def test_man_page_names_every_help_option_among_those_that_skip_the_connection(
     option: str,
 ) -> None:
-    # D44/D48: help, under either name, reads neither the connection nor the project file.
+    # Help, under either name, reads neither the connection nor the project file.
     paragraph = next(
         paragraph
         for paragraph in _man_sections()["GLOBAL OPTIONS"].split("\n.PP")
@@ -302,7 +302,7 @@ def test_man_page_names_every_help_option_among_those_that_skip_the_connection(
 
 
 def test_man_page_merge_example_shows_the_merged_output_order() -> None:
-    # D52: store load order, sorted by name within a store, a shared variable keeps its
+    # Store load order, sorted by name within a store, a shared variable keeps its
     # first position. The inputs are the ones the MERGE ORDER section names.
     section = _man_sections()["MERGE ORDER"]
     stores = [
@@ -356,12 +356,12 @@ def test_man_page_completion_section_explains_saving_the_script_as_a_file(phrase
 def test_man_page_tui_section_names_store_management_export_and_path_completion(
     phrase: str,
 ) -> None:
-    # D55-D57, as docs/tui.md describes them.
+    # As docs/tui.md describes them.
     assert _mentions(_command_sections()["tui"], phrase), phrase
 
 
 def test_man_page_tui_section_lists_the_new_keys() -> None:
-    # D55-D57: the stores screen's a, d and x, and Tab in a path input.
+    # The stores screen's a, d and x, and Tab in a path input.
     heads = _plain(_tagged_paragraph_heads(_command_sections()["tui"])).split("\n")
     assert [head.split()[-1] for head in heads] == ["a", "d", "x", "Tab"]
 

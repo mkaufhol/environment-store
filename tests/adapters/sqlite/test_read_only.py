@@ -1,4 +1,4 @@
-"""`SetupMode.READ_ONLY` on SQLite: reads what is there and never writes a byte (D43, D54)."""
+"""`SetupMode.READ_ONLY` on SQLite: reads what is there and never writes a byte."""
 
 import hashlib
 from datetime import UTC, datetime

@@ -1,4 +1,4 @@
-"""The shared CLI harness itself (tests/support/cli.py), so C2-C4 can rely on it."""
+"""The shared CLI harness itself (tests/support/cli.py), so the command tests can rely on it."""
 
 import stat
 from dataclasses import replace

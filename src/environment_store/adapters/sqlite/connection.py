@@ -1,4 +1,4 @@
-"""Opening the connection to a SQLite database file (D10, D43, D54).
+"""Opening the connection to a SQLite database file.
 
 A missing file is created, with its missing parent directories, only when asked to (the first
 write); otherwise a missing file gives no connection and a read finds no stores. A read-only
@@ -29,8 +29,8 @@ def connect_file(
 
     Args:
         path: The absolute database path.
-        create: Create a missing file and its missing directories first (D43).
-        read_only: Open read-only (`SetupMode.READ_ONLY`, D54); ignored with `create`.
+        create: Create a missing file and its missing directories first.
+        read_only: Open read-only (`SetupMode.READ_ONLY`); ignored with `create`.
         busy_timeout: Seconds to wait for locks held by other connections.
 
     Returns:
@@ -75,7 +75,7 @@ def _uri_parameters(path: Path, *, create: bool, read_only: bool) -> str:
         # mode=rw: SQLite never creates the file itself (with its default mode, 0644) when it
         # is deleted between the existence check and the connect.
         return "mode=rw"
-    # D54: an immutable file needs no lock, -wal or -shm file, and a WAL database without its
+    # An immutable file needs no lock, -wal or -shm file, and a WAL database without its
     # -wal file has no writer whose commits it could miss. A rollback-journal database (a file
     # system without WAL support keeps that mode) is changed in place by its writers, so only
     # the plain read-only mode, which honours their locks, can read it safely.

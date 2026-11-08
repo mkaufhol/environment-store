@@ -1,7 +1,7 @@
-"""Open a store without asking, with the keys the TUI finds itself (D53, PD 5).
+"""Open a store without asking, with the keys the TUI finds itself.
 
-An encrypted store is opened with the key from `ENV_STORE_KEY_<STORE>` (D53), else with the
-project file's key when it names one (PD 5). When neither gives a working key, the caller asks
+An encrypted store is opened with the key from `ENV_STORE_KEY_<STORE>`, else with the project
+file's key when it names one. When neither gives a working key, the caller asks
 with the `UnlockScreen`; a key that does not fit is reported, naming where it came from.
 """
 
@@ -37,7 +37,7 @@ def open_without_asking(
     name = info.name
     if not info.encrypted:
         return session.open(name)
-    # D53: the key variable comes before the project key; when set, it alone is tried.
+    # The key variable comes before the project key; when set, it alone is tried.
     try:
         secret = session.environment_secret(name)
         if secret is not None:

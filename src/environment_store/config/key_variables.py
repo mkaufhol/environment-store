@@ -1,7 +1,8 @@
-"""An existing store's key from `ENV_STORE_KEY_<STORE>` (spec §4.3, D53).
+"""An existing store's key from `ENV_STORE_KEY_<STORE>`.
 
-The variable sits between an explicit source and the project file's `[keys]` in D53's
-precedence; `SecretResolver` and `EnvironmentStore` both read it through this module. It is
+This serves deployments that hand secrets over as environment variables (e.g. Heroku,
+Kubernetes). The variable sits between an explicit source and the project file's `[keys]` in
+the key precedence; `SecretResolver` and `EnvironmentStore` both read it through this module. It is
 consulted only for encrypted stores: a variable for a plaintext store is ignored, because
 environments are shared. Messages name the variable, never its value.
 """
@@ -59,7 +60,7 @@ class StoreInspector(Protocol):
 
 
 def check_not_empty(text: str, *, what: str) -> str:
-    """Refuse secret text that is empty after D3's newline stripping.
+    """Refuse secret text that is empty once one trailing newline is stripped.
 
     Args:
         text: The raw text.
@@ -71,7 +72,7 @@ def check_not_empty(text: str, *, what: str) -> str:
     Raises:
         KeySourceError: The text is empty after stripping one trailing LF or CRLF.
     """
-    # Exactly one trailing LF or CRLF is stripped, as passphrase_from_text does (D3).
+    # Exactly one trailing LF or CRLF is stripped, as passphrase_from_text does.
     stripped = text[:-2] if text.endswith("\r\n") else text.removesuffix("\n")
     if not stripped:
         message = f"{what} is empty"
@@ -86,11 +87,11 @@ def check_key_variables(
     explicit: Collection[str],
     environ: Mapping[str, str],
 ) -> None:
-    """Refuse encrypted stores of one command that share a set key variable (D53).
+    """Refuse encrypted stores of one command that share a set key variable.
 
     `my-app` and `my_app` both map to `ENV_STORE_KEY_MY_APP`, so it is unclear which store a
     set variable is meant for. Only encrypted stores count: a plaintext store ignores the
-    variable (D53), so it cannot be what the variable is for. There is no problem either when
+    variable, so it cannot be what the variable is for. There is no problem either when
     the variable is not set, or when every such encrypted store has an explicit key.
 
     Args:
@@ -124,7 +125,7 @@ def check_key_variables(
 def secret_from_environment(
     inspector: StoreInspector, store: str, environ: Mapping[str, str]
 ) -> Secret | None:
-    """Return an existing store's secret from `ENV_STORE_KEY_<STORE>`, if it gives one (D53).
+    """Return an existing store's secret from `ENV_STORE_KEY_<STORE>`, if it gives one.
 
     Args:
         inspector: Reads the store's metadata (only when the variable is set).
@@ -148,7 +149,7 @@ def secret_from_environment(
 
 
 def parse_key_variable(inspector: StoreInspector, store: str, text: str) -> Secret:
-    """Interpret the value of an encrypted store's key variable (D53).
+    """Interpret the value of an encrypted store's key variable.
 
     Args:
         inspector: Interprets the text by the store's key mode.

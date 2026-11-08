@@ -1,4 +1,4 @@
-"""Path completion of the TUI's path inputs (D57): the suggester and the Tab key."""
+"""Path completion of the TUI's path inputs: the suggester and the Tab key."""
 
 import asyncio
 import os

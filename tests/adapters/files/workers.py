@@ -24,7 +24,7 @@ _BARRIER_TIMEOUT: Final[float] = 60.0
 
 
 def increment(url: str, barrier: "Barrier", rounds: int) -> None:
-    """Increment `COUNT` of the counter store `rounds` times, retrying on conflicts (D7)."""
+    """Increment `COUNT` of the counter store `rounds` times, retrying on conflicts."""
     with open_adapter(url) as adapter:
         barrier.wait(_BARRIER_TIMEOUT)
         done = 0

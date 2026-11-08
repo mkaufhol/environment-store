@@ -1,4 +1,4 @@
-"""`StoreSession`: what the TUI screens do with the library (PD 29, D7)."""
+"""`StoreSession`: what the TUI screens do with the library; stale writes conflict."""
 
 from pathlib import Path
 

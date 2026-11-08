@@ -1,4 +1,4 @@
-"""`load_for_reading`: store lists, keys, order of work (§6.0, PD 5, PD 18)."""
+"""`load_for_reading`: store lists, keys, order of work."""
 
 from pathlib import Path
 

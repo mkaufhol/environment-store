@@ -1,8 +1,8 @@
-"""The JSON and TOML file adapters: one file per store in a directory (D9, spec §3.2).
+"""The JSON and TOML file adapters: one file per store in a directory.
 
 - `<directory>/<store>.json` (or `.toml`) holds one store; the store name is the file stem.
-  Files with another extension or a stem that is not a valid store name (D27) are ignored.
-- Create, write and delete run under the store's lock file `.<store>.<ext>.lock` (D7). A write
+  Files with another extension or a stem that is not a valid store name are ignored.
+- Create, write and delete run under the store's lock file `.<store>.<ext>.lock`. A write
   checks the revision under the lock, writes a temporary file in the same directory and moves it
   into place with `os.replace`, so readers see the old or the new file, never a mix.
 - Create publishes the temporary file with a hard link (`os.link`), which fails if the store
@@ -12,8 +12,8 @@
   of the store takes.
 - Every per-store operation requires a directory entry named exactly `<store>.<ext>`. On a
   case-insensitive file system (macOS, Windows) `Base.json` would otherwise be opened as
-  `base.json`, although listing ignores it (D27): such a file is never read, replaced or
-  deleted, and creating `base` next to it fails.
+  `base.json`, although listing ignores it (store names are lowercase): such a file is never
+  read, replaced or deleted, and creating `base` next to it fails.
 """
 
 import errno
@@ -64,7 +64,7 @@ def open_json(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "FileAdapter":
 
     Args:
         url: `json://relative/dir`, `json:///absolute/dir` or `json://~/dir`.
-        setup: Files need no setup; `READ_ONLY` refuses every write (D54).
+        setup: Files need no setup; `READ_ONLY` refuses every write.
 
     Returns:
         The adapter.
@@ -82,7 +82,7 @@ def open_toml(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "FileAdapter":
 
     Args:
         url: `toml://relative/dir`, `toml:///absolute/dir` or `toml://~/dir`.
-        setup: Files need no setup; `READ_ONLY` refuses every write (D54).
+        setup: Files need no setup; `READ_ONLY` refuses every write.
 
     Returns:
         The adapter.
@@ -102,7 +102,7 @@ class FileAdapter:
         directory: The store directory; created on the first write.
         serializer: The file format.
         setup: The setup mode it was opened with; files need no setup, `READ_ONLY` refuses
-            writes (D54).
+            writes.
         lock_timeout: Seconds to wait for another writer of the same store.
     """
 
@@ -125,7 +125,7 @@ class FileAdapter:
         Args:
             directory: The store directory.
             serializer: The file format.
-            setup: Files need no setup; `READ_ONLY` refuses every write (D54).
+            setup: Files need no setup; `READ_ONLY` refuses every write.
             lock_timeout: Seconds to wait for another writer of the same store.
         """
         self.directory = directory
@@ -220,7 +220,7 @@ class FileAdapter:
         )
 
     def write_store(self, record: StoreRecord, *, expected_revision: int) -> None:
-        """Replace a store file if its revision is still `expected_revision` (D7).
+        """Replace a store file if its revision is still `expected_revision`.
 
         Args:
             record: The new content at revision `expected_revision + 1`.
@@ -302,7 +302,8 @@ class FileAdapter:
             raise BackendError(message)
 
     def _path(self, name: str) -> Path:
-        # Safe: every caller validated `name` against D27, which allows no separators or dots.
+        # Safe: every caller validated `name` against the store name rule, which allows no
+        # separators or dots.
         return self.directory / f"{name}{self.serializer.extension}"
 
     def _not_found(self, name: str) -> StoreNotFoundError:

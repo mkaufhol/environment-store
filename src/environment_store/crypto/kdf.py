@@ -1,4 +1,4 @@
-"""Argon2id key derivation for passphrase stores (spec §4.2, D34).
+"""Argon2id key derivation for passphrase stores.
 
 The parameters are stored with each store (`KdfParams`), so they can be raised later without
 breaking existing stores. Their upper bounds are enforced by `KdfParams` itself, so a tampered
@@ -16,14 +16,14 @@ from environment_store.core.secrets import KEY_LENGTH, KeyMaterial, Passphrase
 __all__ = ["SALT_LENGTH", "derive_key", "new_kdf_params"]
 
 SALT_LENGTH: Final[int] = 16
-"""Length of a new random salt in bytes (D34)."""
+"""Length of a new random salt in bytes."""
 
 
 def new_kdf_params() -> KdfParams:
     """Return parameters for a new passphrase store.
 
     Returns:
-        The spec defaults (RFC 9106 second recommendation: `t=3`, `m=64 MiB`, `p=4`) with a
+        The defaults (RFC 9106 second recommendation: `t=3`, `m=64 MiB`, `p=4`) with a
         fresh random 16-byte salt.
     """
     return KdfParams(salt=secrets.token_bytes(SALT_LENGTH))

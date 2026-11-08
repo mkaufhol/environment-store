@@ -1,4 +1,4 @@
-"""The statements on the `stores` table and the conversions of its rows (spec §3.3).
+"""The statements on the `stores` table and the conversions of its rows.
 
 Statements are templates for `sql.SQL.format(schema=..., ...)`; values are always parameters.
 The session is pinned to UTC; driver values are untrusted and validated by the shared codec.
@@ -40,7 +40,7 @@ READ: Final = sql.SQL("SELECT {columns} FROM {schema}.stores WHERE name = %s")
 CREATE: Final = sql.SQL(
     "INSERT INTO {schema}.stores ({columns}) VALUES ({values}) ON CONFLICT (name) DO NOTHING"
 )
-# The revision check and the replacement are one statement, so the check is atomic (D7).
+# The revision check and the replacement are one statement, so the check is atomic.
 WRITE: Final = sql.SQL(
     "UPDATE {schema}.stores SET encrypted = %s, cipher_meta = %s, variables = %s, "
     "ciphertext = %s, revision = %s, created_at = %s, updated_at = %s "

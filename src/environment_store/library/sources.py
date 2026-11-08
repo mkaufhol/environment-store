@@ -1,4 +1,4 @@
-"""Load sources of the public library: a store and, optionally, its key (spec §7.3, PD 12)."""
+"""Load sources of the public library: a store and, optionally, its key."""
 
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
@@ -10,7 +10,7 @@ from environment_store.core.validation import validate_store_name
 __all__ = ["KeyInput", "Source", "check_key_input"]
 
 type KeyInput = Path | KeyMaterial | Passphrase
-"""A key as the library takes it: a key or passphrase file, a key, or a passphrase (PD 12).
+"""A key as the library takes it: a key or passphrase file, a key, or a passphrase.
 
 A plain `str` is refused, because it could be a path or a passphrase.
 """
@@ -47,7 +47,7 @@ class Source:
     keyword-only.
 
     Attributes:
-        name: The store name (D27).
+        name: The store name.
         key: The store's key, or `None` for a plaintext store (or to be prompted).
     """
 

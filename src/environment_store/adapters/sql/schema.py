@@ -1,9 +1,9 @@
-"""SQL schema version 1 for SQLite and PostgreSQL (D12).
+"""SQL schema version 1 for SQLite and PostgreSQL.
 
 Both dialects share one layout: a key-value `meta` table that marks the database as ours and
-holds the schema version, and one `stores` row per store (D8). The statements are constants and
+holds the schema version, and one `stores` row per store. The statements are constants and
 contain no user input. The PostgreSQL statements carry a `{schema}` placeholder for the dedicated
-schema (D13), which the PostgreSQL adapter fills with `psycopg.sql.Identifier`, never as text.
+schema, which the PostgreSQL adapter fills with `psycopg.sql.Identifier`, never as text.
 """
 
 from typing import Final
@@ -29,7 +29,7 @@ META_TABLE: Final = "meta"
 META_APP_KEY: Final = "app"
 META_VERSION_KEY: Final = "schema_version"
 META_APP: Final = "environment-store"
-"""Value of `meta.app` by which the tool recognises its own database (D12)."""
+"""Value of `meta.app` by which the tool recognises its own database."""
 
 STORES_TABLE: Final = "stores"
 STORES_COLUMNS: Final[tuple[str, ...]] = (
@@ -109,4 +109,4 @@ POSTGRES_SCHEMA_V1: Final[tuple[str, ...]] = (
 """Statements that create schema version 1 inside the (existing) `{schema}`, in order."""
 
 POSTGRES_CREATE_SCHEMA: Final = "CREATE SCHEMA IF NOT EXISTS {schema}"
-"""Creates the dedicated schema before `POSTGRES_SCHEMA_V1`, in the same transaction (D13)."""
+"""Creates the dedicated schema before `POSTGRES_SCHEMA_V1`, in the same transaction."""

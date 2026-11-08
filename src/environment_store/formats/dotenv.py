@@ -1,4 +1,4 @@
-r"""dotenv import and export (spec §6.10, §6.11, D37).
+r"""dotenv import and export.
 
 **Writing** — every line is `KEY=VALUE`, quoted so that both python-dotenv and Docker Compose read
 the value back exactly:
@@ -11,7 +11,7 @@ the value back exactly:
 4. a value that needs double quotes **and** contains `$` is refused: Compose interpolates `$` in
    double quotes and no escape works in both tools.
 
-Measured against python-dotenv 1.2 (golden tests), two refinements of D37 keep it exact:
+Measured against python-dotenv 1.2 (golden tests), two refinements keep it exact:
 python-dotenv decodes `\\` (and `\'`) inside single quotes and a trailing `\` escapes the closing
 quote, so values containing `\\` or ending in `\` use double quotes (rule 3; any other backslash
 stays literal in single quotes); and it interpolates `${…}` in *every* quoting style, single
@@ -75,7 +75,7 @@ _READ_ESCAPES: Final[Mapping[str, str]] = MappingProxyType(
 
 
 class DotenvValueError(ValidationError):
-    """A value cannot be written to a dotenv file that both readers read back exactly (D37).
+    """A value cannot be written to a dotenv file that both readers read back exactly.
 
     Attributes:
         name: The variable whose value is refused; the value is never part of the error.
@@ -99,11 +99,11 @@ class DotenvValueError(ValidationError):
 
 
 def dumps(variables: Mapping[str, str]) -> str:
-    """Serialize variables as dotenv lines (D37).
+    """Serialize variables as dotenv lines.
 
     Args:
-        variables: Keys and values, in output order. Keys are variable names (D33); nested keys
-            (`STORE__VAR`) are too, because store names start with a letter (D40).
+        variables: Keys and values, in output order. Keys are variable names; nested keys
+            (`STORE__VAR`) are too, because store names start with a letter.
 
     Returns:
         One `KEY=VALUE` line per variable, each ending with a newline; empty for no variables.
@@ -166,7 +166,7 @@ def loads(text: str) -> dict[str, str]:
 
     Raises:
         ValidationError: A statement is malformed (no `=`, unterminated quotes, text after a
-            quoted value), a name does not match `VARIABLE_NAME_PATTERN` (D33), or a value
+            quoted value), a name does not match `VARIABLE_NAME_PATTERN`, or a value
             contains NUL or a lone surrogate. The message names the line but never echoes a
             value.
     """

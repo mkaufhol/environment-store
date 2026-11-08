@@ -1,4 +1,4 @@
-"""The Unlock dialog says what each field takes for the store's key mode (D3).
+"""The Unlock dialog says what each field takes for the store's key mode.
 
 The hidden field takes the key text of a `keyfile` store or the passphrase of a `passphrase`
 store; the path field takes a file only. Key text typed into the visible path field is refused

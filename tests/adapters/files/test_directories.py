@@ -1,4 +1,4 @@
-"""Private directories of the file-based backends (D43), for JSON/TOML and for SQLite.
+"""Private directories of the file-based backends, for JSON/TOML and for SQLite.
 
 Both adapter subpackages carry the same helper, as they may not import each other.
 """

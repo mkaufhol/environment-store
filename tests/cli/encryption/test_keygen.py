@@ -1,4 +1,4 @@
-"""`envs keygen`: key files and printed keys (spec §4.5, D4, D33, PD 10, PD 17)."""
+"""`envs keygen`: key files and printed keys."""
 
 import re
 import stat
@@ -85,7 +85,7 @@ def test_keygen_opens_no_store(cli_json: CliHarness) -> None:
     ids=["bad-toml", "unknown-key", "password-in-connection"],
 )
 def test_keygen_ignores_the_project_file(cli_json: CliHarness, project: str) -> None:
-    # D44: a broken .envstore.toml cannot stop keygen, and it prints no warning either.
+    # A broken .envstore.toml cannot stop keygen, and it prints no warning either.
     cli_json.project_file(project)
 
     result = cli_json.invoke("keygen", "-", connection=False)

@@ -1,4 +1,4 @@
-"""The command line interface `envs` / `environment-store` (spec §6, D19, D20).
+"""The command line interface `envs` / `environment-store`.
 
 Needs the `cli` extra (typer). This package module imports no typer, so `main()` can report a
 missing extra instead of failing with an import error.

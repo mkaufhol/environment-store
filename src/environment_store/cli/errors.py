@@ -1,8 +1,8 @@
-"""Exit codes and messages of the CLI: the mapping from library errors (D24, D47, spec §6).
+"""Exit codes and messages of the CLI: the mapping from library errors.
 
 Library errors name library parameters (`overwrite=True`, `force=True`, `fmt=`, `key=`,
 `nested=True`) in their `hint`; the CLI shows the error's `detail` with its own option in their
-place (D47).
+place.
 """
 
 from enum import IntEnum
@@ -47,7 +47,7 @@ _CATEGORIES: tuple[tuple[type[EnvironmentStoreError], ExitCode], ...] = (
 
 
 def exit_code_for(error: EnvironmentStoreError) -> ExitCode:
-    """Return the exit code of an error by its category class (D24).
+    """Return the exit code of an error by its category class.
 
     Args:
         error: The error.
@@ -63,7 +63,7 @@ def exit_code_for(error: EnvironmentStoreError) -> ExitCode:
 
 _KEY_HINT: Final = "pass it with -k <path> (or -k - for stdin)"
 
-# Error class -> the CLI's remedy, replacing the library's hint (D47). Checked in order.
+# Error class -> the CLI's remedy, replacing the library's hint. Checked in order.
 _CLI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
     (VariableExistsError, "use -o/--overwrite to replace them"),
     (OutputFileExistsError, "use --force to replace it"),
@@ -79,7 +79,7 @@ _CLI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
 
 
 def message_for(error: EnvironmentStoreError) -> str:
-    """Return the message the CLI prints for a library error (D47).
+    """Return the message the CLI prints for a library error.
 
     An error that carries a library hint and has a CLI remedy shows its detail with the CLI's
     option instead; every other error keeps its message.
@@ -91,7 +91,7 @@ def message_for(error: EnvironmentStoreError) -> str:
         The message, without the `Error: ` prefix.
     """
     if isinstance(error, KeyRequiredError) and error.store is not None:
-        # The store's key variable is a source of the CLI as well (D53).
+        # The store's key variable is a source of the CLI as well.
         return f"{error.detail}; {_KEY_HINT}, or set {key_variable(error.store)}"
     if error.hint is not None:
         for category, hint in _CLI_HINTS:

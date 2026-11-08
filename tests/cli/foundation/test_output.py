@@ -1,4 +1,4 @@
-"""Output helpers: data on stdout, diagnostics on stderr, JSON documents (D33, spec §6)."""
+"""Output helpers: data on stdout, diagnostics on stderr, JSON documents."""
 
 import json
 import sys

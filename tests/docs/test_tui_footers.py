@@ -1,7 +1,7 @@
-"""docs/tui.md shows the footers the TUI really shows (D46, D55-D57).
+"""docs/tui.md shows the footers the TUI really shows.
 
-Every screen's footer lists the keys that work there (D46), and it changes with the focus: a path
-input adds `tab Complete path` (D57). The test drives the TUI headless through every screen and
+Every screen's footer lists the keys that work there, and it changes with the focus: a path
+input adds `tab Complete path`. The test drives the TUI headless through every screen and
 dialog, collects each footer, and compares them with the guide in both directions.
 """
 

@@ -102,7 +102,7 @@ def test_list_stores_lists_every_store_sorted_with_its_key_mode(service: StoreSe
 
 
 def test_delete_store_needs_no_key_for_an_encrypted_store(service: StoreService) -> None:
-    # D21: a store whose key is lost must still be removable.
+    # A store whose key is lost must still be removable.
     service.create_store("vault", secret=KEY)
 
     service.delete_store("vault")
@@ -115,7 +115,7 @@ def test_delete_missing_store_raises_store_not_found(service: StoreService) -> N
         service.delete_store("missing")
 
 
-# --- parse_secret (D3) -------------------------------------------------------------------------
+# --- parse_secret ------------------------------------------------------------------------------
 
 
 def test_parse_secret_for_a_keyfile_store_parses_the_key_file(service: StoreService) -> None:
@@ -297,7 +297,7 @@ def test_set_variables_on_an_encrypted_store_keeps_no_plaintext_in_the_record(
 def test_every_write_reencrypts_with_a_fresh_nonce_and_keeps_the_metadata(
     service: StoreService, backend: MemoryBackend
 ) -> None:
-    # The salt stays the same until rekey (D34).
+    # The salt stays the same until rekey.
     service.create_store("vault", secret=PASSPHRASE)
     first = backend.read("vault")
 
@@ -468,8 +468,8 @@ def test_service_defaults_to_the_real_clock(backend: MemoryBackend) -> None:
     assert service.read_variables("base") == {}
 
 
-def test_service_defaults_to_the_spec_kdf_parameters(backend: MemoryBackend) -> None:
-    # One real Argon2id run (t=3, m=64 MiB, p=4, D34): the default must not be weakened.
+def test_service_defaults_to_the_rfc_9106_kdf_parameters(backend: MemoryBackend) -> None:
+    # One real Argon2id run (t=3, m=64 MiB, p=4): the default must not be weakened.
     StoreService(backend.open()).create_store("vault", secret=PASSPHRASE)
 
     meta = backend.read("vault").cipher_meta

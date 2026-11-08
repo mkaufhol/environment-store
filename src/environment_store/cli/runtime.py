@@ -50,14 +50,14 @@ class Runtime:
         cwd: Returns where the project file search starts.
         project_boundary: The last directory the project file search looks in; `None` for the
             filesystem root.
-        uid: The owner a project file must have (PD 32); `None` for the effective user.
-        stdin_is_tty: Whether stdin is a terminal (prompts, D3, D35).
-        stdout_is_tty: Whether stdout is a terminal (`get` adds a newline only there, D33).
+        uid: The owner a project file must have; `None` for the effective user.
+        stdin_is_tty: Whether stdin is a terminal (prompts).
+        stdout_is_tty: Whether stdout is a terminal (`get` adds a newline only there).
         prompter: Asks the user; `None` for a `TerminalPrompter`.
-        exec_process: Replaces the process for `run` (D33).
+        exec_process: Replaces the process for `run`.
         clock: Source of timestamps.
-        kdf_params_factory: Argon2id parameters for new passphrases; `None` for the spec
-            defaults (D34).
+        kdf_params_factory: Argon2id parameters for new passphrases; `None` for the
+            `KdfParams` defaults.
         adapter_opener: Opens adapters for connection strings.
     """
 

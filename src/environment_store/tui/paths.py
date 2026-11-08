@@ -1,4 +1,4 @@
-"""Path completion for every path input of the TUI (D57).
+"""Path completion for every path input of the TUI.
 
 `PathSuggester` suggests the first existing file or directory that completes what was typed:
 `~` is expanded for the lookup but kept in the suggestion (only at the start, like the CLI's
@@ -24,7 +24,7 @@ __all__ = ["PathInput", "PathSuggester", "complete_path", "expand_path"]
 
 
 def complete_path(typed: str) -> str | None:
-    """Return the first existing entry that completes a typed path (D57).
+    """Return the first existing entry that completes a typed path.
 
     Args:
         typed: The text of the path input.
@@ -52,7 +52,7 @@ def _first_completion(entries: Iterable[os.DirEntry[str]], prefix: str) -> str |
     """Return the first entry name (with `/` for a directory) that is longer than `prefix`.
 
     One pass without sorting, and only the exact match and the chosen entry are asked whether
-    they are directories, so a large directory stays cheap on every keystroke (D57).
+    they are directories, so a large directory stays cheap on every keystroke.
     """
     exact: os.DirEntry[str] | None = None
     shortest: os.DirEntry[str] | None = None
@@ -94,7 +94,7 @@ def expand_path(text: str, *, what: str) -> Path:
 
 
 def _expand_home(text: str) -> Path:
-    """Expand a leading `~`, as `-k` of the CLI does (D57, D53).
+    """Expand a leading `~`, as `-k` of the CLI does.
 
     Checked on the text: `Path` drops a leading `./`, so `Path("./~/a")` is `Path("~/a")`
     and `expanduser` would wrongly read it as the home directory.
@@ -107,7 +107,7 @@ def _expand_home(text: str) -> Path:
 
 
 class PathSuggester(Suggester):
-    """Suggests existing files and directories (D57); never cached, the disk changes.
+    """Suggests existing files and directories; never cached, the disk changes.
 
     The lookup runs in a worker thread, so a slow or hung directory (a network mount, an
     automount path) never blocks the event loop and freezes the TUI.
@@ -131,7 +131,7 @@ class PathSuggester(Suggester):
 
 
 class PathInput(Input):
-    """An input for a path: suggests completions, `Tab` accepts them (D57)."""
+    """An input for a path: suggests completions, `Tab` accepts them."""
 
     BINDINGS: ClassVar[list[BindingType]] = [Binding("tab", "complete", "Complete path")]
 

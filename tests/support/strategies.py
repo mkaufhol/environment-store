@@ -76,12 +76,12 @@ _TRICKY_VALUES: Final[tuple[str, ...]] = (
 
 
 def store_names() -> st.SearchStrategy[str]:
-    """Valid store names (D27, D40): they start with a letter."""
+    """Valid store names: they start with a letter."""
     return st.from_regex(STORE_NAME_PATTERN, fullmatch=True)
 
 
 def invalid_store_names() -> st.SearchStrategy[str]:
-    """Strings that violate D27 / D40: path traversal, uppercase and digit-leading names."""
+    """Strings that are not valid store names: path traversal, uppercase and digit-leading names."""
     return st.one_of(
         st.sampled_from(_DANGEROUS_STORE_NAMES),
         st.text(max_size=70).filter(lambda name: STORE_NAME_PATTERN.fullmatch(name) is None),
@@ -89,7 +89,7 @@ def invalid_store_names() -> st.SearchStrategy[str]:
 
 
 def variable_names() -> st.SearchStrategy[str]:
-    """Valid, portable POSIX variable names (D33)."""
+    """Valid, portable POSIX variable names."""
     return st.from_regex(VARIABLE_NAME_PATTERN, fullmatch=True)
 
 
@@ -102,7 +102,7 @@ def invalid_variable_names() -> st.SearchStrategy[str]:
 
 
 def values() -> st.SearchStrategy[str]:
-    """Valid values (D28): empty, multi-line, unicode, quotes, `$`, `=`, surrounding whitespace.
+    """Valid values: empty, multi-line, unicode, quotes, `$`, `=`, surrounding whitespace.
 
     Never NUL and never lone surrogates.
     """
@@ -123,7 +123,7 @@ def timestamps() -> st.SearchStrategy[datetime]:
 
 @st.composite
 def kdf_params(draw: st.DrawFn) -> KdfParams:
-    """Valid Argon2id parameters within the D34 bounds.
+    """Valid Argon2id parameters within the accepted bounds.
 
     They may be expensive: use them as metadata, not to derive keys.
     """

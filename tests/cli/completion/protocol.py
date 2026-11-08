@@ -1,4 +1,4 @@
-"""Drive the completion protocol in-process, as the scripts of bash, zsh and fish do (D54)."""
+"""Drive the completion protocol in-process, as the scripts of bash, zsh and fish do."""
 
 import shlex
 from collections.abc import Mapping

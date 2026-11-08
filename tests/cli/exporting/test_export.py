@@ -1,4 +1,4 @@
-"""`envs export`: formats, files, nested mode, refusals and keys (spec §6.11, D22, D30, D37)."""
+"""`envs export`: formats, files, nested mode, refusals and keys."""
 
 import json
 import stat
@@ -174,10 +174,10 @@ def test_unknown_type_is_a_usage_error(cli_json: CliHarness) -> None:
     assert result.stdout == ""
 
 
-# --- golden output (spec §6.11) -------------------------------------------------------------------
+# --- golden output --------------------------------------------------------------------------------
 
 
-def test_nested_json_matches_the_spec_example(cli: CliHarness) -> None:
+def test_nested_json_matches_the_golden_output(cli: CliHarness) -> None:
     _arrange(cli)
     cli.store().delete("base", ["PORT"])
 
@@ -191,7 +191,7 @@ def test_nested_json_matches_the_spec_example(cli: CliHarness) -> None:
     assert list(json.loads(result.stdout)) == ["base", "customer-a"]
 
 
-def test_nested_dotenv_matches_the_spec_example(cli: CliHarness) -> None:
+def test_nested_dotenv_matches_the_golden_output(cli: CliHarness) -> None:
     library = cli.store()
     library.create_store("base_conf")
     library.set("base_conf", "DB_HOST", "localhost")
@@ -253,7 +253,7 @@ def test_project_store_list_is_the_default(cli_json: CliHarness) -> None:
     assert result.stdout == "DB_HOST=localhost\nPORT=5432\n"
 
 
-# --- D37 refusals ---------------------------------------------------------------------------------
+# --- dotenv refusals: values python-dotenv or Compose would interpolate ---------------------------
 
 
 @pytest.mark.parametrize("value", ["${HOME}", "it's $HOME", 'a "$x"\nb'])

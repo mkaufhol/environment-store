@@ -15,7 +15,7 @@ def test_cipher_meta_round_trips_through_json_text(meta: CipherMeta) -> None:
 
 @given(cipher_metas())
 def test_cipher_meta_round_trips_through_toml_text(meta: CipherMeta) -> None:
-    # The TOML file adapter stores the metadata as a [cipher] table (spec §3.2).
+    # The TOML file adapter stores the metadata as a [cipher] table.
     document = tomllib.loads(toml_dumps({"cipher": meta.to_json()}))
 
     assert CipherMeta.from_json(document["cipher"]) == meta

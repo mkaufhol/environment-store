@@ -1,6 +1,7 @@
-"""`envs set` and `envs rm`: change the variables of one store in one write (spec §6.8, §6.9).
+"""`envs set` and `envs rm`: change the variables of one store in one write.
 
-Writing commands name their store with `-s` and never take it from the project file (D33).
+Writing commands name their store with `-s` and never take it from the project file, so a
+write never lands in a store by accident.
 Both validate their arguments before reading a key, so a typo never costs a prompt.
 """
 
@@ -77,7 +78,7 @@ def set_variables(
         values = parsed
         secret = existing_secret(ctx, store, key)
     else:
-        # D35: without a prompt (piped stdin or --noinput) the value comes from stdin.
+        # Without a prompt (piped stdin or --noinput) the value comes from stdin.
         from_stdin = not state.interactive()
         if from_stdin:
             # Claimed before the key, so `-k -` is refused before anything is read.
@@ -111,7 +112,10 @@ def remove_variables(
 
 
 def strip_one_newline(text: str) -> str:
-    """Remove exactly one trailing line ending, CRLF or LF, from a piped value (D38, PD 25).
+    """Remove exactly one trailing line ending, CRLF or LF, from a piped value.
+
+    `echo secret | envs set ...` then stores `secret`; values that must end in a newline
+    are set with `import`.
 
     Args:
         text: The text read from stdin.
@@ -127,7 +131,7 @@ def strip_one_newline(text: str) -> str:
 
 
 def _read_value(text: str, *, store: str, name: str) -> str:
-    # D41: zero bytes (< /dev/null, a forgotten pipe in CI) must never blank a variable.
+    # Zero bytes (< /dev/null, a forgotten pipe in CI) must never blank a variable.
     if not text:
         message = (
             f"no value was read from stdin (it was empty); to set an empty value, send a "
@@ -139,7 +143,7 @@ def _read_value(text: str, *, store: str, name: str) -> str:
 
 
 def _parse_assignments(arguments: Sequence[str]) -> dict[str, str] | str:
-    """Split `set`'s arguments into KEY=VALUE pairs or the one bare KEY (D18).
+    """Split `set`'s arguments into KEY=VALUE pairs or the one bare KEY.
 
     Returns:
         The pairs, or the bare name.

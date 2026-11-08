@@ -1,4 +1,4 @@
-"""`envs rm-store`: delete a store, no key needed, confirmed (spec §6.4, D21, D33, D35)."""
+"""`envs rm-store`: delete a store, no key needed, confirmed."""
 
 import pytest
 

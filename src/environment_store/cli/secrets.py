@@ -1,13 +1,14 @@
-"""Secrets for commands: an existing store's key, a new secret, generated key files (D3, PD 33).
+"""Secrets for commands: an existing store's key, a new secret, generated key files.
 
-- `existing_secret`: `-k path|-` > `ENV_STORE_KEY_<STORE>` (D53) > the project file's
-  `[keys]` (PD 5) > a prompt when interactive > `KeyRequiredError` (exit 4).
-- `new_secret`: exactly one of the new-key option, `--generate-key` and `--passphrase`
-  (PD 24); `--generate-key -` is refused for every command. `new_secret_choice` checks the
-  options alone, so a command can refuse them before it asks for an existing key.
+- `existing_secret`: `-k path|-` > `ENV_STORE_KEY_<STORE>` > the project file's `[keys]` (also
+  for writing commands) > a prompt when interactive > `KeyRequiredError` (exit 4).
+- `new_secret`: exactly one of the new-key option, `--generate-key` and `--passphrase`;
+  `--generate-key -` is refused for every command, so no key file is literally named `-`.
+  `new_secret_choice` checks the options alone, so a command can refuse them before it asks
+  for an existing key.
 - `keep_or_discard`: wraps the writing library call; after success it warns about a new secret
-  read from stdin (D45), after a failure it removes a generated key file only when the store
-  provably does not use it (PD 33).
+  read from stdin, after a failure it removes a generated key file only when the store
+  provably does not use it: deleting the only key of a committed store would lose its data.
 """
 
 from collections.abc import Generator
@@ -57,7 +58,7 @@ __all__ = [
 _STDIN_PATH: Final = Path("-")
 # An empty --generate-key value arrives as Path(""), which is Path(".").
 _NO_FILE_PATH: Final = Path()
-# Raised before anything is written (PD 33). AlreadyExistsError is narrowed per command below.
+# Raised before anything is written. AlreadyExistsError is narrowed per command below.
 _BEFORE_WRITE: Final = (
     ValidationError,
     ConfigurationError,
@@ -95,7 +96,7 @@ def existing_secret(ctx: typer.Context, store: str, key: str | None) -> Secret |
 def resolve_existing(
     state: CliState, resolver: SecretResolver, store: str, source: KeySource | None
 ) -> Secret | None:
-    """Resolve one store's secret by the precedence of `SecretResolver.existing` (D53).
+    """Resolve one store's secret by the precedence of `SecretResolver.existing`.
 
     Args:
         state: The invocation state (for the project file's `[keys]`).
@@ -107,14 +108,14 @@ def resolve_existing(
         The secret, or `None` for a plaintext store.
 
     Raises:
-        NotEncryptedError: A project key for a plaintext store names the project file (PD 5).
+        NotEncryptedError: A project key for a plaintext store names the project file.
         KeyModeMismatchError: A key file for a passphrase store, with what to do instead.
     """
     try:
         return _resolve_existing(state, resolver, store, source)
     except KeyModeMismatchError as error:
         if resolver.uses_key_variable(store, source):
-            # The message names the variable; -k is not what the user gave (D53).
+            # The message names the variable; -k is not what the user gave.
             raise
         message = (
             f"{error}: pass the passphrase file with -k (or -k - for stdin), or switch the "
@@ -163,7 +164,7 @@ def new_secret(
         The new secret, or `None`.
 
     Raises:
-        ValidationError: More than one option, `--generate-key -` (PD 24), or an empty path.
+        ValidationError: More than one option, `--generate-key -`, or an empty path.
     """
     choice = new_secret_choice(
         key=key, generate=generate, passphrase=passphrase, key_option=key_option
@@ -189,7 +190,7 @@ def new_secret_choice(
         The choice, or `None` if no new-secret option was given.
 
     Raises:
-        ValidationError: More than one option, `--generate-key -` (PD 24), or an empty path.
+        ValidationError: More than one option, `--generate-key -`, or an empty path.
     """
     given = sum((key is not None, generate is not None, passphrase))
     if given > 1:
@@ -215,10 +216,10 @@ def new_secret_choice(
 def keep_or_discard(
     new: NewSecret | None, *, target: str, store: EnvironmentStore, creates_target: bool
 ) -> Generator[None]:
-    """Remove a generated key file after a failure only if the store cannot use it (PD 33).
+    """Remove a generated key file after a failure only if the store cannot use it.
 
     After success, a secret read from stdin is kept nowhere by envs, so a warning names the
-    store that cannot be read again without it (D45).
+    store that cannot be read again without it.
 
     Args:
         new: The new secret, or `None` (then nothing happens).
@@ -237,7 +238,7 @@ def keep_or_discard(
             _after_failure(new, new.generated, error, target, store, creates_target=creates_target)
         raise
     if new is not None and new.from_stdin:
-        # Only once the store is written: a failed command encrypts nothing with it (D45).
+        # Only once the store is written: a failed command encrypts nothing with it.
         what = "key" if isinstance(new.secret, KeyMaterial) else "passphrase"
         err(
             f"Warning: envs does not save this {what}; keep it, or store '{target}' cannot be "

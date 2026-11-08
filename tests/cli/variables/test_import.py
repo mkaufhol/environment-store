@@ -1,5 +1,4 @@
-"""`envs import`: fill an existing store from a dotenv, JSON or TOML file (spec §6.10, D22, D33,
-D37, PD 27, PD 34, PD 35)."""
+"""`envs import`: fill an existing store from a dotenv, JSON or TOML file."""
 
 import json
 from pathlib import Path
@@ -333,7 +332,7 @@ def test_export_then_import_round_trips(fmt: Format, variables: dict[str, str]) 
     try:
         document = environment.dumps(fmt)
     except ValidationError:
-        # dotenv refuses values it cannot write exactly (D37); json and toml hold everything.
+        # dotenv refuses values it cannot write exactly; json and toml hold everything.
         reject()
     with temporary_cli() as cli:
         cli.store().create_store("a")

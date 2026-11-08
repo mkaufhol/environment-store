@@ -10,13 +10,13 @@ from environment_store.core.validation import (
     validate_variables,
 )
 
-# --- store names (D27) -------------------------------------------------------------------------
+# --- store names -------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "name", ["a", "a9", "base_conf", "customer-a", "a1-b2_c3", "x" * 63, "a--b__c"]
 )
-def test_validate_store_name_accepts_names_matching_d27_and_d40(name: str) -> None:
+def test_validate_store_name_accepts_lowercase_names_starting_with_a_letter(name: str) -> None:
     assert validate_store_name(name) == name
 
 
@@ -40,7 +40,7 @@ def test_validate_store_name_accepts_names_matching_d27_and_d40(name: str) -> No
         "a\x00",
     ],
 )
-def test_validate_store_name_rejects_names_violating_d27(name: str) -> None:
+def test_validate_store_name_rejects_bad_case_length_and_characters(name: str) -> None:
     with pytest.raises(ValidationError, match="invalid store name"):
         validate_store_name(name)
 
@@ -56,13 +56,13 @@ def test_validate_store_name_error_names_the_rule() -> None:
 
 
 @pytest.mark.parametrize("name", ["9lives", "0abc", "0", "1-a", "2_b"])
-def test_validate_store_name_rejects_names_starting_with_a_digit_d40(name: str) -> None:
-    # D40: the nested prefix `STORE__VAR` must always be a valid shell variable name.
+def test_validate_store_name_rejects_names_starting_with_a_digit(name: str) -> None:
+    # The nested prefix `STORE__VAR` must always be a valid shell variable name.
     with pytest.raises(ValidationError, match=r"starting with a letter \("):
         validate_store_name(name)
 
 
-# --- variable names (D33) ----------------------------------------------------------------------
+# --- variable names ----------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", ["A", "_", "_a", "DB_HOST", "db_host", "a1", "X" * 300])
@@ -85,7 +85,7 @@ def test_variable_names_are_case_sensitive() -> None:
     assert validate_variable_name("db_host") != validate_variable_name("DB_HOST")
 
 
-# --- values (D28) ------------------------------------------------------------------------------
+# --- values ------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -117,7 +117,7 @@ def test_validate_value_rejects_nul_without_echoing_the_value() -> None:
 
 
 def test_validate_value_rejects_lone_surrogates_without_echoing_the_value() -> None:
-    # A lone surrogate cannot be encoded as UTF-8, so it is not a UTF-8 string (D28).
+    # A lone surrogate cannot be encoded as UTF-8, so it is not a UTF-8 string.
     with pytest.raises(ValidationError) as excinfo:
         validate_value("top-secret\ud800", variable="API_KEY")
 

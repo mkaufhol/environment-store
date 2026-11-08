@@ -1,4 +1,4 @@
-"""A new store key or passphrase read from stdin is never saved by envs: warn about it (D45)."""
+"""A new store key or passphrase read from stdin is never saved by envs: warn about it."""
 
 from collections.abc import Callable
 from typing import Final

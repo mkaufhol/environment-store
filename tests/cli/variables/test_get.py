@@ -1,4 +1,4 @@
-"""`envs get`: print the winning value of a variable (spec §6.7, D16, D33, PD 23)."""
+"""`envs get`: print the winning value of a variable."""
 
 import json
 from pathlib import Path

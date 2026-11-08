@@ -1,6 +1,6 @@
-"""`-h` is a shorthand for `--help` on `envs` and on every command (D48).
+"""`-h` is a shorthand for `--help` on `envs` and on every command.
 
-Like `--help`, `-h` needs neither a connection nor a valid project file (D44).
+Like `--help`, `-h` needs neither a connection nor a valid project file.
 """
 
 from typing import Final

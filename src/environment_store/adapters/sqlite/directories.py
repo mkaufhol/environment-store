@@ -1,4 +1,4 @@
-"""Private directories and files for the SQLite database (D43, spec §3.2).
+"""Private directories (mode 0700) and files (mode 0600) for the SQLite database.
 
 The same rule as `adapters.files.directories`; adapter subpackages do not import each other.
 """

@@ -1,4 +1,4 @@
-"""Global options, settings per command, the project file (D17, D29, D33, PD 10, PD 17)."""
+"""Global options, settings per command, the project file."""
 
 import pytest
 import typer
@@ -30,7 +30,7 @@ def _test_app() -> typer.Typer:
 
     @app.command("offline", cls=EnvsCommand)
     def offline() -> None:
-        """Open no store, like keygen (PD 17)."""
+        """Open no store, like keygen."""
         out("ok")
 
     @app.command("flags", cls=EnvsCommand)
@@ -107,7 +107,7 @@ def test_project_file_is_found_from_a_subdirectory(
 
     result = cli_json.invoke("where", app=app, connection=False)
 
-    # Relative paths in the project file are anchored at its directory (PD 7).
+    # Relative paths in the project file are anchored at its directory.
     assert result.stdout == f"json://{cli_json.root / 'stores'}\n"
 
 
@@ -135,7 +135,7 @@ def test_empty_connection_option_is_refused(cli_json: CliHarness, app: typer.Typ
     assert "must not be empty" in result.stderr
 
 
-# --- no connection (D29, PD 17) ----------------------------------------------------------------
+# --- no connection -------------------------------------------------------------------------------
 
 
 def test_command_that_opens_a_store_without_connection_names_the_three_ways(
@@ -158,7 +158,7 @@ def test_command_that_opens_no_store_needs_no_connection(
     assert result.stdout == "ok\n"
 
 
-# --- configuration is validated for every command (PD 10) ----------------------------------------
+# --- configuration is validated for every command -------------------------------------------------
 
 
 @pytest.mark.parametrize("command", ["opens", "offline"])

@@ -35,7 +35,7 @@ _INSERT: Final = (
 _VALID_PLAIN: Final[tuple[object, ...]] = ("base", 0, None, "{}", None, 1, _TS, _TS)
 _VALID_SEALED: Final[tuple[object, ...]] = ("secret", 1, _META, None, b"\x00", 1, _TS, _TS)
 
-# Rows that break the D12 check constraints: never plaintext and encrypted at once, never
+# Rows that break the schema's check constraints: never plaintext and encrypted at once, never
 # neither, a 0/1 flag, a revision >= 1, no NULL in required columns.
 _INVALID_ROWS: Final[dict[str, tuple[object, ...]]] = {
     "plaintext with ciphertext": ("x", 0, None, "{}", b"\x00", 1, _TS, _TS),
@@ -145,7 +145,7 @@ def test_an_existing_database_file_keeps_its_mode(path: Path) -> None:
     assert stat.S_IMODE(path.stat().st_mode) == 0o640
 
 
-# --- missing files and directories (D43) ---------------------------------------------------
+# --- missing files and directories ---------------------------------------------------------
 
 
 @pytest.mark.parametrize("setup", [SetupMode.AUTO, SetupMode.NONE])
@@ -313,7 +313,7 @@ def test_a_missing_store_names_the_database_file(path: Path) -> None:
     assert str(raised.value) == f"store 'nope' not found in {path}"
 
 
-# --- schema constraints (D12) --------------------------------------------------------------
+# --- schema constraints --------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("row", [_VALID_PLAIN, _VALID_SEALED], ids=["plaintext", "encrypted"])

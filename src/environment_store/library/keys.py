@@ -1,4 +1,4 @@
-"""Key generation and key text for the public library (spec §4.5, D4, D47)."""
+"""Key generation and key text for the public library."""
 
 import os
 from pathlib import Path
@@ -10,7 +10,7 @@ __all__ = ["generate_key_file", "generate_key_text", "parse_key_text"]
 
 
 def generate_key_file(path: Path | str | os.PathLike[str]) -> None:
-    """Write a new random key file with mode `0600`; never overwrites (D4).
+    """Write a new random key file with mode `0600`; never overwrites.
 
     Args:
         path: Where to create the key file.
@@ -32,7 +32,7 @@ def generate_key_text() -> str:
 
 
 def parse_key_text(text: str) -> KeyMaterial:
-    """Parse key text (`envstore-key-v1:...`) without a file, e.g. from a secret manager (D47).
+    """Parse key text (`envstore-key-v1:...`) without a file, e.g. from a secret manager.
 
     The result is a key wherever the library takes one: `key=` of `EnvironmentStore` methods,
     `Source(..., key=...)` and `load(keys={...})`.

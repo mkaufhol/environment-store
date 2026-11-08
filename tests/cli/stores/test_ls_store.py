@@ -1,4 +1,4 @@
-"""`envs ls-store`: names and encryption, never contents (spec §6.2, §4.1, D1, PD 23)."""
+"""`envs ls-store`: names and encryption, never contents."""
 
 import json
 from datetime import UTC, datetime
@@ -56,7 +56,7 @@ def _location(cli: CliHarness) -> Path:
 def test_ls_store_on_an_empty_backend_prints_nothing_and_names_the_location(
     cli: CliHarness,
 ) -> None:
-    # D42: a mistyped connection must not look like an empty backend.
+    # A mistyped connection must not look like an empty backend.
     result = cli.invoke("ls-store")
 
     assert_exit(result, 0)
@@ -96,8 +96,8 @@ def test_ls_store_on_a_missing_home_location_names_it_and_creates_nothing(
     url: str,
     location: str,
 ) -> None:
-    # D42 and D43 together: the message names the path the adapter would create on its first
-    # write, and listing writes nothing.
+    # The message names the path the adapter would create on its first write, and listing
+    # writes nothing.
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))

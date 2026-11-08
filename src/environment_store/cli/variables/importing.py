@@ -1,8 +1,8 @@
-"""`envs import`: fill an existing store from a dotenv, JSON or TOML file (spec §6.10, D22).
+"""`envs import`: fill an existing store from a dotenv, JSON or TOML file.
 
 The input is read and parsed before the store's key is resolved, so a missing file or a
-malformed document never costs a prompt. JSON and TOML input must be flat (D33); dotenv input
-is never interpolated (D37). An empty document changes nothing (PD 27) and needs no key, but
+malformed document never costs a prompt. JSON and TOML input must be flat; dotenv input
+is never interpolated. An empty document changes nothing and needs no key, but
 a given or project key is still validated.
 """
 
@@ -68,8 +68,8 @@ def import_variables(  # noqa: PLR0913 - one parameter per option of the command
         text = read_input_file(path)
     variables = _LOADERS[resolved](text)
     if not variables:
-        # Nothing is written (PD 27), but a given, environment (D53) or project key is still
-        # checked (§6.0.1, PD 5): only the prompt for a missing key is skipped.
+        # Nothing is written, but a given, environment or project key is still
+        # checked: only the prompt for a missing key is skipped.
         given = key is not None or key_variable(store) in state.runtime.environ()
         if given or store in state.settings().key_paths:
             existing_secret(ctx, store, key)

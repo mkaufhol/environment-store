@@ -1,4 +1,4 @@
-"""Private store directories of the JSON and TOML adapters (D43, spec §3.2)."""
+"""Private store directories of the JSON and TOML adapters."""
 
 from pathlib import Path
 from typing import Final

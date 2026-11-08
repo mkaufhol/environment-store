@@ -1,7 +1,7 @@
-"""Interactive prompts: the `Prompter` protocol and the `getpass` implementation (D3, PD 11).
+"""Interactive prompts: the `Prompter` protocol and the `getpass` implementation.
 
-Frontends inject a prompter; `None` means "never prompt" (non-interactive use or `--noinput`,
-D35). `GetpassPrompter` is the library one-liner's prompter and the only place in the library
+Frontends inject a prompter; `None` means "never prompt" (non-interactive use or `--noinput`).
+`GetpassPrompter` is the library one-liner's prompter and the only place in the library
 that talks to the terminal.
 """
 
@@ -55,7 +55,7 @@ class Prompter(Protocol):
 
 
 class GetpassPrompter:
-    """A `Prompter` on `getpass.getpass` (prompts on the terminal or stderr, PD 11)."""
+    """A `Prompter` on `getpass.getpass` (prompts on the terminal or stderr)."""
 
     _input_stream: TextIO | None
     _error_stream: TextIO | None

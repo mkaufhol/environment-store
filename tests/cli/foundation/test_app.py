@@ -1,4 +1,4 @@
-"""The root app: usage errors, exit codes, `--version`, interrupts (D24, PD 16, PD 21)."""
+"""The root app: usage errors, exit codes, `--version`, interrupts."""
 
 from importlib.metadata import version
 from typing import Annotated
@@ -91,7 +91,7 @@ def test_missing_command_after_global_options_is_a_usage_error(cli_json: CliHarn
 def test_no_arguments_show_the_help_and_exit_with_one(cli_json: CliHarness) -> None:
     result = cli_json.invoke(connection=False)
 
-    # The plan's one exception to "nothing on stdout" for usage errors: the help goes to stdout.
+    # The one exception to "nothing on stdout" for usage errors: the help goes to stdout.
     assert_exit(result, 1)
     assert "Usage:" in result.stdout
     assert "--connection" in result.stdout
@@ -198,7 +198,7 @@ def test_end_of_input_at_a_prompt_exits_with_one(cli_json: CliHarness, app: type
     assert result.stdout == ""
 
 
-# --- --version (PD 16) ---------------------------------------------------------------------------
+# --- --version ------------------------------------------------------------------------------------
 
 
 def test_version_prints_the_installed_version_without_a_connection(cli_json: CliHarness) -> None:

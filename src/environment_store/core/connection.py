@@ -1,8 +1,8 @@
-"""Connection strings: the scheme registry and `open_adapter()` (spec §3, §5.1).
+"""Connection strings: the scheme registry and `open_adapter()`.
 
-The registry names every V2 adapter by import path, so the core never imports an adapter (or its
-optional dependencies) until a connection string asks for it, and the adapter packages, built in
-parallel, never need to edit this file.
+The registry names every adapter by import path, so the core never imports an adapter (or its
+optional dependencies) until a connection string asks for it, and an adapter package never needs
+to edit this file.
 """
 
 import importlib
@@ -42,7 +42,7 @@ _USERINFO: Final[re.Pattern[str]] = re.compile(r"([^@/]*)@")
 _HOST_PORT: Final[re.Pattern[str]] = re.compile(r":[^:\]]*$")
 _DIRECTORY_SCHEMES: Final = frozenset({"json", "toml"})
 _POSTGRES_SCHEMES: Final = frozenset({"postgresql", "postgres"})
-# The PostgreSQL adapter's default schema (D13); repeated here, as the core imports no adapter.
+# The PostgreSQL adapter's default schema; repeated here, as the core imports no adapter.
 _DEFAULT_SCHEMA: Final = "environment_store"
 
 
@@ -54,7 +54,7 @@ class AdapterFactory(Protocol):
 
         Args:
             url: The complete connection string.
-            setup: How to treat the database layout on open (D11, D13).
+            setup: How to treat the database layout on open.
 
         Returns:
             The open adapter.
@@ -107,7 +107,7 @@ ADAPTER_FACTORIES: Final[Mapping[str, AdapterEntry]] = MappingProxyType(
         "postgres": _POSTGRES,
     }
 )
-"""Every V2 scheme (lowercase) and its factory; read-only."""
+"""Every scheme (lowercase) and its factory; read-only."""
 
 
 def scheme_of(url: str) -> str:
@@ -134,11 +134,11 @@ def scheme_of(url: str) -> str:
 
 
 def connection_has_credentials(url: str) -> bool:
-    """Tell whether a connection string holds a password (PD 9).
+    """Tell whether a connection string holds a password.
 
-    The one detector shared by the project file warning (D33) and the PostgreSQL adapter: a
-    non-empty password in the URL user information, or a query parameter whose percent-decoded
-    name is in `CREDENTIAL_PARAMETERS`.
+    The one detector shared by the warning about a password in a project file and the PostgreSQL
+    adapter: a non-empty password in the URL user information, or a query parameter whose
+    percent-decoded name is in `CREDENTIAL_PARAMETERS`.
 
     Args:
         url: The connection string; strings without `scheme://` never count as holding one.
@@ -169,7 +169,7 @@ def open_adapter(
 
     Args:
         url: The connection string; passed unchanged to the factory.
-        setup: How to treat the database layout on open (D11, D13).
+        setup: How to treat the database layout on open.
         factories: The scheme registry; tests pass their own.
 
     Returns:
@@ -205,10 +205,10 @@ def _load_factory(entry: AdapterEntry) -> AdapterFactory:
 
 
 def connection_location(url: str) -> str:
-    """Describe where a connection string keeps its stores, for messages (D42).
+    """Describe where a connection string keeps its stores, for messages.
 
     Pure: nothing is opened or created. Paths are resolved like the file and SQLite adapters
-    resolve them: relative to the working directory, with a leading `~` expanded (D43).
+    resolve them: relative to the working directory, with a leading `~` expanded.
     PostgreSQL locations name schema, database, host and port, never a user name or password.
 
     Args:

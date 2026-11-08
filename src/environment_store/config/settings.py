@@ -1,4 +1,4 @@
-"""Settings resolution: CLI option > environment variable > project file > default (spec §5).
+"""Settings resolution: CLI option > environment variable > project file > default.
 
 `resolve_settings` is the one place where the connection, the merge order, the project file's
 store list and key paths come together, for the CLI, the TUI and the library one-liner alike.
@@ -34,10 +34,10 @@ __all__ = [
 ]
 
 ENV_CONNECTION: Final = "ENV_STORE_CONNECTION"
-"""The connection string variable (spec §5.1)."""
+"""The connection string variable."""
 
 ENV_ORDERED_OVERWRITE: Final = "ENV_STORE_ORDERED_OVERWRITE"
-"""The merge order variable (spec §5.2)."""
+"""The merge order variable."""
 
 
 class ConnectionSource(StrEnum):
@@ -53,7 +53,11 @@ class CredentialsInProjectFileWarning(UserWarning):
 
 
 def missing_connection_message() -> str:
-    """Return the D29 message: no connection is configured, and the three ways to set one."""
+    """Return the message that no connection is configured, naming the three ways to set one.
+
+    There is no default connection, so nothing is written to a location the user did not
+    choose.
+    """
     return (
         "no connection configured: pass -c/--connection, set ENV_STORE_CONNECTION, or set "
         f"'connection' in {PROJECT_FILE_NAME}"
@@ -103,14 +107,14 @@ class Settings:
             The connection string.
 
         Raises:
-            ConfigurationError: None is configured (D29); the message names the three ways.
+            ConfigurationError: None is configured; the message names the three ways.
         """
         if self.connection is None:
             raise ConfigurationError(missing_connection_message())
         return self.connection
 
     def merge_order(self, *, first_wins: bool) -> MergeOrder:
-        """Return the merge order; `--first-wins` beats every other setting (D14).
+        """Return the merge order; `--first-wins` beats every other setting.
 
         Args:
             first_wins: Whether `--first-wins` was given.
@@ -134,7 +138,7 @@ def resolve_settings(  # noqa: PLR0913 - every input is a keyword-only boundary 
 ) -> Settings:
     """Resolve the settings of one invocation.
 
-    Empty environment variables count as unset (PD 8).
+    Empty environment variables count as unset, for the `VAR= command` idiom.
 
     Args:
         connection: The `-c` option, or `None`.
@@ -181,10 +185,10 @@ def _project(
     if candidate is None:
         return None
     if candidate.untrusted_reason is not None:
-        # PD 32: an untrusted file contributes nothing but this warning.
+        # An untrusted file contributes nothing but this warning.
         warnings.append(f"ignoring project file '{candidate.path}': {candidate.untrusted_reason}")
         return None
-    # Parse the bytes the trust check saw, never the path a second time (PD 32).
+    # Parse the bytes the trust check saw, never the path a second time.
     return decode_project_file(candidate.content, path=candidate.path)
 
 

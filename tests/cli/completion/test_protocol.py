@@ -1,4 +1,4 @@
-"""Shell completion through the protocol the scripts use (spec §6.15, D54)."""
+"""Shell completion through the protocol the scripts use."""
 
 import hashlib
 import sys
@@ -158,7 +158,7 @@ def test_the_store_part_of_a_reading_key_completes(cli_json: CliHarness, command
 def test_the_path_shorthand_of_a_reading_key_is_left_to_the_shell(
     cli_json: CliHarness, incomplete: str, shell: Shell
 ) -> None:
-    # D33: with one store, `-k PATH` is enough; §6.15: every -k completes paths.
+    # With one store, `-k PATH` is enough; every -k completes paths.
     _stores(cli_json, "alpha")
 
     items = parse(
@@ -228,7 +228,7 @@ def test_bash_words_split_at_colons_are_joined_again(
 def test_the_version_option_prints_nothing_while_completing(
     cli_json: CliHarness, shell: Shell
 ) -> None:
-    # D54: only protocol output; zsh reads the answer in triples, one extra line shifts them.
+    # Only protocol output; zsh reads the answer in triples, one extra line shifts them.
     result = complete(cli_json, "--version", incomplete="ls", shell=shell)
 
     assert "environment-store" not in result.stdout
@@ -265,7 +265,7 @@ def test_nothing_but_the_answer_reaches_stdout(cli_json: CliHarness, shell: Shel
 def test_run_leaves_the_command_after_the_separator_to_the_shell(
     cli_json: CliHarness, args: tuple[str, ...], incomplete: str, shell: Shell
 ) -> None:
-    # C4, §6.13: everything after the first `--` is the command, not a store (§6.15).
+    # Everything after the first `--` is the command to run, not a store.
     _stores(cli_json, "alpha")
 
     items = parse(complete(cli_json, *args, incomplete=incomplete, shell=shell), shell)

@@ -1,4 +1,7 @@
-"""Helpers of the Pilot tests: run an app under `asyncio.run` (PD 30) and read what it shows."""
+"""Helpers of the Pilot tests: run an app under `asyncio.run` and read what it shows.
+
+Plain `asyncio.run` around Pilot avoids a test dependency such as pytest-asyncio.
+"""
 
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping

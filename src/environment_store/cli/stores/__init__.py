@@ -1,4 +1,4 @@
-"""The store commands: ls-store, create-store, rm-store, cp-store, mv-store (C2)."""
+"""The store commands: ls-store, create-store, rm-store, cp-store, mv-store."""
 
 import typer
 
@@ -14,7 +14,7 @@ def register(app: typer.Typer) -> None:
     """Register the commands of this package on the `envs` app.
 
     Every command is registered with `cls=EnvsCommand`, so the configuration is validated
-    before each runs (PD 10).
+    before each runs.
 
     Args:
         app: The `envs` app.

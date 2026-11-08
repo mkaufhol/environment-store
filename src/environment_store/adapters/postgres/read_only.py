@@ -1,4 +1,4 @@
-"""Bounded waits for `SetupMode.READ_ONLY` sessions on PostgreSQL (D54).
+"""Bounded waits for `SetupMode.READ_ONLY` sessions on PostgreSQL.
 
 Shell completion opens the backend read-only and must neither hang nor slow down every
 keystroke, so every wait of such a session has an upper bound:
@@ -24,7 +24,7 @@ from psycopg.rows import TupleRow
 __all__ = ["READ_ONLY_CONNECT_TIMEOUT", "READ_ONLY_SESSION", "connect_read_only"]
 
 READ_ONLY_CONNECT_TIMEOUT: Final = 2
-"""Seconds a `SetupMode.READ_ONLY` adapter waits for the server (D54); libpq's minimum."""
+"""Seconds a `SetupMode.READ_ONLY` adapter waits for the server; libpq's minimum."""
 
 _LIMITS: Final[dict[str, int]] = {
     "connect_timeout": READ_ONLY_CONNECT_TIMEOUT,

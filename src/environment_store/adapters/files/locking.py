@@ -1,4 +1,4 @@
-"""Per-store exclusive lock files for the file adapters (D7, spec §4.6).
+"""Per-store exclusive lock files for the file adapters.
 
 POSIX uses `fcntl.flock`; Windows uses `msvcrt.locking`, which is unverified in V2.0 (Windows is
 not tested). Both locks belong to an open file description, so two adapters in one process, two

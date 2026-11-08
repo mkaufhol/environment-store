@@ -1,4 +1,4 @@
-"""JSON and TOML file adapters: one file per store in a directory (D9, spec §3.2).
+"""JSON and TOML file adapters: one file per store in a directory.
 
 `open_json` and `open_toml` are the factories registered for the `json://` and `toml://`
 schemes. Imports `environment_store.core` and the built-in TOML writer only.

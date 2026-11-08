@@ -1,4 +1,4 @@
-"""`CliState`: stdin consumption, secret input, interaction and store lifetime (D3, D35, PD 34)."""
+"""`CliState`: stdin consumption, secret input, interaction and store lifetime."""
 
 from dataclasses import replace
 
@@ -59,7 +59,7 @@ def app() -> typer.Typer:
     return _test_app()
 
 
-# --- stdin (PD 34) ------------------------------------------------------------------------------
+# --- stdin ---------------------------------------------------------------------------------------
 
 
 def test_stdin_is_read_byte_exact_without_newline_translation(
@@ -228,7 +228,7 @@ def test_repr_hides_the_connection_option_and_the_opened_store_urls(
 
 
 def test_close_stores_closes_every_opened_store_and_forgets_them(cli_json: CliHarness) -> None:
-    # run closes all stores before exec, so no handle or lock leaks into the command (C4).
+    # run closes all stores before exec, so no handle or lock leaks into the command.
     app = build_app()
     other = f"json://{cli_json.root}/other"
     seen: list[EnvironmentStore] = []

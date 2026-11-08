@@ -1,9 +1,7 @@
 # Contributing to Environment Store
 
-These rules are **binding** for all code in this repository, written by humans or agents. The product behaviour is
-defined in [SPEC-V2.md](SPEC-V2.md); the build order and module layout in
-[IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md). When a rule here conflicts with convenience, the rule wins. When it
-conflicts with the spec, stop and raise it.
+These rules are **binding** for all code in this repository, written by humans or agents. When a rule here
+conflicts with convenience, the rule wins.
 
 ## 1. Toolchain
 
@@ -29,22 +27,22 @@ uv run coverage report        # fails below 100 % (line + branch)
 
 ## 2. Test-driven development
 
-1. **Red:** write a failing test for the next small piece of behaviour from the spec. Run it and see it fail for the
-   right reason.
+1. **Red:** write a failing test for the next small piece of the behaviour being built. Run it and see it fail for
+   the right reason.
 2. **Green:** write the minimum production code to make it pass.
 3. **Refactor:** clean up code and tests with all tests green.
 
 Rules:
 
-- No production code without a test that required it. Every spec rule (a validation, an error, an exit code, a
-  precedence order) has at least one test that names it.
+- No production code without a test that required it. Every behaviour rule (a validation, an error, an exit code,
+  a precedence order) has at least one test that names it.
 - Tests describe behaviour, not implementation: `test_write_store_with_stale_revision_raises_conflict`, not
   `test_write_store_2`. Arrange / act / assert, one behaviour per test.
 - Use `pytest.mark.parametrize` for input tables, `tmp_path` for files, fixtures for setup. No test depends on
   another test's state or on execution order.
 - Use **Hypothesis** property tests for round-trips (values through every adapter, serializers, escaping,
   encryption).
-- No network access in tests. PostgreSQL tests use a throwaway local cluster (see the plan), never a shared server.
+- No network access in tests. PostgreSQL tests use a throwaway local cluster, never a shared server.
 - Every adapter passes the shared **adapter contract suite** (`tests/contract/`) in addition to its own tests.
 - 100 % line and branch coverage. `# pragma: no cover` is forbidden except for the patterns configured in
   `[tool.coverage.report] exclude_also` (`if TYPE_CHECKING:`, `...` protocol bodies, `raise NotImplementedError`,
@@ -100,11 +98,11 @@ Rules:
   or tracebacks. Secret-bearing fields use `field(repr=False)` or the `Secret` wrapper with a redacted `repr`.
 - Randomness for keys, nonces and salts comes from `secrets` / `os.urandom` only.
 - Key files are created with mode `0600` and never overwritten (`O_CREAT | O_EXCL`).
-- SQL uses parameters only; identifiers (the Postgres schema name) are validated against the spec regex and quoted
-  with `psycopg.sql.Identifier`. No string-formatted SQL with user input.
+- SQL uses parameters only; identifiers (the Postgres schema name) must match `^[a-z_][a-z0-9_]{0,62}$` and are
+  quoted with `psycopg.sql.Identifier`. No string-formatted SQL with user input.
 - No `eval`, `exec`, `pickle`, `shell=True` or `yaml.load`.
-- Dependencies are pinned through `uv.lock`; new runtime dependencies need a spec decision (the core depends on
-  `cryptography` only, D6).
+- Dependencies are pinned through `uv.lock`; new runtime dependencies need a deliberate decision (the core depends
+  on `cryptography` only).
 
 ## 7. Style and documentation
 
@@ -112,10 +110,11 @@ Rules:
   per file without a comment.
 - Google-style docstrings on every public module, class, function and method (ruff `D`, `convention = "google"`).
   Tests need no docstrings. Comments explain *why*, not *what*.
-- Spec decisions are referenced where they drive code, e.g. `# Ciphertext is bound to the store name (D5).`
+- Comments and docstrings explain the reason directly instead of pointing to external documents, e.g.
+  `# Ciphertext is bound to the store name, so a copy must be re-sealed.`
 
 ## 8. Git
 
-- Branch per work package off `feature/v2` while V2 is in development.
+- Branch per change off `feature/v2` while V2 is in development.
 - Small commits with an imperative subject line (`Add merge logic for ordered stores`) and a body explaining why.
 - Never commit secrets, key files, `.env` files or coverage output.

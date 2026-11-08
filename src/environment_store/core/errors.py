@@ -1,7 +1,7 @@
 """Exception hierarchy of Environment Store.
 
 Every error derives from `EnvironmentStoreError`. The direct subclasses are *categories*; the CLI
-maps each category to an exit code (D24):
+maps each category to an exit code:
 
 | Category | Exit code |
 |---|---|
@@ -12,7 +12,7 @@ maps each category to an exit code (D24):
 | `ConcurrentModificationError` | 5 |
 
 Messages never contain keys, passphrases or variable values. They name library parameters, never
-CLI flags (D47): an error whose remedy is a parameter keeps that remedy in `hint`, apart from
+CLI flags: an error whose remedy is a parameter keeps that remedy in `hint`, apart from
 `detail`, so a frontend can put its own remedy (`-o`, `--force`, `-t`, `-k`) in its place.
 """
 
@@ -69,7 +69,7 @@ class EnvironmentStoreError(Exception):
 
         Args:
             detail: What went wrong.
-            hint: The library's remedy, naming library parameters only (D47).
+            hint: The library's remedy, naming library parameters only.
         """
         super().__init__(detail if hint is None else f"{detail}; {hint}")
         self.detail = detail
@@ -84,7 +84,7 @@ class ValidationError(EnvironmentStoreError, ValueError):
 
 
 class AlreadyEncryptedError(ValidationError):
-    """The store is already encrypted (`encrypt` on an encrypted store, D4)."""
+    """The store is already encrypted (`encrypt` on an encrypted store)."""
 
 
 class NotEncryptedError(ValidationError):
@@ -92,11 +92,14 @@ class NotEncryptedError(ValidationError):
 
 
 class PlaintextNotAllowedError(ValidationError):
-    """Plaintext input is refused for an encrypted store (e.g. `KEY=VALUE` arguments, D18)."""
+    """Plaintext input is refused for an encrypted store (e.g. `KEY=VALUE` arguments).
+
+    Values on the command line end up in the shell history.
+    """
 
 
 class ConfigurationError(EnvironmentStoreError):
-    """Missing connection (D29), bad environment values or project file problems."""
+    """Missing connection, bad environment values or project file problems."""
 
 
 class MissingExtraError(EnvironmentStoreError):
@@ -111,8 +114,8 @@ class MissingExtraError(EnvironmentStoreError):
     def __init__(self, extra: str) -> None:
         """Create the error for a missing extra.
 
-        The message leads with uv and names pip as the alternative (D50, D51). The CLI tool
-        line always includes `cli`, since an extra used from `envs` needs the CLI too.
+        The message leads with uv and names pip as the alternative, like the installation docs.
+        The CLI tool line always includes `cli`, since an extra used from `envs` needs the CLI too.
 
         Args:
             extra: Name of the pip extra that provides the dependency, e.g. `postgres`.
@@ -136,19 +139,19 @@ class UnsupportedFormatError(BackendError):
 
 
 class DatabaseNotCleanError(BackendError):
-    """The database contains foreign content; nothing is created or changed (D13)."""
+    """The database contains foreign content; nothing is created or changed."""
 
 
 class SchemaOutdatedError(BackendError):
-    """The database schema is older than this client and must be migrated (D11)."""
+    """The database schema is older than this client and must be migrated."""
 
 
 class SchemaTooNewError(BackendError):
-    """The database schema is newer than this client (D13)."""
+    """The database schema is newer than this client."""
 
 
 class SetupPrivilegeError(BackendError):
-    """The database user may not create the schema during the first setup (D11)."""
+    """The database user may not create the schema during the first setup."""
 
 
 # --- exit code 2 -------------------------------------------------------------------------------
@@ -201,7 +204,7 @@ class StoreExistsError(AlreadyExistsError):
 
 
 class VariableExistsError(AlreadyExistsError):
-    """One or more variables exist already and overwriting was not requested (D18).
+    """One or more variables exist already and overwriting was not requested.
 
     Attributes:
         names: All conflicting variable names, in the order given.
@@ -236,7 +239,7 @@ class KeyRequiredError(CryptoError):
 
     Attributes:
         store: The store, when the error was made by `for_store`; a frontend uses it to name
-            the store's key variable in its own remedy (D47, D53).
+            the store's key variable in its own remedy.
     """
 
     store: str | None = None
@@ -245,8 +248,8 @@ class KeyRequiredError(CryptoError):
     def for_store(cls, store: str) -> Self:
         """Create the error for an encrypted store that was given no secret.
 
-        `EnvironmentStore` methods and `load()` raise it with the same wording (D47). The hint
-        names every source of the library: the parameters and the key variable (D53).
+        `EnvironmentStore` methods and `load()` raise it with the same wording. The hint
+        names every source of the library: the parameters and the key variable.
 
         Args:
             store: The encrypted store.
@@ -261,7 +264,7 @@ class KeyRequiredError(CryptoError):
 
 
 class DecryptionError(CryptoError):
-    """Decryption failed: wrong key, tampered data or changed metadata (D5)."""
+    """Decryption failed: wrong key, tampered data or changed metadata."""
 
 
 class InvalidKeyFileError(CryptoError):
@@ -275,7 +278,7 @@ class KeyModeMismatchError(CryptoError):
 class KeySourceError(CryptoError):
     """A key or passphrase cannot be read: missing or unreadable file, not UTF-8, or empty.
 
-    A missing key file is a key error like a missing key (PD 3), so it shares exit code 4. The
+    A missing key file is a key error like a missing key, so it shares exit code 4. The
     message names the source (a path or stdin), never its content.
     """
 
@@ -284,4 +287,4 @@ class KeySourceError(CryptoError):
 
 
 class ConcurrentModificationError(EnvironmentStoreError):
-    """The store was changed since it was read; nothing was written (D7)."""
+    """The store was changed since it was read; nothing was written."""

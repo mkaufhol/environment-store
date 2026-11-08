@@ -125,7 +125,7 @@ def test_search_without_boundary_walks_up_to_the_root(tmp_path: Path) -> None:
     assert candidate.path == path
 
 
-# --- trust check (PD 32) -----------------------------------------------------------------------
+# --- trust check -------------------------------------------------------------------------------
 
 
 def test_file_owned_by_another_user_is_untrusted_and_ends_the_search(tmp_path: Path) -> None:
@@ -458,7 +458,7 @@ def test_project_file_that_is_not_utf8_is_a_configuration_error(tmp_path: Path) 
         read_project_file(path)
 
 
-# --- anchor_connection (PD 7) ------------------------------------------------------------------
+# --- anchor_connection -------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(

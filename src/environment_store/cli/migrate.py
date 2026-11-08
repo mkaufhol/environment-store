@@ -1,4 +1,4 @@
-"""`envs migrate`: create or upgrade the SQL schema (D11, D13, PD 22)."""
+"""`envs migrate`: create or upgrade the SQL schema; file backends have none, so it fails there."""
 
 import typer
 

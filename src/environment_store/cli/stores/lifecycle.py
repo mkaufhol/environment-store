@@ -1,4 +1,4 @@
-"""`envs create-store` and `envs rm-store` (spec §6.3, §6.4, D21, PD 24, PD 33)."""
+"""`envs create-store` and `envs rm-store`."""
 
 from typing import Annotated
 
@@ -16,7 +16,7 @@ from environment_store.core.validation import validate_store_name
 __all__ = ["ExistingNameArg", "NameArg", "create_store", "rm_store"]
 
 NameArg = Annotated[str, typer.Argument(metavar="NAME", help="The store name.", show_default=False)]
-"""A new store's name: never completed (D54)."""
+"""A new store's name: never completed."""
 ExistingNameArg = Annotated[
     str,
     typer.Argument(
@@ -26,7 +26,7 @@ ExistingNameArg = Annotated[
         autocompletion=complete_stores,
     ),
 ]
-"""An existing store's name: completes the stores of the backend (D54)."""
+"""An existing store's name: completes the stores of the backend."""
 EncryptOpt = Annotated[
     bool,
     typer.Option(
@@ -37,7 +37,7 @@ EncryptOpt = Annotated[
 ]
 
 
-def create_store(  # noqa: PLR0913 - one parameter per documented option (spec §6.3)
+def create_store(  # noqa: PLR0913 - one parameter per documented option
     ctx: typer.Context,
     name: NameArg,
     *,
@@ -66,7 +66,7 @@ def create_store(  # noqa: PLR0913 - one parameter per documented option (spec �
 def rm_store(ctx: typer.Context, name: ExistingNameArg, *, yes: YesOpt = False) -> None:
     """Delete a store; needs no key, also when it is encrypted."""
     store = get_state(ctx).open_store(ctx)
-    # A missing store fails with 2 before anyone is asked (D21: no key, only the name).
+    # A missing store fails with 2 before anyone is asked (it needs no key, only the name).
     store.store_info(name)
     require_confirmation(ctx, f"Delete store {name!r}?", yes=yes)
     store.delete_store(name)

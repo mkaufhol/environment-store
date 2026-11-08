@@ -1,4 +1,4 @@
-"""`-k` parsing for reading and writing commands (D3, D16, D33, PD 19)."""
+"""`-k` parsing for reading and writing commands."""
 
 from pathlib import Path
 
@@ -45,7 +45,7 @@ def test_path_after_the_first_equals_sign_may_contain_equals_signs() -> None:
     ],
 )
 def test_bare_path_is_the_single_store_shorthand(value: str, expected: KeyFile | KeyStdin) -> None:
-    # The text before the first '=' is not a valid store name, so it is a path (PD 19).
+    # The text before the first '=' is not a valid store name, so it is a path.
     assert parse_reading_keys([value], ["only"]) == {"only": expected}
 
 
@@ -110,7 +110,7 @@ def test_no_writing_key_gives_no_source() -> None:
     [
         ("-", KeyStdin()),
         ("./a.key", KeyFile(Path("./a.key"))),
-        # Writing commands take a path only; "store=path" is a file name (PD 19).
+        # Writing commands take a path only; "store=path" is a file name.
         ("a=./a.key", KeyFile(Path("a=./a.key"))),
     ],
 )

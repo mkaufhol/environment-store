@@ -42,7 +42,7 @@ def test_generate_key_text_is_a_new_key_each_time() -> None:
     assert first.endswith("\n")
 
 
-# --- key text without a file (D47) -------------------------------------------------------------
+# --- key text without a file -------------------------------------------------------------------
 
 
 def test_parse_key_text_reads_the_text_of_generate_key_text() -> None:

@@ -1,8 +1,8 @@
-"""Merging of stores in load order (spec §2.2), nested mode (§6.11, D30) and bool settings (§5.2).
+"""Merging of stores in load order, nested mode and bool settings.
 
-Merging is a pure core function so that every frontend (library, CLI, TUI) behaves identically
-(D33), including the output order (D52): the stores' variables in load order, each store's
-sorted by name in code point order, a variable shared by several stores at its first position.
+Merging is a pure core function so that every frontend (library, CLI, TUI) behaves identically,
+including the output order: the stores' variables in load order, each store's sorted by name
+in code point order, a variable shared by several stores at its first position.
 Error messages name stores and variables but never echo a value.
 """
 
@@ -51,13 +51,13 @@ def merge_with_sources(
         order: Which store wins for a variable present in several stores.
 
     Returns:
-        Variable name → `(value, winning store name)` in output order (D52): stores in load
+        Variable name → `(value, winning store name)` in output order: stores in load
         order, each store's variables sorted by name (code point order), a variable present in
         several stores at the position of its first appearance with the value `order` chooses.
     """
     result: dict[str, tuple[str, str]] = {}
     for store, variables in stores:
-        # D52: within one store by name; a dict keeps a key's first position on reassignment.
+        # Within one store by name; a dict keeps a key's first position on reassignment.
         for name, value in sorted(variables.items()):
             if order is MergeOrder.LAST_WINS or name not in result:
                 result[name] = (value, store)
@@ -69,20 +69,20 @@ def merge(
     *,
     order: MergeOrder = MergeOrder.LAST_WINS,
 ) -> dict[str, str]:
-    """Merge stores in load order into one set of variables (spec §2.2).
+    """Merge stores in load order into one set of variables.
 
     Args:
         stores: `(store name, variables)` pairs in load order.
         order: Which store wins for a variable present in several stores.
 
     Returns:
-        Variable name → winning value in output order (D52, see `merge_with_sources`).
+        Variable name → winning value in output order (see `merge_with_sources`).
     """
     return {name: value for name, (value, _) in merge_with_sources(stores, order=order).items()}
 
 
 def nested(stores: Sequence[tuple[str, Mapping[str, str]]]) -> dict[str, dict[str, str]]:
-    """Keep each store in its own namespace instead of merging (`--nested`, §6.11).
+    """Keep each store in its own namespace instead of merging (`--nested`).
 
     Args:
         stores: `(store name, variables)` pairs in load order.
@@ -103,7 +103,7 @@ def nested(stores: Sequence[tuple[str, Mapping[str, str]]]) -> dict[str, dict[st
 
 
 def nested_flat_key(store: str, variable: str) -> str:
-    """Build the flat key of a variable in nested mode (D30).
+    """Build the flat key of a variable in nested mode.
 
     The store name in SCREAMING_SNAKE_CASE (`-` becomes `_`), a double underscore, then the
     variable name unchanged: `customer-a`, `DB_HOST` → `CUSTOMER_A__DB_HOST`.
@@ -124,7 +124,7 @@ def nested_flat_key(store: str, variable: str) -> str:
 
 
 def nested_flat(stores: Sequence[tuple[str, Mapping[str, str]]]) -> dict[str, str]:
-    """Flatten nested mode into prefixed variables for dotenv and shell output (D30).
+    """Flatten nested mode into prefixed variables for dotenv and shell output.
 
     Args:
         stores: `(store name, variables)` pairs in load order.
@@ -155,7 +155,7 @@ def nested_flat(stores: Sequence[tuple[str, Mapping[str, str]]]) -> dict[str, st
 
 
 def parse_bool_setting(raw: str, *, setting: str) -> bool:
-    """Parse a boolean setting such as `ENV_STORE_ORDERED_OVERWRITE` (§5.2, D33).
+    """Parse a boolean setting such as `ENV_STORE_ORDERED_OVERWRITE`.
 
     Args:
         raw: The raw text; `true/false/1/0/yes/no`, case-insensitive.
@@ -177,7 +177,7 @@ def parse_bool_setting(raw: str, *, setting: str) -> bool:
 
 
 def order_from_setting(*, ordered_overwrite: bool) -> MergeOrder:
-    """Map the `ordered_overwrite` setting to a merge order (§5.2).
+    """Map the `ordered_overwrite` setting to a merge order.
 
     Args:
         ordered_overwrite: `True` means last wins, `False` means first wins.

@@ -1,4 +1,4 @@
-"""`ENV_STORE_KEY_<STORE>` in the library: `EnvironmentStore` methods, `load` (§4.3, D53)."""
+"""`ENV_STORE_KEY_<STORE>` in the library: `EnvironmentStore` methods, `load`."""
 
 import os
 from collections.abc import Callable, Mapping

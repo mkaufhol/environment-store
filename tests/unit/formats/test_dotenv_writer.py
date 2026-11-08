@@ -1,4 +1,4 @@
-"""The dotenv writer (D37), verified against python-dotenv.
+"""The dotenv writer, verified against python-dotenv.
 
 Docker Compose cannot run in the tests; its documented semantics (single quotes literal,
 `$VAR` / `${VAR}` interpolated in unquoted and double-quoted values, `\\`, `\"`, `\n`, `\r`,
@@ -62,7 +62,7 @@ def _python_dotenv(text: str) -> dict[str, str | None]:
 
 
 @pytest.mark.parametrize(("value", "line"), _GOLDEN)
-def test_dumps_quotes_values_by_the_d37_rules(value: str, line: str) -> None:
+def test_dumps_quotes_values_by_the_quoting_rules(value: str, line: str) -> None:
     assert dumps({"A": value}) == f"{line}\n"
 
 
@@ -169,7 +169,7 @@ def _single_quotable(value: str) -> bool:
 
 @given(values().map(lambda value: value.translate(_SINGLE_QUOTE_BREAKERS)).filter(_single_quotable))
 def test_single_line_values_without_quote_or_backslash_pair_keep_their_dollars(value: str) -> None:
-    # D37: every such value is written (single quotes), `$` and single backslashes included.
+    # Every such value is written (single quotes), `$` and single backslashes included.
     text = dumps({"A": value})
 
     assert loads(text) == {"A": value}

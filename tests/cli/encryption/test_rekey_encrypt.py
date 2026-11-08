@@ -1,4 +1,4 @@
-"""`envs rekey` and `envs encrypt`: new secrets for stores (§4.5, D1, D4, D34, PD 24, PD 33)."""
+"""`envs rekey` and `envs encrypt`: new secrets for stores."""
 
 import json
 import stat
@@ -51,7 +51,7 @@ def test_after_rekey_the_old_key_no_longer_works(cli: CliHarness) -> None:
     result = cli.invoke("rekey", "-s", "a", "-k", str(old), "--new-key", str(new_key))
 
     assert_exit(result, 0)
-    # `export` reads like `ls` (C3's command); both need the store's current key.
+    # `export` reads like `ls`; both need the store's current key.
     assert_exit(cli.invoke("export", "a", "-k", str(old)), 4)
 
 
@@ -290,7 +290,8 @@ def test_encrypt_turns_a_plain_store_into_an_encrypted_one(cli: CliHarness) -> N
 
     assert_exit(result, 0)
     assert "encrypted store 'a'" in result.stderr
-    # Even the names need the key now (D1); `export` reads like `ls`.
+    # Even the names need the key now, as the whole store is one encrypted blob; `export`
+    # reads like `ls`.
     assert_exit(cli.invoke("export", "a"), 4)
     listed = cli.invoke("export", "a", "-k", str(key))
     assert_exit(listed, 0)

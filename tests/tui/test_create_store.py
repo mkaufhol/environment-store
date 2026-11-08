@@ -1,4 +1,4 @@
-"""Creating a store in the TUI (D55, D27, D40, D45, D47, D57)."""
+"""Creating a store in the TUI: name checked as typed, every encryption, the no-save reminder."""
 
 import stat
 from pathlib import Path

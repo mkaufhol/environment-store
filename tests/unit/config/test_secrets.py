@@ -230,7 +230,7 @@ def test_encrypted_store_without_source_and_prompter_needs_a_key(
     with pytest.raises(KeyRequiredError) as caught:
         _resolver(inspector, tty=True).existing("keyed", None)
 
-    # Library wording; the CLI puts its -k hint in place of the library's (D47).
+    # Library wording; the CLI puts its -k hint in place of the library's.
     assert str(caught.value) == str(KeyRequiredError.for_store("keyed"))
 
 
@@ -289,7 +289,7 @@ def test_empty_prompt_answer_is_a_key_source_error(inspector: ServiceInspector) 
 def test_lone_carriage_return_is_a_passphrase_not_an_empty_secret(
     inspector: ServiceInspector, tmp_path: Path, data: bytes, secret: str
 ) -> None:
-    # D3 strips one LF or CRLF only, as passphrase_from_text does.
+    # A passphrase file loses one trailing LF or CRLF only, as passphrase_from_text does.
     store = "crphrase"
     inspector.service.create_store(store, secret=Passphrase(text=secret))
 
@@ -332,7 +332,7 @@ def test_new_key_file_from_stdin() -> None:
 
     assert new.secret == KEY
     assert stdin.calls == 1
-    # D45: the caller warns that envs does not save it.
+    # The caller warns that envs does not save it.
     assert new.from_stdin is True
 
 

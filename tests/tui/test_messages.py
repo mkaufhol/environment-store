@@ -1,4 +1,4 @@
-"""TUI error messages: the TUI's own hints in place of the library's (D47)."""
+"""TUI error messages: the TUI's own hints in place of the library's."""
 
 from pathlib import Path
 

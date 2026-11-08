@@ -80,7 +80,7 @@ def test_meta_marks_the_database_as_environment_store() -> None:
     )
 
 
-def test_stores_columns_are_the_eight_d12_columns_in_ddl_order() -> None:
+def test_stores_columns_are_the_eight_columns_in_ddl_order() -> None:
     assert STORES_TABLE == "stores"
     assert STORES_COLUMNS == (
         "name",
@@ -198,7 +198,7 @@ def test_sqlite_schema_statements_are_single_statements() -> None:
     assert not any(";" in statement for statement in SQLITE_SCHEMA_V1)
 
 
-# --- PostgreSQL DDL (structural; executed by A3) -----------------------------------------------
+# --- PostgreSQL DDL (structural; executed by the PostgreSQL adapter tests) ---------------------
 
 
 def _compose(statement: str, schema: str = "environment_store") -> str:

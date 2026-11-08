@@ -1,4 +1,4 @@
-"""Shared SQL layer of the SQLite and PostgreSQL adapters (D8, D10-D13).
+"""Shared SQL layer of the SQLite and PostgreSQL adapters.
 
 Schema DDL, migrations, the pure first-setup decision and the record <-> row codec. Imports
 `environment_store.core` only.

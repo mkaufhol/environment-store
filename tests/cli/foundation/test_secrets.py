@@ -1,4 +1,4 @@
-"""Secrets for commands: existing, new and generated keys (D3, PD 5, PD 24, PD 33)."""
+"""Secrets for commands: existing, new and generated keys."""
 
 import stat
 from pathlib import Path
@@ -110,7 +110,7 @@ def encrypted(cli_json: CliHarness) -> Path:
     return path
 
 
-# --- existing secrets: -k > [keys] > prompt (D3, PD 5) -------------------------------------------
+# --- existing secrets: -k > [keys] > prompt ------------------------------------------------------
 
 
 def test_key_option_reads_the_key_file(
@@ -231,7 +231,7 @@ def test_empty_key_option_exits_with_one(cli_json: CliHarness, app: typer.Typer)
     assert_exit(result, 1)
 
 
-# --- new secrets (PD 24) -------------------------------------------------------------------------
+# --- new secrets ----------------------------------------------------------------------------------
 
 
 def test_no_new_secret_option_gives_none(cli_json: CliHarness, app: typer.Typer) -> None:
@@ -391,7 +391,7 @@ def test_key_file_for_a_passphrase_store_says_what_to_do(
     assert "envs rekey -s p" in result.stderr
 
 
-# --- keep_or_discard (PD 33) ---------------------------------------------------------------------
+# --- keep_or_discard ------------------------------------------------------------------------------
 
 
 def _guarded(cli: CliHarness, app: typer.Typer, *args: str) -> tuple[Path, str, int]:

@@ -29,7 +29,7 @@ from environment_store.core.errors import (
     VariableNotFoundError,
 )
 
-# The category classes are what the CLI maps to exit codes (D24).
+# The category classes are what the CLI maps to exit codes.
 _CATEGORIES: list[type[EnvironmentStoreError]] = [
     ValidationError,
     ConfigurationError,

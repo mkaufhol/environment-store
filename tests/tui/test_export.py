@@ -1,4 +1,4 @@
-"""Exporting from the TUI (D56): stores in order, options, path, keys, mode 0600, D52 order."""
+"""Exporting from the TUI: stores in order, options, path, keys, mode 0600, merged output order."""
 
 import json
 import stat

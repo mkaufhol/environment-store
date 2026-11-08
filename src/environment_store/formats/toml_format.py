@@ -1,7 +1,7 @@
-"""TOML import and export (spec §6.10, §6.11).
+"""TOML import and export.
 
 Exports use `environment_store._toml` (the standard library only reads TOML): flat key/value
-lines, or one `[table]` per store when nested. Imports accept only flat string values (D33).
+lines, or one `[table]` per store when nested. Imports accept only flat string values.
 """
 
 import tomllib

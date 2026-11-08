@@ -1,9 +1,9 @@
-"""`VariablesScreen`: the variables of one store, values masked until shown (PD 29).
+"""`VariablesScreen`: the variables of one store, values masked until shown.
 
 `v` shows or hides the values, `a` adds a variable, `e` or enter edits the selected one, `d`
 deletes it after a confirmation, `r` reloads, `escape` goes back to the stores and `q` quits the
 app, as on the stores screen. A write that
-conflicts with a change made elsewhere (D7) writes nothing and offers to reload.
+conflicts with a change made elsewhere writes nothing and offers to reload.
 """
 
 import json
@@ -147,7 +147,7 @@ class VariablesScreen(Screen[None]):
         self._fill()
 
     def action_back(self) -> None:
-        """Go back to the stores; the key is forgotten with this screen (D3)."""
+        """Go back to the stores; the key is forgotten with this screen."""
         self.dismiss(None)
 
     def _add(self, edited: Edited | None) -> None:

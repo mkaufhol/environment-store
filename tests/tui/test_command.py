@@ -1,4 +1,4 @@
-"""`envs tui`: settings like every command, terminal only, the `tui` extra (spec §6.14, PD 31)."""
+"""`envs tui`: settings like every command, terminal only, the `tui` extra."""
 
 import sys
 from collections.abc import Mapping

@@ -1,10 +1,11 @@
-"""Import direction (IMPLEMENTATION-PLAN.md §3, §6.1).
+"""Import direction between the layers of the package.
 
 core <- crypto <- service; core <- adapters; core <- formats; core, crypto <- config;
 core, crypto, service, formats, config <- library; core, config, library, formats <- cli, tui.
 Adapter subpackages import core and adapters.sql only, never each other. No frontend layer
-imports adapters, service or crypto (D31). One recorded exception (PD 31): the `envs tui` command
-module may import `tui`, inside its command function only; the TUI never imports the CLI.
+imports adapters, service or crypto: the frontends use the library. One exception: the
+`envs tui` command module may import `tui`, inside its command function only, so the optional
+extra loads only when `envs tui` runs; the TUI never imports the CLI.
 """
 
 import ast
@@ -38,7 +39,7 @@ _ALLOWED: Final[dict[str, frozenset[str]]] = {
     "tui": frozenset({"core", "config", "library", "formats", "tui"}),
 }
 
-# Module -> extra layers only it may import (PD 31).
+# Module -> extra layers only it may import.
 _MODULE_EXCEPTIONS: Final[dict[str, frozenset[str]]] = {
     "environment_store.cli.tui_command": frozenset({"tui"}),
 }

@@ -49,7 +49,7 @@ class KeyMaterial:
 
 @dataclass(frozen=True, slots=True, kw_only=True, repr=False)
 class Passphrase:
-    """A human passphrase, stretched with Argon2id before use (D34).
+    """A human passphrase, stretched with Argon2id before use.
 
     Attributes:
         text: The non-empty passphrase.

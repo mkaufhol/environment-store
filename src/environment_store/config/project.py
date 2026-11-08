@@ -1,11 +1,12 @@
-"""The project file `.envstore.toml`: discovery, trust check and strict parsing (spec §6.0.3).
+"""The project file `.envstore.toml`: discovery, trust check and strict parsing.
 
 Discovery walks from a start directory up to the filesystem root (or a boundary) and takes the
 first regular file named `.envstore.toml`. A file owned by another user or writable by every
-user, or a symbolic link owned by another user, is not trusted and is ignored (PD 32). The trust
-check runs on the opened file and the bytes parsed are read from that same descriptor, so the
-path cannot be swapped in between. Error messages name the file and the offending key, never a
-value.
+user, or a symbolic link owned by another user, is not trusted and is ignored: discovery walks up
+to `/`, so a file planted in a shared directory such as `/tmp` could otherwise redirect the
+connection, the stores or the key paths. The trust check runs on the opened file and the bytes
+parsed are read from that same descriptor, so the path cannot be swapped in between. Error
+messages name the file and the offending key, never a value.
 """
 
 import os
@@ -37,7 +38,7 @@ __all__ = [
 ]
 
 PROJECT_FILE_NAME: Final = ".envstore.toml"
-"""Name of the project file (D17, D25)."""
+"""Name of the project file; its own file, not `pyproject.toml`, as it is end-user config."""
 
 _ALLOWED_KEYS: Final[tuple[str, ...]] = ("connection", "keys", "ordered_overwrite", "stores")
 _ROOT_UID: Final = 0
@@ -62,7 +63,7 @@ class ProjectFile:
         stores: Default store list for reading commands, in load order; `()` when absent.
         keys: Store name → absolute key file path (read-only).
         ordered_overwrite: Default merge order, or `None` when absent.
-        connection: The connection string, anchored at the file's directory (PD 7), or `None`;
+        connection: The connection string, anchored at the file's directory, or `None`;
             it may hold a password, so it stays out of the `repr`.
     """
 
@@ -110,7 +111,7 @@ class ProjectFileCandidate:
 
     Attributes:
         path: The file.
-        untrusted_reason: Why the file must be ignored (PD 32), or `None` if it is trusted.
+        untrusted_reason: Why the file must be ignored, or `None` if it is trusted.
         content: The bytes of a trusted file, read from the descriptor the trust check ran on;
             empty for an untrusted file.
     """
@@ -121,7 +122,7 @@ class ProjectFileCandidate:
 
 
 def untrusted_reason(st_uid: int, st_mode: int, uid: int) -> str | None:
-    """Decide whether a project file may be used (PD 32).
+    """Decide whether a project file may be used.
 
     Group-writable files are allowed, because user-private groups make them common.
 
@@ -143,7 +144,7 @@ def untrusted_reason(st_uid: int, st_mode: int, uid: int) -> str | None:
 def find_project_file(
     start: Path, *, boundary: Path | None = None, uid: int | None = None
 ) -> ProjectFileCandidate | None:
-    """Find the nearest project file from `start` upwards (spec §6.0.3).
+    """Find the nearest project file from `start` upwards.
 
     The first regular file found ends the search, trusted or not: an untrusted file is
     returned with its reason, so the caller can warn, and nothing above it is used.
@@ -233,7 +234,7 @@ def read_project_file(path: Path) -> ProjectFile:
 
 
 def decode_project_file(data: bytes, *, path: Path) -> ProjectFile:
-    """Decode and parse the bytes of a project file, e.g. those read at discovery (PD 32).
+    """Decode and parse the bytes of a project file, e.g. those read at discovery.
 
     Args:
         data: The raw content.
@@ -255,7 +256,9 @@ def decode_project_file(data: bytes, *, path: Path) -> ProjectFile:
 
 
 def parse_project_file(text: str, *, path: Path) -> ProjectFile:
-    """Parse the text of a project file against the strict schema (PD 6).
+    """Parse the text of a project file against the strict schema.
+
+    Unknown keys are errors, so a typo such as `store =` cannot silently load nothing.
 
     Args:
         text: The TOML text.
@@ -356,7 +359,7 @@ def _is_store_name(value: object) -> bool:
 
 
 def anchor_connection(url: str, base: Path) -> str:
-    """Anchor relative file paths of a project file connection at its directory (PD 7).
+    """Anchor relative file paths of a project file connection at its directory.
 
     `json://`, `toml://` and `sqlite:///` paths that are relative become absolute below `base`,
     so the project file works from any subdirectory. Absolute paths, `~` paths and every other

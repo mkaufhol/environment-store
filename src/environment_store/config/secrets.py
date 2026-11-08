@@ -1,10 +1,10 @@
-"""Key sources: reading existing secrets and choosing new ones (spec §4.3, §6.3, D3, D35, D53).
+"""Key sources: reading existing secrets and choosing new ones.
 
-`SecretResolver` finds the secret of an existing store, in the order of D53: an explicit
+`SecretResolver` finds the secret of an existing store, in this order: an explicit
 source (file, stdin, or a key the caller already has) > `ENV_STORE_KEY_<STORE>` > the project
 file's `[keys]` > a hidden prompt. `resolve_new_secret` produces the secret for a new
-encryption and never looks at the environment (D53). The variable itself is read by
-`config.key_variables`. Nothing is cached or stored (D3).
+encryption and never looks at the environment. The variable itself is read by
+`config.key_variables`. Nothing is cached or stored.
 Messages name the source (a path, stdin or the variable), never the secret.
 """
 
@@ -82,10 +82,11 @@ class SecretInput:
     """How secrets may be read in this invocation.
 
     Attributes:
-        read_stdin: Claims stdin and reads all of it as bytes (PD 34).
+        read_stdin: Claims stdin and reads all of it as bytes, so the text is
+            decoded as strict UTF-8 without newline translation.
         stdin_is_tty: Whether stdin is a terminal.
-        prompter: Asks the user; `None` never prompts (non-interactive or `--noinput`, D35).
-        environ: The environment variables, for `ENV_STORE_KEY_<STORE>` (D53); the edge
+        prompter: Asks the user; `None` never prompts (non-interactive or `--noinput`).
+        environ: The environment variables, for `ENV_STORE_KEY_<STORE>`; the edge
             passes `os.environ`. Never consulted for new secrets.
     """
 
@@ -116,7 +117,7 @@ def read_secret_file(path: Path) -> str:
 
     Raises:
         KeySourceError: The path holds a NUL character, or the file cannot be read, is not
-            UTF-8 or is empty (PD 3).
+            UTF-8 or is empty.
     """
     if "\0" in str(path):
         # The OS refuses such a path with a ValueError, not an OSError.
@@ -146,7 +147,7 @@ def _decode(data: bytes, *, what: str) -> str:
 
 
 class SecretResolver:
-    """Finds the secret of an existing store (D3, D53).
+    """Finds the secret of an existing store.
 
     Explicit source > `ENV_STORE_KEY_<STORE>` > project key > prompt > `KeyRequiredError`.
     """
@@ -167,12 +168,12 @@ class SecretResolver:
     def existing(
         self, store: str, source: KeySource | None, *, project_key: Path | None = None
     ) -> Secret | None:
-        """Return the secret of an existing store, by the precedence of D53.
+        """Return the secret of an existing store: source > key variable > project key > prompt.
 
         Args:
             store: The store name.
             source: The explicitly given key source, or `None`.
-            project_key: The project file's `[keys]` path for the store, or `None` (PD 5).
+            project_key: The project file's `[keys]` path for the store, or `None`.
 
         Returns:
             The secret, or `None` for a plaintext store without a source or project key.
@@ -202,7 +203,7 @@ class SecretResolver:
         return self._inspector.parse_secret(store, self._prompt(store))
 
     def uses_key_variable(self, store: str, source: KeySource | None) -> bool:
-        """Tell whether `existing` takes the store's secret from its key variable (D53).
+        """Tell whether `existing` takes the store's secret from its key variable.
 
         Args:
             store: The store name.
@@ -231,7 +232,7 @@ class SecretResolver:
     def _prompt(self, store: str) -> str:
         prompter = self._input.prompter
         if prompter is None:
-            # Library wording; the CLI puts its -k hint in place of the hint (D47).
+            # Library wording; the CLI puts its -k hint in place of the hint.
             raise KeyRequiredError.for_store(store)
         answer = prompter.secret(f"Key or passphrase for store {store!r}: ")
         return check_not_empty(answer, what=f"the key or passphrase for store {store!r}")
@@ -275,7 +276,8 @@ class NewSecret:
     Attributes:
         secret: The key or passphrase.
         generated: The key file created for it, or `None`.
-        from_stdin: Whether it was read from stdin, where nothing keeps it (D45).
+        from_stdin: Whether it was read from stdin, where nothing keeps it; the CLI warns
+            that the store is unreadable without it.
     """
 
     secret: Secret = field(repr=False)
@@ -283,7 +285,9 @@ class NewSecret:
     from_stdin: bool = False
 
     def discard(self) -> None:
-        """Remove a generated key file; the caller decides when this is safe (PD 33).
+        """Remove a generated key file; the caller decides when this is safe.
+
+        Deleting the only key of a store that was written loses that store for good.
 
         Raises:
             BackendError: The file exists but cannot be removed.
@@ -310,7 +314,7 @@ def resolve_new_secret(choice: NewSecretChoice, secret_input: SecretInput) -> Ne
         InvalidKeyFileError: A given key file is not a key file.
         KeySourceError: A key file or piped passphrase cannot be read, is not UTF-8 or is empty.
         KeyRequiredError: A passphrase on a terminal with prompting off (stdin is never read
-            from a terminal, D35).
+            from a terminal).
         ValidationError: A path for a generated key file exists already.
         BackendError: The generated key file cannot be written.
     """

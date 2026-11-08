@@ -1,4 +1,4 @@
-"""Shell completion (spec §6.15, D54).
+"""Shell completion.
 
 - `command`: `envs completion <shell>`, registered by `command.register`.
 - `protocol`: the scripts and the answers to them; `EnvsGroup` hands requests to it.

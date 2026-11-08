@@ -1,11 +1,11 @@
-"""The export dialogs (D56, spec §6.11): stores in order, options, output path.
+"""The export dialogs: stores in order, options, output path.
 
 1. `ExportStoresScreen`: choosing a store appends it to the load order and shows its position;
-   unchoosing one renumbers the rest (§2.2, D52).
+   unchoosing one renumbers the rest.
 2. `ExportOptionsScreen`: the format, `--nested` and `--first-wins`; the merge order starts
-   from the configured one (§5.2).
-3. `ExportPathScreen`: the output path (with path completion, D57) and the format again,
-   preselected from the path's extension as it is typed, like `-t` (D22). An existing file is
+   from the configured one.
+3. `ExportPathScreen`: the output path (with path completion) and the format again,
+   preselected from the path's extension as it is typed, like `-t`. An existing file is
    replaced only after a confirmation (`--force`).
 """
 
@@ -160,7 +160,7 @@ class ExportOptionsScreen(ModalScreen[ExportOptions | None]):
 
         Args:
             stores: The chosen stores in load order.
-            first_wins: The configured merge order, the default of the checkbox (§5.2).
+            first_wins: The configured merge order, the default of the checkbox.
         """
         super().__init__()
         self._stores = tuple(stores)
@@ -212,7 +212,7 @@ class ExportOptionsScreen(ModalScreen[ExportOptions | None]):
 
 
 class _ExportPathInput(PathInput):
-    """The output path (D57); its enter exports, and the footer says so."""
+    """The output path; its enter exports, and the footer says so."""
 
     BINDINGS: ClassVar[list[BindingType]] = [Binding("enter", "submit", "Export")]
 
@@ -259,7 +259,7 @@ class ExportPathScreen(ModalScreen[ExportTarget | None]):
         self.query_one("#path", Input).focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Preselect the format a newly typed extension names (D22) and clear the error."""
+        """Preselect the format a newly typed extension names and clear the error."""
         self._show_error("")
         inferred = infer_format(event.value.strip())
         if inferred is not None and inferred is not self._inferred:

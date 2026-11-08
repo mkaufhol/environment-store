@@ -1,4 +1,4 @@
-"""Export keys in the TUI: key variable, project key, unlock dialog (D56, D53, PD 5)."""
+"""Export keys in the TUI: key variable, project key, unlock dialog, in this order."""
 
 import json
 from collections.abc import Generator, Mapping

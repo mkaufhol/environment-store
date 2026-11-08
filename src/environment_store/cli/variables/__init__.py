@@ -1,4 +1,4 @@
-"""The variable commands: ls, get, set, rm, import (C3, spec §6.6-§6.10)."""
+"""The variable commands: ls, get, set, rm, import."""
 
 import typer
 

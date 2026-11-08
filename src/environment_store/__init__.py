@@ -1,6 +1,6 @@
 """Environment Store: named, optionally encrypted stores of environment variables.
 
-The public API (spec §7.3) is resolved lazily (PD 1): `import environment_store` stays cheap,
+The public API is resolved lazily: `import environment_store` stays cheap,
 and importing a lower layer such as `environment_store.core` never loads the library, the
 configuration or the crypto layers.
 
@@ -160,7 +160,7 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
-    """Resolve a public name on first use (PD 1).
+    """Resolve a public name on first use.
 
     Args:
         name: The attribute.

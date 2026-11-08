@@ -1,4 +1,4 @@
-"""Entry points `envs` / `environment-store`, `python -m` and the `cli` extra guard (D20)."""
+"""Entry points `envs` / `environment-store`, `python -m` and the `cli` extra guard."""
 
 import importlib
 import runpy

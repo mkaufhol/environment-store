@@ -1,9 +1,9 @@
-"""`envs cp-store` and `envs mv-store` (spec §6.5, D4, D5, D15, D33, PD 5, PD 33).
+"""`envs cp-store` and `envs mv-store`.
 
 The target is encrypted like the source by default (re-encrypted, because a ciphertext is bound
-to its store name, D5), as plaintext with `--plain` (the documented way to decrypt, D4), or with
-a new secret. `mv-store` is a copy followed by deleting the source; the library makes sure a
-failure never leaves zero copies.
+to its store name), as plaintext with `--plain` (the way to decrypt: there is no `decrypt`
+command), or with a new secret. `mv-store` is a copy followed by deleting the source; the
+library makes sure a failure never leaves zero copies.
 """
 
 from dataclasses import dataclass
@@ -36,7 +36,7 @@ SrcArg = Annotated[
         autocompletion=complete_stores,
     ),
 ]
-# The target is a new name: never completed (D54).
+# The target is a new name: never completed.
 DstArg = Annotated[str, typer.Argument(metavar="DST", help="The new store.", show_default=False)]
 ToOpt = Annotated[
     str | None,
@@ -53,7 +53,7 @@ PlainOpt = Annotated[
 ]
 
 
-def cp_store(  # noqa: PLR0913 - one parameter per documented option (spec §6.5)
+def cp_store(  # noqa: PLR0913 - one parameter per documented option
     ctx: typer.Context,
     src: SrcArg,
     dst: DstArg,
@@ -88,7 +88,7 @@ def cp_store(  # noqa: PLR0913 - one parameter per documented option (spec §6.5
     err(f"copied store {src!r} to {dst!r}")
 
 
-def mv_store(  # noqa: PLR0913 - one parameter per documented option (spec §6.5)
+def mv_store(  # noqa: PLR0913 - one parameter per documented option
     ctx: typer.Context,
     src: SrcArg,
     dst: DstArg,

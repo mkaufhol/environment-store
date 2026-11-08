@@ -618,7 +618,7 @@ def test_open_configured_adapter_uses_the_registry(tmp_path: Path) -> None:
         assert adapter.list_stores() == []
 
 
-def test_passphrase_with_the_spec_kdf_defaults(tmp_path: Path) -> None:
+def test_passphrase_with_the_default_kdf_parameters(tmp_path: Path) -> None:
     # The one library test with the real Argon2id parameters (t=3, m=64 MiB, p=4).
     with EnvironmentStore(f"json://{tmp_path}") as store:
         store.create_store("secret", encrypt=True, key=PASSPHRASE)

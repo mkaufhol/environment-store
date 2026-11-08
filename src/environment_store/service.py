@@ -1,8 +1,8 @@
-"""The store service: every store and variable operation, implemented once (spec §4, §6).
+"""The store service: every store and variable operation, implemented once.
 
 `StoreService` sits between the frontends (library, CLI, TUI) and an `Adapter`. It validates
 every input before it touches the adapter, decrypts and re-encrypts encrypted stores (adapters
-never see their plaintext, spec §4.4) and writes with the optimistic revision check (D7).
+never see their plaintext) and writes with the optimistic revision check.
 """
 
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -50,7 +50,7 @@ class StoreService:
     wrong kind, `KeyModeMismatchError`; a wrong secret, `DecryptionError`.
 
     Every write is read, modify, seal with a fresh nonce, then `write_store` with the revision
-    that was read, so a concurrent change raises `ConcurrentModificationError` (D7).
+    that was read, so a concurrent change raises `ConcurrentModificationError`.
     """
 
     _adapter: Adapter
@@ -113,7 +113,9 @@ class StoreService:
         return record.info
 
     def delete_store(self, name: str) -> None:
-        """Delete a store; needs no key, also for encrypted stores (D21).
+        """Delete a store; needs no key, also for encrypted stores.
+
+        A store whose key is lost must still be removable.
 
         Args:
             name: The store name.
@@ -126,7 +128,7 @@ class StoreService:
         self._adapter.delete_store(name)
 
     def parse_secret(self, name: str, text: str) -> Secret:
-        """Interpret raw secret text (from `-k` file, stdin or prompt) by the store's mode (D3).
+        """Interpret raw secret text (from `-k` file, stdin or prompt) by the store's mode.
 
         Args:
             name: The store the secret is for.
@@ -175,7 +177,7 @@ class StoreService:
         secret: Secret | None = None,
         overwrite: bool = False,
     ) -> None:
-        """Set one or more variables in a single write (D18).
+        """Set one or more variables in a single write.
 
         Args:
             name: The store name.
@@ -233,10 +235,12 @@ class StoreService:
         remaining = {key: value for key, value in opened.variables.items() if key not in unique}
         self._write(opened, remaining, opened.sealing)
 
-    # --- encryption lifecycle (D4) -------------------------------------------------------------
+    # --- encryption lifecycle ------------------------------------------------------------------
 
     def encrypt_store(self, name: str, *, secret: Secret) -> None:
-        """Turn a plaintext store into an encrypted one; there is no way back (D4).
+        """Turn a plaintext store into an encrypted one; there is no way back.
+
+        A plaintext copy is made with `copy_store` and `encryption="plain"` instead.
 
         Args:
             name: The store name.
@@ -257,7 +261,7 @@ class StoreService:
         self._write(opened, opened.variables, new_sealing(secret, self._kdf_params_factory))
 
     def rekey_store(self, name: str, *, old: Secret | None, new: Secret) -> None:
-        """Re-encrypt a store with a new secret; may switch the key mode (D4).
+        """Re-encrypt a store with a new secret; may switch the key mode.
 
         A new passphrase always gets a new salt.
 
@@ -282,7 +286,7 @@ class StoreService:
         opened = open_record(record, old)
         self._write(opened, opened.variables, new_sealing(new, self._kdf_params_factory))
 
-    # --- copy and move (D15) -------------------------------------------------------------------
+    # --- copy and move -------------------------------------------------------------------------
 
     def copy_store(
         self,
@@ -295,14 +299,14 @@ class StoreService:
     ) -> StoreInfo:
         """Copy a store under a new name or into another backend.
 
-        The copy is always re-encrypted, because a ciphertext is bound to its store name (D5).
+        The copy is always re-encrypted, because a ciphertext is bound to its store name.
 
         Args:
             src: The source store.
             dst: The new store; may equal `src` only in another backend.
             secret: The source's key or passphrase; `None` for a plaintext store.
             encryption: `"same"` (default) encrypts the copy like the source, with the same
-                secret; `"plain"` makes a plaintext copy (the way to decrypt, D4); a key or
+                secret; `"plain"` makes a plaintext copy (the only way to decrypt); a key or
                 passphrase encrypts the copy with that secret.
             destination: The service of another backend; defaults to this one.
 

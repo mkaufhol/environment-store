@@ -1,4 +1,4 @@
-"""The store file layout of spec §3.2, independent of JSON or TOML.
+"""The store file layout, independent of JSON or TOML.
 
 ```toml
 format = 1
@@ -46,8 +46,8 @@ def record_to_document(record: StoreRecord) -> dict[str, TomlValue]:
         record: The (valid) record.
 
     Returns:
-        The document in spec key order; variables sorted by name, so equal stores give equal
-        files.
+        The document in the key order of the module docstring; variables sorted by name, so
+        equal stores give equal files.
     """
     document: dict[str, TomlValue] = {
         "format": FILE_FORMAT_VERSION,

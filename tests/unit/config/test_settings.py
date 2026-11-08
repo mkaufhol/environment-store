@@ -47,7 +47,7 @@ def _resolve(
     )
 
 
-def test_environment_variable_names_follow_the_spec() -> None:
+def test_environment_variable_names_use_the_env_store_prefix() -> None:
     assert ENV_CONNECTION == "ENV_STORE_CONNECTION"
     assert ENV_ORDERED_OVERWRITE == "ENV_STORE_ORDERED_OVERWRITE"
 
@@ -134,7 +134,7 @@ def test_repr_hides_the_connection(tmp_path: Path) -> None:
     assert _HIDDEN not in repr(settings)
 
 
-# --- merge order precedence (D14) --------------------------------------------------------------
+# --- merge order precedence --------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -236,7 +236,7 @@ def test_settings_freeze_the_key_paths(tmp_path: Path) -> None:
 def test_project_file_is_parsed_from_the_bytes_read_at_discovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # PD 32: what is parsed is what the trust check saw, not whatever the path names later.
+    # What is parsed is what the trust check saw, not whatever the path names later.
     path = _project(tmp_path, 'stores = ["on_disk"]\n')
 
     def found(*_args: object, **_kwargs: object) -> ProjectFileCandidate:
@@ -271,7 +271,7 @@ def test_settings_validate_their_invariants(fields: dict[str, object]) -> None:
         Settings(**arguments)
 
 
-# --- password warning (D25, D33, PD 9) ---------------------------------------------------------
+# --- password warning --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -321,7 +321,7 @@ def test_connection_without_password_gives_no_warning(tmp_path: Path) -> None:
     assert _resolve(tmp_path).warnings == ()
 
 
-# --- untrusted project file (PD 32) ------------------------------------------------------------
+# --- untrusted project file --------------------------------------------------------------------
 
 
 def test_untrusted_project_file_only_adds_a_warning(tmp_path: Path) -> None:

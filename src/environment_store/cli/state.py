@@ -1,9 +1,9 @@
 """`CliState`: the per-invocation state every command reaches through `get_state(ctx)`.
 
 The root callback creates it from the global options and the injected `Runtime`. It resolves
-the settings once per command (PD 10), opens stores and registers them with the typer context
-(so they are closed even on errors), knows whether prompting is allowed (D3, D35) and makes sure
-stdin is consumed by at most one thing (spec §6.8, generalised) and read as bytes (PD 34).
+the settings once per command, opens stores and registers them with the typer context
+(so they are closed even on errors), knows whether prompting is allowed and makes sure
+stdin is consumed by at most one thing and read as bytes.
 """
 
 from dataclasses import dataclass, field
@@ -34,7 +34,7 @@ class CliState:
         runtime: The terminal and OS boundaries.
         connection_option: The `-c/--connection` value, or `None`.
         use_project: `False` for `--no-project`.
-        noinput: `True` for `--noinput` (D35).
+        noinput: `True` for `--noinput`.
     """
 
     runtime: Runtime
@@ -87,7 +87,7 @@ class CliState:
 
         Args:
             ctx: The command's context.
-            setup: How SQL backends treat their schema on open (D11, D13).
+            setup: How SQL backends treat their schema on open.
             connection: Another connection string (e.g. `cp-store --to`); `None` for the
                 configured one.
 
@@ -95,7 +95,7 @@ class CliState:
             The open store.
 
         Raises:
-            ConfigurationError: No connection is configured (D29).
+            ConfigurationError: No connection is configured.
         """
         url = self.settings().require_connection() if connection is None else connection
         key = (url, setup)
@@ -126,7 +126,7 @@ class CliState:
             store.close()
 
     def interactive(self) -> bool:
-        """Whether prompts are allowed: stdin is a terminal and `--noinput` is not set (D35)."""
+        """Whether prompts are allowed: stdin is a terminal and `--noinput` is not set."""
         return not self.noinput and self.runtime.stdin_is_tty()
 
     def prompter(self) -> Prompter:
@@ -141,7 +141,7 @@ class CliState:
 
         Returns:
             The TTY state, the prompter only when interactive, a `read_stdin` that claims
-            stdin before reading it, and the environment (`ENV_STORE_KEY_<STORE>`, D53).
+            stdin before reading it, and the environment (`ENV_STORE_KEY_<STORE>`).
         """
 
         def read_stdin() -> bytes:
@@ -173,11 +173,11 @@ class CliState:
         self._stdin_claim = purpose
 
     def read_stdin_bytes(self) -> bytes:
-        """Read all of stdin as bytes (PD 34); claim it first with `claim_stdin`."""
+        """Read all of stdin as bytes; claim it first with `claim_stdin`."""
         return typer.get_binary_stream("stdin").read()
 
     def read_stdin(self) -> str:
-        """Read all of stdin as strict UTF-8, without newline translation (PD 34).
+        """Read all of stdin as strict UTF-8, without newline translation.
 
         Returns:
             The text exactly as sent.

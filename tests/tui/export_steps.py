@@ -1,4 +1,4 @@
-"""Steps of the export dialogs for the Pilot tests (D56)."""
+"""Steps of the export dialogs for the Pilot tests."""
 
 from textual.pilot import Pilot
 from textual.widgets import SelectionList

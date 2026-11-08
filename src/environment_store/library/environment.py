@@ -1,6 +1,6 @@
-"""The result of loading stores: merge, apply to an environment, export (spec §2.2, §6.11).
+"""The result of loading stores: merge, apply to an environment, export.
 
-Merged variables come in the core's output order (PD 13, D52): stores in load order, each
+Merged variables come in the core's output order: stores in load order, each
 store's variables sorted by name, a shared variable at its first position. Nested output keeps
 the load order of the stores, each store's variables sorted by name.
 """
@@ -50,10 +50,10 @@ class Environment:
         object.__setattr__(self, "stores", frozen)
 
     def variables(self) -> dict[str, str]:
-        """Merge the stores (spec §2.2).
+        """Merge the stores.
 
         Returns:
-            Variable name → winning value, in output order (D52).
+            Variable name → winning value, in output order.
         """
         return merge(self.stores, order=self.order)
 
@@ -61,7 +61,7 @@ class Environment:
         """Merge the stores and name the store each value comes from.
 
         Returns:
-            Variable name → `(value, winning store)`, in output order (D52).
+            Variable name → `(value, winning store)`, in output order.
         """
         return merge_with_sources(self.stores, order=self.order)
 
@@ -80,7 +80,7 @@ class Environment:
         }
 
     def nested_flat(self) -> dict[str, str]:
-        """Prefix each variable with its store name in SCREAMING_SNAKE_CASE (D30).
+        """Prefix each variable with its store name in SCREAMING_SNAKE_CASE.
 
         Returns:
             Flat key → value; stores in load order, variables sorted by name.
@@ -97,11 +97,11 @@ class Environment:
         nested: bool = False,
         environ: MutableMapping[str, str] | None = None,
     ) -> dict[str, str]:
-        """Write the variables into an environment (PD 14).
+        """Write the variables into an environment.
 
         Args:
             overwrite: Replace variables that are already set; otherwise they are kept.
-            nested: Use the prefixed names of nested mode (D30) instead of merging.
+            nested: Use the prefixed names of nested mode instead of merging.
             environ: The target; `None` for `os.environ`.
 
         Returns:
@@ -124,8 +124,7 @@ class Environment:
             The document.
 
         Raises:
-            ValidationError: Unknown format, a nested collision, or a value dotenv cannot hold
-                (D37).
+            ValidationError: Unknown format, a nested collision, or a value dotenv cannot hold.
         """
         resolved = _format(fmt)
         if resolved is Format.DOTENV:
@@ -141,13 +140,13 @@ class Environment:
         nested: bool = False,
         force: bool = False,
     ) -> None:
-        """Export the variables to a file with mode `0600` (PD 4).
+        """Export the variables to a file with mode `0600`, as it holds decrypted secrets.
 
         The document is built before the file is opened, so a refused value leaves no file.
 
         Args:
             path: The output file.
-            fmt: The format; `None` infers it from the file name (D22).
+            fmt: The format; `None` infers it from the file name.
             nested: One namespace per store instead of merging.
             force: Replace an existing file (atomically).
 

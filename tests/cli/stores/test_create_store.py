@@ -1,4 +1,4 @@
-"""`envs create-store`: plaintext and encrypted stores, key options (§6.3, D3, PD 24, PD 33)."""
+"""`envs create-store`: plaintext and encrypted stores, key options."""
 
 import stat
 from pathlib import Path

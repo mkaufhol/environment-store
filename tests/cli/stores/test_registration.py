@@ -1,4 +1,4 @@
-"""The store commands are registered on `envs` with the envs command class (spec §6.1, PD 10)."""
+"""The store commands are registered on `envs` with the envs command class."""
 
 import pytest
 from typer.main import get_command

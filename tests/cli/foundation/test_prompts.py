@@ -1,4 +1,4 @@
-"""`TerminalPrompter`: prompts on stderr, never on stdout (PD 20, PD 21)."""
+"""`TerminalPrompter`: prompts on stderr, never on stdout."""
 
 import getpass
 import io
@@ -143,7 +143,7 @@ def test_end_of_input_at_a_hidden_prompt_aborts(ask: Callable[[TerminalPrompter]
     ids=["secret", "new_secret", "confirm"],
 )
 def test_ctrl_c_at_a_prompt_is_not_caught(ask: Callable[[TerminalPrompter], object]) -> None:
-    # typer turns an escaping KeyboardInterrupt into exit code 130 (PD 21).
+    # typer turns an escaping KeyboardInterrupt into exit code 130.
     terminal = FakeTerminal([KeyboardInterrupt()])
 
     with pytest.raises(KeyboardInterrupt):

@@ -1,20 +1,21 @@
 """The only touch points with typer internals: the group and command classes of `envs`.
 
 - `EnvsGroup` maps every typer usage error (unknown command or option, missing argument, bad
-  choice) to exit code 1 instead of click's 2, which means "not found" here (D24), and every
-  `EnvironmentStoreError` to `Error: <message>` on stderr (with the CLI's own hints, D47) and
+  choice) to exit code 1 instead of click's 2, which means "not found" here, and every
+  `EnvironmentStoreError` to `Error: <message>` on stderr (with the CLI's own hints) and
   its category's exit code.
-- `EnvsCommand` resolves the settings before each command's callback (PD 10). `invoke` runs
-  only after the command's own arguments were parsed, so `envs <cmd> --help` never resolves
-  settings. Every command is registered with `cls=EnvsCommand` (or a subclass). Its usage
-  errors name a global option given after the command name, and say that writing commands
-  never take their store (`-s`) from the project file.
+- `EnvsCommand` resolves the settings before each command's callback, so a broken
+  configuration fails every command. `invoke` runs only after the command's own arguments were
+  parsed, so `envs <cmd> --help` never resolves settings. Every command is registered with
+  `cls=EnvsCommand` (or a subclass). Its usage errors name a global option given after the
+  command name, and say that writing commands never take their store (`-s`) from the project
+  file.
 - `OfflineCommand` resolves no settings: `keygen` reads neither the connection nor the project
-  file, so a broken `.envstore.toml` cannot stop it (D44).
+  file, so a broken `.envstore.toml` cannot stop it.
 - `EnvsGroup` also answers shell completion requests (`_<PROG>_COMPLETE` in the environment)
-  through `completion.protocol`, silently (D54); typer's own completion options stay off.
+  through `completion.protocol`, silently; typer's own completion options stay off.
 - `PassthroughCommand` splits the arguments at the first `--` before parsing; the tail is the
-  command `run` executes, untouched (C4).
+  command `run` executes, untouched.
 """
 
 import os
@@ -78,7 +79,7 @@ class EnvsGroup(TyperGroup):
         prog_name: str,
         complete_var: str | None = None,
     ) -> None:
-        """Answer a completion request and exit with 0; return if there is none (D54)."""
+        """Answer a completion request and exit with 0; return if there is none."""
         variable = complete_var or _complete_var(prog_name)
         instruction = os.environ.get(variable)
         if not instruction:
@@ -93,7 +94,7 @@ class EnvsGroup(TyperGroup):
         """Parse the arguments; a bare `envs` prints the help on stdout and exits with 1.
 
         Click would raise its private `NoArgsIsHelpError` and print the help on stderr; this
-        check runs first, so neither the private class nor stderr is involved (plan §6.3). It
+        check runs first, so neither the private class nor stderr is involved. It
         is the one usage error that writes to stdout.
         """
         if not args and self.no_args_is_help and not ctx.resilient_parsing:
@@ -115,7 +116,7 @@ class EnvsGroup(TyperGroup):
 
 
 class EnvsCommand(TyperCommand):
-    """A command that validates the configuration before its callback runs (PD 10)."""
+    """A command that validates the configuration before its callback runs."""
 
     resolves_settings: ClassVar[bool] = True
     """Whether the settings are resolved before the callback; `False` for `OfflineCommand`."""
@@ -170,7 +171,7 @@ class EnvsCommand(TyperCommand):
 
 
 class OfflineCommand(EnvsCommand):
-    """A command that reads neither the connection nor the project file (`keygen`, D44)."""
+    """A command that reads neither the connection nor the project file (`keygen`)."""
 
     resolves_settings: ClassVar[bool] = False
 

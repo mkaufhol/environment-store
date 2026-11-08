@@ -1,4 +1,4 @@
-"""Import and export formats: dotenv, JSON, TOML and POSIX shell statements (spec §6.10-§6.12).
+"""Import and export formats: dotenv, JSON, TOML and POSIX shell statements.
 
 Pure functions without I/O. Imports `environment_store.core` and `environment_store._toml` only.
 """

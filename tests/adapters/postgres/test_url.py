@@ -87,11 +87,11 @@ def test_invalid_schema_names_are_rejected(schema: str) -> None:
 
 
 @given(schema=st.from_regex(SCHEMA_PATTERN, fullmatch=True))
-def test_every_name_matching_the_spec_rule_is_accepted(schema: str) -> None:
+def test_every_name_matching_the_schema_rule_is_accepted(schema: str) -> None:
     assert parse_url(f"postgresql://host/db?schema={schema}").schema == schema
 
 
-def test_schema_rule_is_the_spec_regex() -> None:
+def test_schema_rule_is_pinned() -> None:
     assert SCHEMA_PATTERN.pattern == r"[a-z_][a-z0-9_]{0,62}"
 
 

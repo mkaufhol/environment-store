@@ -1,10 +1,10 @@
-"""`envs run`: run a command with the merged environment added to the current one (§6.13).
+"""`envs run`: run a command with the merged environment added to the current one.
 
-On POSIX the process is replaced (`execvpe`, D33), so the command's exit code is the exit code
+On POSIX the process is replaced (`execvpe`), so the command's exit code is the exit code
 of `run` and signals reach the command directly. Before that, the store is closed (no SQLite
 handle or file lock leaks into the command) and stdout / stderr are flushed. A command that
-cannot be started exits with the shell's codes, 127 or 126 (PD 28), on every platform.
-Every `ENV_STORE_KEY_*` variable is removed from the command's environment (D53).
+cannot be started exits with the shell's codes, 127 or 126, on every platform.
+Every `ENV_STORE_KEY_*` variable is removed from the command's environment.
 """
 
 import subprocess  # nosec B404  # Windows has no exec(); used by run's fallback only
@@ -33,7 +33,7 @@ _NOT_FOUND: Final = 127
 _NOT_EXECUTABLE: Final = 126
 
 
-def run(  # noqa: PLR0913 - the options of spec §6.13
+def run(  # noqa: PLR0913 - the options of envs run
     ctx: typer.Context,
     stores: StoresArg = None,
     *,
@@ -50,14 +50,14 @@ def run(  # noqa: PLR0913 - the options of spec §6.13
     command = passthrough_args(ctx)
     if not command or not command[0]:
         # Checked before loading: a forgotten `--` or an empty program name (e.g. an unset
-        # "$CMD") must not cost a key prompt (PD 28); exec would reject "" with a ValueError.
+        # "$CMD") must not cost a key prompt; exec would reject "" with a ValueError.
         message = "run needs a command after '--': envs run [STORES]... -- CMD [ARGS]..."
         raise ValidationError(message)
     state = get_state(ctx)
     environment = load_for_reading(ctx, stores=stores, keys=keys, first_wins=first_wins)
     env = dict(state.runtime.environ())
     environment.apply(overwrite=overwrite, nested=nested, environ=env)
-    # The command never inherits keys, used or not (D53).
+    # The command never inherits keys, used or not.
     env = {name: value for name, value in env.items() if not is_key_variable(name)}
     state.close_stores()
     sys.stdout.flush()

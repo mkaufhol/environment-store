@@ -1,4 +1,4 @@
-"""Inspecting and migrating the dedicated PostgreSQL schema (D11, D13).
+"""Inspecting and migrating the dedicated PostgreSQL schema.
 
 The caller runs these inside one transaction that holds the schema's advisory lock, so that
 inspection, decision and migration see one consistent state and racing first opens serialise.
@@ -22,7 +22,7 @@ type Connection = psycopg.Connection[TupleRow]
 
 _LOCK_NAMESPACE: Final = "environment-store schema "
 
-# Every object that makes a schema "not empty" (D13): tables and partitioned tables by name;
+# Every object that makes a schema "not empty": tables and partitioned tables by name;
 # every other object with a prefix, so that it can never be mistaken for the `meta` table. That
 # is every catalog with a namespace column; pg_type without the row types of relations and the
 # array types created alongside another type, since those come with an object listed here.
@@ -128,7 +128,7 @@ def apply_migrations(
     *,
     create_schema: bool,
 ) -> None:
-    """Create the schema if asked and apply migrations, recording each version (D11).
+    """Create the schema if asked and apply migrations, recording each version.
 
     Args:
         connection: A connection inside the setup transaction.

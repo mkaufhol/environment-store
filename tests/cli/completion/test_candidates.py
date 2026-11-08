@@ -1,4 +1,4 @@
-"""The completion callbacks and parameter types, called directly (D54)."""
+"""The completion callbacks and parameter types, called directly."""
 
 from collections.abc import Generator
 from contextlib import contextmanager

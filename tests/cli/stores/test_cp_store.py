@@ -1,4 +1,4 @@
-"""`envs cp-store`: copies, re-encryption and target encryption (spec §6.5, D4, D5, D15, D33)."""
+"""`envs cp-store`: copies, re-encryption and target encryption."""
 
 import stat
 from pathlib import Path
@@ -58,7 +58,7 @@ def test_cp_store_reencrypts_with_the_same_key(cli: CliHarness) -> None:
     assert_exit(result, 0)
     assert cli.store().store_info("dst").key_mode is KeyMode.KEYFILE
     assert cli.store().variables("dst", key=key) == _VARIABLES
-    # The ciphertext is bound to the store name, so the copy is re-encrypted (D5).
+    # The ciphertext is bound to the store name, so the copy is re-encrypted.
     assert _ciphertext(cli.connection, "dst") != _ciphertext(cli.connection, "src")
 
 
@@ -252,7 +252,7 @@ def test_cp_store_target_encryption_options_are_exclusive(
 
     assert_exit(result, 1)
     assert "only one" in result.stderr
-    # cp-store calls the new key file option --new-key; -k is the source key (PD 24).
+    # cp-store calls the new key file option --new-key; -k is the source key.
     assert "--new-key" in result.stderr
     assert _names(cli_json) == ["src"]
     assert not (cli_json.root / "generated.key").exists()
@@ -302,7 +302,7 @@ def test_cp_store_generate_key_to_stdout_is_refused_with_a_new_key_hint(
     result = cli_json.invoke("cp-store", "src", "dst", "--generate-key", "-")
 
     assert_exit(result, 1)
-    # PD 24: the hint names cp-store's own key file option, not -k (the source key).
+    # The hint names cp-store's own key file option, not -k (the source key).
     assert "'--new-key -'" in result.stderr
     assert "'-k -'" not in result.stderr
     assert not (cli_json.root / "-").exists()

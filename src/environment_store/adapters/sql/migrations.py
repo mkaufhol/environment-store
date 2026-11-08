@@ -1,4 +1,4 @@
-"""Built-in schema migrations of the SQL adapters (D10, D11).
+"""Built-in schema migrations of the SQL adapters.
 
 Migration 1 creates schema version 1 in an empty database; every later migration upgrades the
 schema by one version. An adapter applies `pending(...)` migrations in one transaction: for each
@@ -94,7 +94,7 @@ def pending(migrations: Sequence[Migration], current: int | None) -> list[Migrat
     Raises:
         ValidationError: `current` is not an integer >= 1, or the migrations are not numbered
             1 to n.
-        SchemaTooNewError: `current` is newer than the last migration (D13).
+        SchemaTooNewError: `current` is newer than the last migration.
     """
     ordered = sorted(migrations, key=lambda migration: migration.version)
     if not ordered or [migration.version for migration in ordered] != list(

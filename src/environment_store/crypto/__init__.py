@@ -1,4 +1,4 @@
-"""Encryption: key files, Argon2id key derivation and AES-256-GCM sealing (spec §4).
+"""Encryption: key files, Argon2id key derivation and AES-256-GCM sealing.
 
 Imports nothing from Environment Store outside `environment_store.core`.
 """

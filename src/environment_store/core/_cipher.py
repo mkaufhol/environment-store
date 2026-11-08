@@ -15,7 +15,7 @@ __all__ = ["Cipher", "CipherMeta", "KdfParams", "KeyMode"]
 
 _KDF_NAME: Final = "argon2id"
 _SALT_LENGTH: Final[int] = 16
-# Upper bounds stop a tampered store from forcing a huge Argon2id computation (D34).
+# Upper bounds stop a tampered store from forcing a huge Argon2id computation.
 _MAX_ITERATIONS: Final[int] = 10
 _MAX_MEMORY_KIB: Final[int] = 1048576
 _MAX_LANES: Final[int] = 16
@@ -24,13 +24,13 @@ _MIN_MEMORY_KIB_PER_LANE: Final[int] = 8
 
 
 class Cipher(StrEnum):
-    """Cipher of an encrypted store (D2)."""
+    """Cipher of an encrypted store."""
 
     AES256GCM = "aes256gcm"
 
 
 class KeyMode(StrEnum):
-    """How the key of an encrypted store is supplied (D2)."""
+    """How the key of an encrypted store is supplied."""
 
     # auto() gives the lowercase member name: "keyfile", "passphrase".
     KEYFILE = auto()
@@ -39,7 +39,7 @@ class KeyMode(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class KdfParams:
-    """Argon2id parameters of a passphrase store (D34).
+    """Argon2id parameters of a passphrase store.
 
     Attributes:
         name: The KDF; only `argon2id`.
@@ -76,7 +76,7 @@ class KdfParams:
             raise UnsupportedFormatError(message)
 
     def to_json(self) -> dict[str, str | int]:
-        """Return the stored form with the spec keys `name, t, m, p, salt` (salt base64).
+        """Return the stored form with the keys `name, t, m, p, salt` (salt base64).
 
         Returns:
             A JSON-compatible mapping.
@@ -116,7 +116,7 @@ class KdfParams:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CipherMeta:
-    """Cipher metadata stored with an encrypted store and bound into its AAD (D5).
+    """Cipher metadata stored with an encrypted store and bound into its AAD.
 
     Attributes:
         cipher: The cipher.
@@ -187,9 +187,9 @@ class CipherMeta:
         )
 
     def to_file_table(self) -> dict[str, str | dict[str, str | int]]:
-        """Return the `[cipher]` table of the file layout (spec §3.2): `{"name", "mode", "kdf"?}`.
+        """Return the `[cipher]` table of the file layout: `{"name", "mode", "kdf"?}`.
 
-        Same content as `to_json`, with the cipher under `name`; the AAD keeps using `to_json` (D5).
+        Same content as `to_json`, with the cipher under `name`; the AAD keeps using `to_json`.
 
         Returns:
             A TOML-compatible mapping; `kdf` only in passphrase mode.

@@ -1,7 +1,7 @@
 """What the TUI's dialogs hand to the session: a new store's key, the export options.
 
-The new-key choices are the encryption options of `create-store` (spec §6.3, D55); the export
-options are those of `export` (spec §6.11, D56).
+The new-key choices are the encryption options of `create-store`; the export options are those of
+`export`.
 """
 
 from dataclasses import dataclass, field

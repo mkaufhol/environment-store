@@ -1,4 +1,4 @@
-"""`envs ls`: list the merged variables of stores (spec §6.6, D1, D16, PD 13, PD 23)."""
+"""`envs ls`: list the merged variables of stores."""
 
 import json
 from pathlib import Path

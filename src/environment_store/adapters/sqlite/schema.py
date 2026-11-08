@@ -1,8 +1,8 @@
-"""First setup and migrations of a SQLite database file (D11, D13).
+"""First setup and migrations of a SQLite database file.
 
 The adapter inspects the file (its tables and the `meta` rows), the shared pure setup logic
 classifies it and decides, and `set_up` applies the pending migrations in one write transaction.
-SQLite upgrades automatically (D11). A refused file (foreign content or a newer schema) is never
+SQLite upgrades automatically. A refused file (foreign content or a newer schema) is never
 written to: the decision is made before the journal mode is changed or a write lock is taken.
 """
 
@@ -92,7 +92,7 @@ def set_up(
     location: str,
     busy_timeout: float,
 ) -> MigrationReport:
-    """Create, upgrade or just check the schema of a database file (spec §3.3.2).
+    """Create, upgrade or just check the schema of a database file.
 
     Several connections may run this at the same time, also on a new file: the state is
     checked again under the write lock, so exactly one of them creates or upgrades the schema.

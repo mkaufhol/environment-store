@@ -43,7 +43,7 @@ def _filled(service: StoreService, name: str, secret: Secret | None) -> None:
     service.set_variables(name, _VARIABLES, secret=secret)
 
 
-# --- encrypt (D4) ------------------------------------------------------------------------------
+# --- encrypt -----------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -73,7 +73,7 @@ def test_encrypt_missing_store_raises_store_not_found(service: StoreService) -> 
         service.encrypt_store("missing", secret=KEY)
 
 
-# --- rekey (D4) --------------------------------------------------------------------------------
+# --- rekey -------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -137,7 +137,7 @@ def test_rekey_a_plaintext_store_raises_not_encrypted(service: StoreService) -> 
         service.rekey_store("base", old=KEY, new=OTHER_KEY)
 
 
-# --- copy (D5, D15) ----------------------------------------------------------------------------
+# --- copy --------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("secret", [None, KEY, PASSPHRASE])

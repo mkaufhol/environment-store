@@ -1,9 +1,9 @@
-"""`EditVariableScreen`: add a variable or edit a value, with a multi-line editor (PD 29).
+"""`EditVariableScreen`: add a variable or edit a value, with a multi-line editor.
 
 The name and the value are validated here, so a typo keeps the dialog and what was typed; the
 write itself happens in the variables screen. The `TextArea` keeps a single line-ending style and
 treats other line separators as line breaks, so a value is edited only if it comes back from the
-editor unchanged (`editable`), and an edited value saved without a change writes nothing (D28).
+editor unchanged (`editable`), and an edited value saved without a change writes nothing.
 """
 
 from collections.abc import Collection

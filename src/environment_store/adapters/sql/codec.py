@@ -1,4 +1,4 @@
-"""Conversion between `StoreRecord`s and rows of the `stores` table, per SQL dialect (D8, D12).
+"""Conversion between `StoreRecord`s and rows of the `stores` table, per SQL dialect.
 
 | Column | SQLite | PostgreSQL |
 |---|---|---|

@@ -1,4 +1,4 @@
-"""`require_confirmation`: `-y`, a terminal question, or a refusal (spec §6, D33, D35)."""
+"""`require_confirmation`: `-y`, a terminal question, or a refusal."""
 
 import pytest
 import typer

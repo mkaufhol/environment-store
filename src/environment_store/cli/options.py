@@ -1,4 +1,4 @@
-"""Shared option and argument types of the `envs` commands (spec §6, D14, D16, D33).
+"""Shared option and argument types of the `envs` commands.
 
 Use them as annotations of keyword-only parameters (ruff FBT), e.g.::
 
@@ -12,7 +12,7 @@ Use them as annotations of keyword-only parameters (ruff FBT), e.g.::
     ) -> None: ...
 
 Store parameters complete existing store names and path parameters let the shell complete
-files (D54). Defaults belong in the signature: `None` for optional values and lists, `False`
+files. Defaults belong in the signature: `None` for optional values and lists, `False`
 for flags.
 `StoreOpt` has no default: `-s` is required. Paths that may be `-` (stdin / stdout) are
 strings; parse them with `key_options.parse_writing_key` or compare with `"-"`.
@@ -153,7 +153,7 @@ NestedPrefixOpt = Annotated[
     bool,
     typer.Option("--nested", help="Prefix each variable with its store name: STORE__NAME."),
 ]
-"""`--nested` of `export-shell` and `run`, which only prefix (spec §6.12, §6.13)."""
+"""`--nested` of `export-shell` and `run`, which only prefix."""
 JsonOpt = Annotated[bool, typer.Option("--json", help="Print one JSON document.")]
 YesOpt = Annotated[bool, typer.Option("-y", "--yes", help="Do not ask for confirmation.")]
 InputFileOpt = Annotated[
@@ -190,7 +190,7 @@ ForceOpt = Annotated[bool, typer.Option("--force", help="Replace an existing out
 
 
 def resolve_format(path: Path | None, fmt: Format | None) -> Format:
-    """Resolve the format of `import` and `export` (D22).
+    """Resolve the format of `import` and `export`.
 
     Args:
         path: The file; `None` for stdin / stdout.

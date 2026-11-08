@@ -1,4 +1,4 @@
-"""`envs migrate` (D11, D13, PD 22)."""
+"""`envs migrate`."""
 
 import sqlite3
 from collections.abc import Generator
@@ -90,7 +90,7 @@ def test_migrate_upgrades_an_outdated_schema(cli_sqlite: CliHarness) -> None:
 
 
 def test_migrate_refuses_a_newer_schema(cli_sqlite: CliHarness) -> None:
-    # Opening creates nothing (D43): the newer schema is written by an explicit migrate.
+    # Opening creates nothing: the newer schema is written by an explicit migrate.
     with SqliteAdapter(_database(cli_sqlite), migrations=_SQLITE_NEWER) as newer:
         newer.migrate()
 

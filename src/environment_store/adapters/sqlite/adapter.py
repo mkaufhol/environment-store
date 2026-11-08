@@ -1,13 +1,14 @@
-"""The SQLite adapter: every store is one row of the `stores` table in one file (D8, D10).
+"""The SQLite adapter: every store is one row of the `stores` table in one file.
 
-Stdlib `sqlite3` only (D6, D10). The connection runs in autocommit mode and every multi-statement
-operation opens an explicit transaction, so no read transaction stays open between operations and
-an open adapter always sees what other connections committed. WAL mode lets readers work while
-one connection writes; the busy timeout makes writers queue instead of failing.
+Stdlib `sqlite3` only, so SQLite needs no extra dependency. The connection runs in autocommit
+mode and every multi-statement operation opens an explicit transaction, so no read transaction
+stays open between operations and an open adapter always sees what other connections committed.
+WAL mode lets readers work while one connection writes; the busy timeout makes writers queue
+instead of failing.
 
 A missing database file is created, with its missing parent directories (mode 0700), by the
-first write only (D43): opening and reading a missing file create nothing, they find no stores.
-`SetupMode.READ_ONLY` opens the file read-only and never sets it up (D54).
+first write only: opening and reading a missing file create nothing, they find no stores.
+`SetupMode.READ_ONLY` opens the file read-only and never sets it up.
 """
 
 import sqlite3
@@ -65,7 +66,7 @@ _INSERT: Final = (
     "INSERT INTO stores (name, encrypted, cipher_meta, variables, ciphertext, revision, "
     "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (name) DO NOTHING"
 )
-# The revision check and the replacement are one statement (D7).
+# The revision check and the replacement are one statement, so the check is atomic.
 _UPDATE: Final = (
     "UPDATE stores SET encrypted = ?, cipher_meta = ?, variables = ?, ciphertext = ?, "
     "revision = revision + 1, created_at = ?, updated_at = ? WHERE name = ? AND revision = ?"
@@ -79,9 +80,9 @@ def open_sqlite(url: str, /, *, setup: SetupMode = SetupMode.AUTO) -> "SqliteAda
 
     Args:
         url: `sqlite:///relative.db`, `sqlite:////absolute/path.db` or `sqlite:///~/envs.db`.
-        setup: `AUTO` inspects an existing file now and creates or upgrades the schema (D11);
+        setup: `AUTO` inspects an existing file now and creates or upgrades the schema;
             `NONE` defers that to `migrate()` or the first data operation. A missing file is
-            set up by the first write. `READ_ONLY` never writes (D54).
+            set up by the first write. `READ_ONLY` never writes.
 
     Returns:
         The open adapter.
@@ -120,12 +121,12 @@ class SqliteAdapter:
         migrations: Sequence[Migration] = SQLITE_MIGRATIONS,
         busy_timeout: float = BUSY_TIMEOUT_SECONDS,
     ) -> None:
-        """Connect to an existing database file and, with `SetupMode.AUTO`, set it up (D11, D13).
+        """Connect to an existing database file and, with `SetupMode.AUTO`, set it up.
 
         Args:
             path: The database file; a relative path is resolved against the working
                 directory now. A missing file is not created here but by the first write
-                (`create_store` or `migrate`), with its missing parent directories (D43).
+                (`create_store` or `migrate`), with its missing parent directories.
             setup: When the schema is checked: now (`AUTO`) or lazily (`NONE`); `READ_ONLY`
                 checks it lazily and never sets anything up.
             migrations: The dialect's migrations; the last one is this client's schema
@@ -154,7 +155,8 @@ class SqliteAdapter:
         with self._errors():
             self._connect(create=False)
         if setup is SetupMode.AUTO and self._connection is not None:
-            # On SQLite, the AUTO check is exactly migrate(): create, upgrade or use (D11).
+            # SQLite upgrades automatically, so the AUTO check is exactly migrate(): create,
+            # upgrade or use.
             try:
                 self.migrate()
             except BaseException:
@@ -225,7 +227,7 @@ class SqliteAdapter:
         )
 
     def write_store(self, record: StoreRecord, *, expected_revision: int) -> None:
-        """Replace a store in one `UPDATE ... WHERE revision = ?` (D7).
+        """Replace a store in one `UPDATE ... WHERE revision = ?`.
 
         Args:
             record: The new content at revision `expected_revision + 1`.
@@ -285,7 +287,7 @@ class SqliteAdapter:
     def migrate(self) -> MigrationReport:
         """Create (new or empty file) or upgrade (older schema) the schema; no-op when current.
 
-        A missing file is created, with its missing parent directories (D43).
+        A missing file is created, with its missing parent directories.
 
         Returns:
             What was done.
@@ -338,7 +340,7 @@ class SqliteAdapter:
         if self.setup is not SetupMode.READ_ONLY:
             self._set_up(connection)
             return connection
-        # D54: check, never create or upgrade; an empty file holds no stores, like a missing one.
+        # Read-only: check, never set up; an empty file holds no stores, like a missing one.
         state = classify(inspect(connection), client_version=len(self._migrations))
         if state is SetupState.EMPTY:
             return None
@@ -379,7 +381,7 @@ class SqliteAdapter:
 
     def _connect(self, *, create: bool) -> sqlite3.Connection | None:
         # Connects once the file exists (another connection may have created it since open);
-        # with `create`, a missing file and its missing directories are created first (D43).
+        # with `create`, a missing file and its missing directories are created first.
         if self._connection is None:
             self._connection = connect_file(
                 self.path,

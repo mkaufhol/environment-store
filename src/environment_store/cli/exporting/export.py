@@ -1,8 +1,8 @@
-"""`envs export`: write merged or nested stores as dotenv, JSON or TOML (spec §6.11, D22, D30).
+"""`envs export`: write merged or nested stores as dotenv, JSON or TOML.
 
-The output goes to stdout unless `-f` names a file. Files are written with mode `0600` and never
-replaced without `--force` (PD 4). The format is checked before any store is loaded, so a
-missing `-t` never costs a key prompt.
+The output goes to stdout unless `-f` names a file. Files hold decrypted secrets, so they are
+written with mode `0600` and never replaced without `--force`. The format is checked before any
+store is loaded, so a missing `-t` never costs a key prompt.
 """
 
 from pathlib import Path
@@ -28,7 +28,7 @@ __all__ = ["export"]
 _STDOUT: Final = "-"
 
 
-def export(  # noqa: PLR0913 - the options of spec §6.11
+def export(  # noqa: PLR0913 - the options of envs export
     ctx: typer.Context,
     stores: StoresArg = None,
     *,

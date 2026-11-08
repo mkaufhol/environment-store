@@ -144,7 +144,7 @@ def test_python_guide_names_every_public_name_of_the_library() -> None:
 
 
 def test_python_guide_quotes_no_cli_flags_in_library_errors() -> None:
-    # Library errors name library parameters (D47); a quoted error with `-k` or `(--force)`
+    # Library errors name library parameters; a quoted error with `-k` or `(--force)`
     # would be CLI wording.
     guide = (_ROOT / "docs" / "python.md").read_text(encoding="utf-8")
     quoted = re.findall(r"^.*\b[A-Z][A-Za-z]*Error: .*$", guide, re.MULTILINE)
@@ -163,6 +163,6 @@ def test_quoted_missing_extra_messages_match_the_error(document: Path) -> None:
 
 @pytest.mark.parametrize("document", _DOCUMENTS, ids=lambda path: path.name)
 def test_no_document_claims_there_is_no_shell_completion(document: Path) -> None:
-    # D54 added `envs completion`; an older sentence saying otherwise would mislead.
+    # `envs completion` exists; an older sentence saying otherwise would mislead.
     prose = " ".join(document.read_text(encoding="utf-8").split())
     assert not re.search(r"\bno (?:built-in )?shell completion\b", prose, re.IGNORECASE)

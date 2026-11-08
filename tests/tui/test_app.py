@@ -1,4 +1,4 @@
-"""`run_tui` and the `tui` package guard (spec §6.14, PD 29)."""
+"""`run_tui` and the `tui` package guard."""
 
 import importlib
 import sys

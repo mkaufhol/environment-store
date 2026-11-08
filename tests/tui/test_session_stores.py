@@ -1,4 +1,4 @@
-"""`StoreSession` store management and export (D55, D56, D21, D52, D53, PD 4)."""
+"""`StoreSession` store management and export."""
 
 import json
 import stat

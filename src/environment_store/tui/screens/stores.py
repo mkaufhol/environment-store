@@ -1,10 +1,10 @@
-"""`StoresScreen`: every store and whether it is encrypted; enter opens one (PD 29).
+"""`StoresScreen`: every store and whether it is encrypted; enter opens one.
 
-`a` creates a store and `d` removes the selected one (D55), `x` exports stores to a file
-(D56). `q` quits the app, here and on the variables screen; `escape` goes back from there.
+`a` creates a store and `d` removes the selected one, `x` exports stores to a file. `q` quits
+the app, here and on the variables screen; `escape` goes back from there.
 
-An encrypted store is opened without asking with the key from `ENV_STORE_KEY_<STORE>` (D53),
-else with the project file's key when it names one (PD 5); otherwise, or when that key does not
+An encrypted store is opened without asking with the key from `ENV_STORE_KEY_<STORE>`,
+else with the project file's key when it names one; otherwise, or when that key does not
 fit, the `UnlockScreen` asks for one.
 """
 
@@ -96,12 +96,12 @@ class StoresScreen(Screen[None]):
         }
 
     def action_create(self) -> None:
-        """Ask for a new store and create it (D55)."""
+        """Ask for a new store and create it."""
         existing = frozenset(info.name for info in self._stores.values())
         self.app.push_screen(CreateStoreScreen(self._session, existing=existing), self._created)
 
     def action_remove(self) -> None:
-        """Remove the selected store after its name is typed (D55, D21)."""
+        """Remove the selected store after its name is typed."""
         info = self._selected()
         if info is None:
             return
@@ -121,7 +121,7 @@ class StoresScreen(Screen[None]):
         self.app.push_screen(RemoveStoreScreen(name), answered)
 
     def action_export(self) -> None:
-        """Export stores to a file (D56)."""
+        """Export stores to a file."""
         ExportFlow(self.app, self._session, list(self._stores.values())).start()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:

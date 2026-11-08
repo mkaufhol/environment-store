@@ -125,7 +125,7 @@ def test_open_sealed_with_the_wrong_key_raises_decryption_error() -> None:
 
 
 def test_open_sealed_for_another_store_name_raises_decryption_error() -> None:
-    # A payload copied into another store must not decrypt (D5).
+    # A payload copied into another store must not decrypt: it is bound to the store name.
     with pytest.raises(DecryptionError):
         open_sealed(_seal(), store="other", meta=_KEYFILE_META, key=_KEY)
 

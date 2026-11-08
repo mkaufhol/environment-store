@@ -1,4 +1,4 @@
-"""The key commands: keygen, rekey, encrypt (C4, spec §4.5)."""
+"""The key commands: keygen, rekey, encrypt."""
 
 import typer
 
@@ -13,7 +13,8 @@ def register(app: typer.Typer) -> None:
     """Register `keygen`, `rekey` and `encrypt` on the `envs` app.
 
     Every command is registered with `cls=EnvsCommand`; `keygen` with `OfflineCommand`, which
-    reads neither the connection nor the project file (D44).
+    reads neither the connection nor the project file, so a broken `.envstore.toml` cannot
+    stop it.
 
     Args:
         app: The `envs` app.

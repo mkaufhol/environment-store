@@ -1,4 +1,4 @@
-"""The stores screen and unlocking (PD 29): list, open plain, project key, typed key, wrong key."""
+"""The stores screen and unlocking: list, open plain, project key, typed key, wrong key."""
 
 from pathlib import Path
 
@@ -441,7 +441,7 @@ def test_invalid_key_file_notifies_with_the_tui_hint(
         await pilot.pause()
         assert isinstance(app.screen, UnlockScreen)
         [message] = notifications(app)
-        # D46's prefix names the input; D47's TUI remedy replaces the library hint.
+        # The prefix names the input; the TUI's own remedy replaces the library hint.
         assert message.startswith(
             f"unlocking with the key file '{bad}' failed: not a valid key file: "
         )

@@ -1,4 +1,4 @@
-"""The on-disk layout of spec §3.2, pinned by hand-written golden files."""
+"""The on-disk layout of the JSON and TOML files, pinned by hand-written golden files."""
 
 import dataclasses
 import shutil
@@ -109,8 +109,8 @@ def test_adapter_writes_a_cipher_table_naming_aes256gcm(
     assert cipher_table in (tmp_path / f"vault.{scheme}").read_text(encoding="utf-8")
 
 
-def test_spec_json_example_is_read(tmp_path: Path) -> None:
-    # Verbatim from spec §3.2.
+def test_hand_written_json_store_file_is_read(tmp_path: Path) -> None:
+    # Written by hand, not by the serializer.
     (tmp_path / "base.json").write_text(
         """{
   "format": 1,

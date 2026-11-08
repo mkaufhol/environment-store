@@ -1,8 +1,8 @@
-"""Output helpers: data on stdout, diagnostics on stderr (D33, spec §6).
+"""Output helpers: data on stdout, diagnostics on stderr.
 
 Data is written to stdout as UTF-8 bytes, so values reach pipes exactly (no locale encoding, no
 newline translation). Diagnostics are text lines on stderr. Prompts never use these helpers;
-they go through the prompter, also on stderr (PD 20).
+they go through the prompter, also on stderr.
 """
 
 import json
@@ -54,7 +54,7 @@ def emit_json(data: JsonValue) -> None:
     """Write exactly one JSON document to stdout, keys sorted, with a trailing newline.
 
     Only object keys are sorted; lists keep their order, so `ls --json` keeps the merged
-    order of the variables (D52). Exports use `formats.json_format`, which never sorts.
+    order of the variables. Exports use `formats.json_format`, which never sorts.
 
     Args:
         data: The document.
@@ -97,7 +97,7 @@ def display_value(value: str) -> str:
 
 
 def write_value(value: str, *, tty: bool) -> None:
-    """Write a raw value to stdout, as `get` prints it (D33, spec §6.7).
+    """Write a raw value to stdout, as `get` prints it.
 
     Args:
         value: The value, written byte-exact.

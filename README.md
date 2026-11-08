@@ -142,8 +142,6 @@ at the `feature/v2` branch, where the 2.0 documentation lives. The
 
 ## Contributing
 
-- What 2.0 does: [SPEC-V2.md](https://github.com/mkaufhol/environment-store/blob/feature/v2/SPEC-V2.md)
-- How it is built: [IMPLEMENTATION-PLAN.md](https://github.com/mkaufhol/environment-store/blob/feature/v2/IMPLEMENTATION-PLAN.md)
 - How to contribute (binding rules: TDD, typing, 100 % coverage):
   [CONTRIBUTING.md](https://github.com/mkaufhol/environment-store/blob/feature/v2/CONTRIBUTING.md)
 

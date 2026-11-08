@@ -1,4 +1,4 @@
-"""`envs mv-store`: rename or move, never zero copies (spec §6.5, D5, D7, D15, PD 33)."""
+"""`envs mv-store`: rename or move, never zero copies."""
 
 from pathlib import Path
 
@@ -161,7 +161,7 @@ def test_mv_store_generate_key_to_stdout_is_refused_with_a_new_key_hint(
     result = cli_json.invoke("mv-store", "src", "dst", "--generate-key", "-")
 
     assert_exit(result, 1)
-    # PD 24: the hint names mv-store's own key file option, not -k (the source key).
+    # The hint names mv-store's own key file option, not -k (the source key).
     assert "'--new-key -'" in result.stderr
     assert "'-k -'" not in result.stderr
     assert not (cli_json.root / "-").exists()

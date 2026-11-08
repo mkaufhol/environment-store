@@ -30,13 +30,13 @@ _HELP: Final = (
     "Stores and keys can be saved in a project file, .envstore.toml (stores, [keys], "
     "ordered_overwrite, connection), found in the current directory or its parents."
 )
-# D48: -h is a shorthand for --help. Click passes help_option_names from the root context to
+# -h is a shorthand for --help. Click passes help_option_names from the root context to
 # every command's context, so setting them here covers `envs` and every command.
 _CONTEXT_SETTINGS: Final = {"help_option_names": ["-h", "--help"]}
 
 
 def _print_version(ctx: typer.Context, value: bool) -> None:  # noqa: FBT001 - typer's signature
-    # D54: while completing, click parses the line leniently and still runs eager callbacks;
+    # While completing, click parses the line leniently and still runs eager callbacks;
     # completion prints nothing but its answer (like click's own --help and --version).
     if value and not ctx.resilient_parsing:
         out(f"{_DISTRIBUTION} {version(_DISTRIBUTION)}")
@@ -85,7 +85,7 @@ def _root(
     noinput: NoInputOpt = False,
     _version: VersionOpt = False,
 ) -> None:
-    # Only builds the state; settings are resolved per command (PD 10). Tests inject a
+    # Only builds the state; settings are resolved per command. Tests inject a
     # Runtime as the context object.
     runtime = ctx.obj if isinstance(ctx.obj, Runtime) else Runtime()
     ctx.obj = CliState(

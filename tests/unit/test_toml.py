@@ -63,7 +63,7 @@ def test_dumps_round_trips_through_tomllib(document: dict[str, TomlValue]) -> No
 # --- layout -----------------------------------------------------------------------------------
 
 
-def test_dumps_writes_the_spec_store_file_layout() -> None:
+def test_dumps_writes_the_store_file_layout() -> None:
     document: dict[str, TomlValue] = {
         "format": 1,
         "encrypted": True,

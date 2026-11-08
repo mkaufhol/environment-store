@@ -19,7 +19,7 @@ type Stores = Sequence[tuple[str, Mapping[str, str]]]
 BASE: tuple[str, Mapping[str, str]] = ("base_conf", {"DB_HOST": "localhost", "DB_PORT": "5432"})
 STAGING: tuple[str, Mapping[str, str]] = ("staging_env", {"DB_HOST": "10.0.0.5", "DEBUG": "1"})
 
-# --- merge order (spec §2.2) -------------------------------------------------------------------
+# --- merge order -------------------------------------------------------------------------------
 
 
 def test_merge_order_values_are_stable_strings() -> None:
@@ -81,7 +81,7 @@ def test_merge_treats_variable_names_case_sensitively() -> None:
     }
 
 
-# --- output order (D52) ---------------------------------------------------------------------------
+# --- output order ---------------------------------------------------------------------------------
 
 STORE_A: tuple[str, Mapping[str, str]] = ("store-a", {"ENV": "development", "DEBUG": "True"})
 STORE_B: tuple[str, Mapping[str, str]] = ("store-b", {"ENV": "staging", "DB_NAME": "test"})
@@ -142,7 +142,7 @@ def test_merge_with_sources_values_match_merge(order: MergeOrder) -> None:
     )
 
 
-# --- nested mode (§6.11) -----------------------------------------------------------------------
+# --- nested mode -------------------------------------------------------------------------------
 
 
 def test_nested_keeps_each_store_under_its_own_key() -> None:
@@ -168,7 +168,7 @@ def test_nested_rejects_a_store_listed_twice() -> None:
         nested([BASE, STAGING, BASE])
 
 
-# --- nested flat keys (D30) --------------------------------------------------------------------
+# --- nested flat keys --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -236,7 +236,7 @@ def test_nested_flat_rejects_a_store_listed_twice() -> None:
         nested_flat([BASE, BASE])
 
 
-# --- bool settings (§5.2, D33) -----------------------------------------------------------------
+# --- bool settings -----------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("raw", ["true", "TRUE", "True", "1", "yes", "YES", "Yes"])

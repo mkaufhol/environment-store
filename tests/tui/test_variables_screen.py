@@ -1,4 +1,4 @@
-"""The variables screen (PD 29): masked values, add / edit multi-line / delete, reload, D7."""
+"""The variables screen: masked values, add / edit multi-line / delete, reload, conflicts."""
 
 from pathlib import Path
 

@@ -16,10 +16,10 @@ _CHEAP: Final[KdfParams] = KdfParams(iterations=1, memory_kib=8, lanes=1, salt=_
 _KNOWN_VECTOR: Final[str] = "3a008963c65f7ffa7331a90babd1fd17ea9f03bd05356b857ceb43f7b7080adc"
 
 
-def test_new_kdf_params_use_the_spec_defaults_with_a_random_16_byte_salt() -> None:
+def test_new_kdf_params_use_the_rfc_9106_defaults_with_a_random_16_byte_salt() -> None:
     first, second = new_kdf_params(), new_kdf_params()
 
-    # RFC 9106 second recommended option (D34): t=3, m=64 MiB, p=4.
+    # RFC 9106 second recommended option: t=3, m=64 MiB, p=4.
     assert (first.name, first.iterations, first.memory_kib, first.lanes) == (
         "argon2id",
         3,

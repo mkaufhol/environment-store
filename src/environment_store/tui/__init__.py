@@ -1,9 +1,9 @@
-"""The terminal user interface (spec §6.14, D15, D31, PD 29).
+"""The terminal user interface.
 
 Needs the `tui` extra (textual); without it, importing this package raises
 `MissingExtraError` with the install hint. Imports `core`, `config`, `library` and `formats`
-only; it never imports the CLI (PD 31). `run_tui` and `EnvironmentStoreApp` are resolved on
-first use, like the package's public API (PD 1), so importing this package loads no library
+only; it never imports the CLI. `run_tui` and `EnvironmentStoreApp` are resolved on
+first use, like the package's public API, so importing this package loads no library
 code.
 """
 

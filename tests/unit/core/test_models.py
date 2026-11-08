@@ -124,11 +124,11 @@ def test_kdf_params_reject_a_non_bytes_salt() -> None:
         KdfParams(salt=cast("bytes", _SALT_B64))
 
 
-def test_kdf_params_to_json_uses_the_spec_keys() -> None:
+def test_kdf_params_to_json_uses_the_short_t_m_p_keys() -> None:
     assert KdfParams(salt=_SALT).to_json() == _kdf_json()
 
 
-def test_kdf_params_from_json_reads_the_spec_keys() -> None:
+def test_kdf_params_from_json_reads_the_short_t_m_p_keys() -> None:
     params = KdfParams.from_json(_kdf_json(t=2, m=1024, p=2))
 
     assert params == KdfParams(iterations=2, memory_kib=1024, lanes=2, salt=_SALT)
@@ -245,7 +245,7 @@ def test_cipher_meta_from_json_rejects_invalid_documents(document: object, messa
 
 
 @pytest.mark.parametrize("meta", [_KEYFILE_META, _PASSPHRASE_META])
-def test_cipher_meta_file_table_uses_the_spec_layout_keys(meta: CipherMeta) -> None:
+def test_cipher_meta_file_table_uses_the_store_file_keys(meta: CipherMeta) -> None:
     table = meta.to_file_table()
 
     assert table == {
@@ -254,7 +254,7 @@ def test_cipher_meta_file_table_uses_the_spec_layout_keys(meta: CipherMeta) -> N
     }
 
 
-def test_cipher_meta_reads_the_spec_file_layout_table() -> None:
+def test_cipher_meta_reads_the_store_file_cipher_table() -> None:
     table = tomllib.loads('[cipher]\nname = "aes256gcm"\nmode = "keyfile"\n')["cipher"]
 
     assert CipherMeta.from_file_table(table) == _KEYFILE_META
@@ -344,7 +344,7 @@ def test_store_info_validates_the_revision() -> None:
 
 
 def test_max_revision_is_the_largest_sql_integer() -> None:
-    # The SQL schema stores the revision as a 32-bit INTEGER (spec §3.3.1), the narrowest backend.
+    # The SQL schema stores the revision as a 32-bit INTEGER, the narrowest backend.
     assert MAX_REVISION == 2**31 - 1
 
 

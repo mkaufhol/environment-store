@@ -1,4 +1,4 @@
-"""Concurrent writers in separate processes: the per-store lock and revision check (D7)."""
+"""Concurrent writers in separate processes: the per-store lock and revision check."""
 
 import multiprocessing
 from collections.abc import Callable

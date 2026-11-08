@@ -1,12 +1,12 @@
-"""`EnvironmentStore`: the public facade over one backend (spec §7.3, D31, PD 2).
+"""`EnvironmentStore`: the public facade over one backend.
 
 It owns exactly one adapter, opened on construction (so a refused schema or a missing extra
-surfaces at once), and one `StoreService` over it. Keys are taken as `KeyInput` (PD 12): for an
+surfaces at once), and one `StoreService` over it. Keys are taken as `KeyInput`: for an
 existing store a `Path` is read and interpreted by the store's mode; for a new secret a `Path`
-must be a key file. Key text without a file is passed as `parse_key_text(text)` (D47).
+must be a key file. Key text without a file is passed as `parse_key_text(text)`.
 
-An existing store's key that is not given comes from `ENV_STORE_KEY_<STORE>` when that is set
-(D53); new keys never do. The environment is passed in (`os.environ` by default) and never
+An existing store's key that is not given comes from `ENV_STORE_KEY_<STORE>` when that is set;
+new keys never do. The environment is passed in (`os.environ` by default) and never
 changed.
 """
 
@@ -55,7 +55,7 @@ def open_configured_adapter(connection: str, setup: SetupMode) -> Adapter:
 
     Args:
         connection: The connection string.
-        setup: How to treat the database layout on open (D11, D13).
+        setup: How to treat the database layout on open.
 
     Returns:
         The open adapter.
@@ -89,12 +89,12 @@ class EnvironmentStore:
 
         Args:
             connection: E.g. `sqlite:///envs.db`, `json://envs` or `postgresql://host/db`.
-            setup: How SQL backends treat their schema on open (D11, D13).
+            setup: How SQL backends treat their schema on open.
             clock: Source of timestamps.
-            kdf_params_factory: Argon2id parameters for new passphrases; `None` for the spec
-                defaults (D34).
+            kdf_params_factory: Argon2id parameters for new passphrases; `None` for the
+                defaults (`t=3`, `m=64 MiB`, `p=4`, as RFC 9106 recommends).
             opener: Opens the adapter; tests inject fakes here.
-            environ: Where `ENV_STORE_KEY_<STORE>` is looked up (D53); `None` for
+            environ: Where `ENV_STORE_KEY_<STORE>` is looked up; `None` for
                 `os.environ`.
 
         Raises:
@@ -125,7 +125,7 @@ class EnvironmentStore:
         """Open the backend named by `ENV_STORE_CONNECTION` only (no project file).
 
         Args:
-            environ: The environment, also for `ENV_STORE_KEY_<STORE>` (D53); `None` for
+            environ: The environment, also for `ENV_STORE_KEY_<STORE>`; `None` for
                 `os.environ`.
             setup: As for the constructor.
             clock: As for the constructor.
@@ -136,7 +136,7 @@ class EnvironmentStore:
             The open store.
 
         Raises:
-            ConfigurationError: The variable is not set or empty (D29).
+            ConfigurationError: The variable is not set or empty.
         """
         environ = os.environ if environ is None else environ
         connection = environ.get(ENV_CONNECTION)
@@ -177,7 +177,7 @@ class EnvironmentStore:
             The open store.
 
         Raises:
-            ConfigurationError: No connection is configured (D29).
+            ConfigurationError: No connection is configured.
         """
         if settings.connection is None:
             raise ConfigurationError(_MISSING_CONNECTION)
@@ -275,7 +275,7 @@ class EnvironmentStore:
         return service.create_store(name, secret=secret)
 
     def delete_store(self, name: str) -> None:
-        """Delete a store; needs no key (D21).
+        """Delete a store; needs no key.
 
         Args:
             name: The store name.
@@ -291,7 +291,7 @@ class EnvironmentStore:
         encryption: Literal["same", "plain"] | KeyInput = "same",
         to: "EnvironmentStore | None" = None,
     ) -> StoreInfo:
-        """Copy a store under a new name or into another backend (D15, D33).
+        """Copy a store under a new name or into another backend.
 
         Args:
             src: The source store.
@@ -392,7 +392,7 @@ class EnvironmentStore:
         key: KeyInput | None = None,
         overwrite: bool = False,
     ) -> None:
-        """Set several variables in one write (D18).
+        """Set several variables in one write.
 
         Args:
             store: The store name.
@@ -415,10 +415,12 @@ class EnvironmentStore:
         service = self._open_service()
         service.delete_variables(store, names, secret=self._existing_secret(store, key))
 
-    # --- encryption (D4) -----------------------------------------------------------------------
+    # --- encryption ----------------------------------------------------------------------------
 
     def encrypt_store(self, store: str, *, key: KeyInput) -> None:
-        """Encrypt a plaintext store; there is no way back (D4).
+        """Encrypt a plaintext store; there is no way back.
+
+        A plaintext copy is made with `copy_store(..., encryption="plain")`.
 
         Args:
             store: The store name.
@@ -427,11 +429,11 @@ class EnvironmentStore:
         self._open_service().encrypt_store(store, secret=_new_secret(key))
 
     def rekey_store(self, store: str, *, old: KeyInput | None = None, new: KeyInput) -> None:
-        """Re-encrypt a store with a new secret (D4).
+        """Re-encrypt a store with a new secret.
 
         Args:
             store: The store name.
-            old: The current key; `None` takes it from `ENV_STORE_KEY_<STORE>` (D53).
+            old: The current key; `None` takes it from `ENV_STORE_KEY_<STORE>`.
             new: The new secret (a key file `Path`, `KeyMaterial` or `Passphrase`); never
                 taken from the environment.
         """
@@ -457,7 +459,7 @@ class EnvironmentStore:
         return checked
 
     def environment_secret(self, store: str) -> Secret | None:
-        """Return an existing store's secret from `ENV_STORE_KEY_<STORE>` (D53).
+        """Return an existing store's secret from `ENV_STORE_KEY_<STORE>`.
 
         The frontends use it to try the variable before a project key or a prompt.
 
@@ -477,7 +479,7 @@ class EnvironmentStore:
         return secret_from_environment(self, store, self._environ)
 
     def parse_secret(self, store: str, text: str) -> Secret:
-        """Interpret raw secret text by the store's key mode (D3).
+        """Interpret raw secret text by the store's key mode.
 
         Args:
             store: The store name.
@@ -507,7 +509,7 @@ class EnvironmentStore:
             message = "sources must be a list of stores, not a single string"
             raise ValidationError(message)
         checked = [_checked_source(source) for source in sources]
-        # Before any key is read: a shared key variable is ambiguous (D53).
+        # Before any key is read: a shared key variable is ambiguous.
         check_key_variables(
             self,
             [source.name for source in checked],
@@ -518,13 +520,14 @@ class EnvironmentStore:
         return Environment(stores=tuple(service.load(resolved)), order=order)
 
     def migrate(self) -> MigrationReport:
-        """Create or upgrade the schema of a SQL backend (D11).
+        """Create or upgrade the schema of a SQL backend.
 
         Returns:
             What was done.
 
         Raises:
-            ValidationError: The backend has no schema (file backends, PD 22).
+            ValidationError: The backend has no schema (file backends); a silent success
+                would hide a wrong connection string.
         """
         adapter = self._open_service().adapter
         if not isinstance(adapter, MigratableAdapter):
@@ -541,7 +544,7 @@ class EnvironmentStore:
         return self._service
 
     def _existing_secret(self, store: str, key: KeyInput | None) -> Secret | None:
-        # The explicit key, else the key variable (D53); None lets the service raise
+        # The explicit key, else the key variable; None lets the service raise
         # KeyRequiredError for an encrypted store.
         return self.environment_secret(store) if key is None else self.secret_for(store, key)
 

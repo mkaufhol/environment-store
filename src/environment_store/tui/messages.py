@@ -2,7 +2,7 @@
 
 Library error messages never contain values or secrets (CONTRIBUTING §6). Their `hint` names
 library parameters (`overwrite=True`, `generate_key_file()`); the TUI shows its own remedy in its
-place, or none, never the library's (D47). Markup is off, so text such as `[keys]` is shown as
+place, or none, never the library's. Markup is off, so text such as `[keys]` is shown as
 written.
 """
 
@@ -20,7 +20,7 @@ _TITLE: Final = "Error"
 _REMINDER_TITLE: Final = "Keep your key"
 _REMINDER_SECONDS: Final = 30.0
 
-# Error class -> the TUI's remedy, replacing the library's hint (D47). Checked in order.
+# Error class -> the TUI's remedy, replacing the library's hint. Checked in order.
 _TUI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
     (InvalidKeyFileError, "create one with envs keygen"),
     (OutputFileExistsError, "export again and confirm replacing it"),
@@ -29,7 +29,7 @@ _TUI_HINTS: Final[tuple[tuple[type[EnvironmentStoreError], str], ...]] = (
 
 
 def message_for(error: EnvironmentStoreError) -> str:
-    """Return the message the TUI shows for a library error (D47).
+    """Return the message the TUI shows for a library error.
 
     An error with a library hint shows its detail with the TUI's remedy, or its detail alone when
     the TUI has none; every other error keeps its message.
@@ -79,7 +79,7 @@ def notify_done(app: App[object], message: str) -> None:
 
 
 def notify_reminder(app: App[object], message: str) -> None:
-    """Show a reminder that must not be missed, such as D45's, for longer than usual.
+    """Show a reminder that must not be missed, such as an unsaved new key, for longer than usual.
 
     Args:
         app: The running app.

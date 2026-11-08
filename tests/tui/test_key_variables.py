@@ -1,4 +1,4 @@
-"""The TUI and `ENV_STORE_KEY_<STORE>`: tried before the project key and the dialog (D53)."""
+"""The TUI and `ENV_STORE_KEY_<STORE>`: tried before the project key and the dialog."""
 
 import dataclasses
 from collections.abc import Generator, Mapping

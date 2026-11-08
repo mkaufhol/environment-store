@@ -1,4 +1,4 @@
-"""`ENV_STORE_KEY_<STORE>` in the CLI: reading and writing commands, `run`, hints (§4.3, D53)."""
+"""`ENV_STORE_KEY_<STORE>` in the CLI: reading and writing commands, `run`, hints."""
 
 from pathlib import Path
 from typing import Final

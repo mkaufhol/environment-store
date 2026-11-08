@@ -1,4 +1,4 @@
-"""Every registered command uses the envs command classes (PD 10), also C2-C4's once merged."""
+"""Every registered command uses the envs command classes, whichever module registers it."""
 
 import typer
 from typer.main import get_command

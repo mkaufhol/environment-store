@@ -1,4 +1,4 @@
-"""An existing store's key from `ENV_STORE_KEY_<STORE>` (spec §4.3, D53).
+"""An existing store's key from `ENV_STORE_KEY_<STORE>`.
 
 Precedence: explicit source > key variable > project `[keys]` > prompt. Collisions, empty or
 invalid values, plaintext and unused stores, and the variable never being echoed.
@@ -173,7 +173,7 @@ def test_invalid_key_text_is_an_invalid_key_file_error_without_the_value(
     assert "ENV_STORE_KEY_KEYED" in message
     assert "store 'keyed'" in message
     assert CANARY not in message
-    assert caught.value.hint is not None  # the CLI replaces it with its keygen remedy (D47)
+    assert caught.value.hint is not None  # the CLI replaces it with its keygen remedy
 
 
 def test_key_text_for_a_passphrase_store_is_a_key_mode_mismatch_naming_the_variable(
@@ -386,7 +386,7 @@ def test_the_resolver_checks_collisions_with_its_environment(inspector: Inspecto
 
 
 def test_plaintext_stores_of_one_variable_never_collide(inspector: Inspector) -> None:
-    # A plaintext store ignores the variable (D53), so it cannot be what the variable is for.
+    # A plaintext store ignores the variable, so it cannot be what the variable is for.
     inspector.service.create_store("a-b")
     inspector.service.create_store("a_b")
 

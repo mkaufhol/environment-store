@@ -1,6 +1,6 @@
-"""`EnvironmentStoreApp` and `run_tui`: the Textual app on the library facade (D31, PD 29).
+"""`EnvironmentStoreApp` and `run_tui`: the Textual app on the library facade.
 
-Browse, create and remove stores (D55), export them to a file (D56), unlock encrypted ones
+Browse, create and remove stores, export them to a file, unlock encrypted ones
 (`ENV_STORE_KEY_<STORE>`, then project `[keys]`), view masked values and add, edit or delete
 variables. Copying, moving, import and the key lifecycle stay in the CLI.
 """
@@ -26,7 +26,7 @@ class EnvironmentStoreApp(App[None]):
 
     TITLE: str | None = "Environment Store"
     ENABLE_COMMAND_PALETTE: ClassVar[bool] = False
-    """Off (D46): the palette's Screenshot action could write revealed values to disk."""
+    """Off: the palette's Screenshot action could write revealed values to disk."""
     CSS: ClassVar[str] = """
     ModalScreen {
         align: center middle;
@@ -79,10 +79,10 @@ class EnvironmentStoreApp(App[None]):
 
         Args:
             store: The open store; the caller closes it after the app ends.
-            key_paths: The project file's `[keys]`, tried before asking (PD 5).
+            key_paths: The project file's `[keys]`, tried before asking.
             project_file: The project file the keys come from, named in errors about them.
             read_key_file: Reads key and passphrase files.
-            ordered_overwrite: The configured merge order (§5.2), the export dialog's default.
+            ordered_overwrite: The configured merge order, the export dialog's default.
         """
         super().__init__()
         self._session = StoreSession(
@@ -122,7 +122,7 @@ def run_tui(
         store: The open store; the caller closes it.
         key_paths: The project file's `[keys]`.
         project_file: The project file the keys come from, named in errors about them.
-        ordered_overwrite: The configured merge order (§5.2), the export dialog's default.
+        ordered_overwrite: The configured merge order, the export dialog's default.
 
     Raises:
         SystemExit: The app stopped after an unexpected error (its traceback is printed); the

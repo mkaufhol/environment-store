@@ -1,4 +1,4 @@
-"""The PostgreSQL adapter: one row per store in a dedicated schema (spec §3.3, D8, D10-D13).
+"""The PostgreSQL adapter: one row per store in a dedicated schema.
 
 One `psycopg` connection per adapter instance, in autocommit mode: every data operation is a
 single atomic statement, and the first setup runs in one explicit transaction. Driver errors are
@@ -65,8 +65,7 @@ def open_postgres(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "PostgresAd
         url: `postgresql://user@host/db?schema=<name>`; `schema` defaults to
             `environment_store` and is removed before the URL reaches the driver.
         setup: `AUTO` inspects and, if empty, creates the schema now; `NONE` only connects;
-            `READ_ONLY` bounds every wait (connect, query, network) and never sets anything up
-            (D54).
+            `READ_ONLY` bounds every wait (connect, query, network) and never sets anything up.
 
     Returns:
         The open adapter.
@@ -84,10 +83,10 @@ class PostgresAdapter:
 
     With `SetupMode.AUTO` the schema is inspected on open: missing or empty → created at the
     latest version in one transaction; ours and current → used; anything else is refused
-    (outdated → run `migrate`, D11). With `SetupMode.NONE` the same check runs before the first
+    (outdated → run `migrate`). With `SetupMode.NONE` the same check runs before the first
     data operation, and `migrate()` may create or upgrade the schema instead. With
     `SetupMode.READ_ONLY` the session is read-only, a missing or empty schema holds no stores, any
-    other schema than a current one is refused, and writes and `migrate()` raise (D54).
+    other schema than a current one is refused, and writes and `migrate()` raise.
     """
 
     _target: PostgresTarget
@@ -108,7 +107,7 @@ class PostgresAdapter:
 
         Args:
             target: Where to connect, from `parse_url`.
-            setup: How to treat the schema on open (D11, D13).
+            setup: How to treat the schema on open.
             migrations: All migrations this client knows; the last one is its schema version.
 
         Raises:
@@ -190,7 +189,7 @@ class PostgresAdapter:
         return row_to_record(table.store_row(row), dialect=Dialect.POSTGRES)
 
     def write_store(self, record: StoreRecord, *, expected_revision: int) -> None:
-        """Replace a store if its stored revision is still `expected_revision` (D7).
+        """Replace a store if its stored revision is still `expected_revision`.
 
         Args:
             record: The new content at `expected_revision + 1`.
@@ -285,7 +284,7 @@ class PostgresAdapter:
         # redacted copy below is all a traceback may show (CONTRIBUTING §6).
         try:
             if self._setup is SetupMode.READ_ONLY:
-                # D54: completion must not hang on a slow server; this overrides the URL's.
+                # Shell completion must not hang on a slow server; this overrides the URL's.
                 return connect_read_only(self._target.conninfo)
             return psycopg.connect(self._target.conninfo, autocommit=True)
         except psycopg.Error as err:
@@ -297,7 +296,7 @@ class PostgresAdapter:
         raise BackendError(message)
 
     def _set_up(self, *, auto_upgrade: bool) -> MigrationReport:
-        """Inspect, decide and create or upgrade in one locked transaction (D11, D13).
+        """Inspect, decide and create or upgrade in one locked transaction.
 
         The transaction first pins the session time zone to UTC; every data operation runs
         after a successful setup.
@@ -340,7 +339,7 @@ class PostgresAdapter:
     def _read[T](
         self, operation: str, work: Callable[[psycopg.Connection[TupleRow]], T], *, empty: T
     ) -> T:
-        """`_run` for a read; read-only, a missing or empty schema gives `empty` (D54)."""
+        """`_run` for a read; read-only, a missing or empty schema gives `empty`."""
         self._check_open()
         if self._setup is SetupMode.READ_ONLY and not self._ready and not self._check_read_only():
             return empty

@@ -1,4 +1,4 @@
-"""Exit codes by error category (D24)."""
+"""Exit codes by error category."""
 
 from pathlib import Path
 
@@ -79,7 +79,7 @@ def _instance(cls: type[EnvironmentStoreError]) -> EnvironmentStoreError:
     return cls("message")
 
 
-def test_exit_codes_have_the_spec_values() -> None:
+def test_exit_codes_have_their_fixed_values() -> None:
     assert [int(code) for code in ExitCode] == [0, 1, 2, 3, 4, 5]
     assert [code.name for code in ExitCode] == [
         "OK",
@@ -102,7 +102,7 @@ def test_error_class_maps_to_its_category_exit_code(
     assert exit_code_for(_instance(cls)) is code
 
 
-# --- CLI hints instead of library parameters (D47) ---------------------------------------------
+# --- CLI hints instead of library parameters ---------------------------------------------------
 
 
 def test_existing_variables_name_the_overwrite_option() -> None:

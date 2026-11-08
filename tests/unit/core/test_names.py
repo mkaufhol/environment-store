@@ -1,4 +1,4 @@
-"""Names derived from store names: SCREAMING_SNAKE_CASE and the key variable (D30, D40, D53)."""
+"""Names derived from store names: SCREAMING_SNAKE_CASE and the key variable."""
 
 import pytest
 from hypothesis import given

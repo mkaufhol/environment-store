@@ -1,4 +1,4 @@
-"""`TerminalPrompter`: the CLI's prompter, on stderr only (D3, PD 20, PD 21).
+"""`TerminalPrompter`: the CLI's prompter, on stderr only.
 
 typer's `prompt` / `confirm` are not used: they write part of the prompt and the echo to stdout
 and turn Ctrl-C into an abort with exit code 1. Here hidden input goes through `getpass` on

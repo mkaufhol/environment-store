@@ -1,4 +1,4 @@
-"""The CLI test harness, shared by the CLI work packages C1-C4 (IMPLEMENTATION-PLAN.md §6 C1).
+"""The CLI test harness, shared by the CLI tests.
 
 How to use it
 =============
@@ -23,9 +23,10 @@ Arrange and assert through the library, act through the CLI::
         assert cli.store().get("a", "HOST") == "localhost"
 
 - `invoke(*args)` runs the real `envs` app in-process with `-c <connection>` prepended
-  (`connection=False` leaves it out, e.g. to test D29 or the project file). It returns typer's
-  `Result`: `exit_code`, `stdout` / `stderr` (text, CRLF normalised) and `stdout_bytes` /
-  `stderr_bytes` (exact). stdin is `input=` (str or bytes; bytes are passed through exactly).
+  (`connection=False` leaves it out, e.g. to test a missing connection or the project file).
+  It returns typer's `Result`: `exit_code`, `stdout` / `stderr` (text, CRLF normalised) and
+  `stdout_bytes` / `stderr_bytes` (exact). stdin is `input=` (str or bytes; bytes are passed
+  through exactly).
 - Terminal state is faked: `stdin_tty=True` makes the CLI interactive (it may prompt),
   `stdout_tty=True` makes `get` add a newline. CliRunner itself is never a TTY.
 - Prompts go to a `RecordingPrompter`. By default it has no answers, so any prompt fails the
@@ -399,7 +400,7 @@ class CliHarness:
         return path
 
     def passphrase_file(self, text: str, name: str = "p.txt") -> Path:
-        """Write a passphrase file in `root` (one trailing newline is stripped when read, D3)."""
+        """Write a passphrase file in `root` (one trailing newline is stripped when read)."""
         path = self.root / name
         path.write_text(text, encoding="utf-8")
         return path

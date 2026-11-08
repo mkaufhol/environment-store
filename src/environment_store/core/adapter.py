@@ -1,4 +1,4 @@
-"""The adapter contract: how the core talks to a storage backend (spec §3.1).
+"""The adapter contract: how the core talks to a storage backend.
 
 Adapters are deliberately dumb. They store and return opaque `StoreRecord`s and know nothing about
 encryption, merging or export formats. Every adapter passes the shared contract suite in
@@ -26,14 +26,16 @@ __all__ = [
 
 
 class SetupMode(StrEnum):
-    """How an adapter treats the database layout when it is opened (D11, D13).
+    """How an adapter treats the database layout when it is opened.
 
-    `AUTO` (default): SQL adapters inspect the database on open and create or upgrade it as the
-    spec allows. `NONE`: open does not inspect; `migrate()` creates or upgrades explicitly and any
-    data operation first runs the `AUTO` check lazily. File adapters need no setup.
+    `AUTO` (default): SQL adapters inspect the database on open and create or upgrade it: SQLite
+    creates and upgrades automatically, PostgreSQL creates automatically but upgrades only through
+    `migrate()`; foreign content or a newer schema is refused. `NONE`: open does not inspect;
+    `migrate()` creates or upgrades explicitly and any data operation first runs the `AUTO` check
+    lazily. File adapters need no setup.
 
     `READ_ONLY`: nothing is ever created, set up, upgraded or written, not even a lock or
-    journal file (D43, D54). Reads use what is there: an empty database or a missing location
+    journal file. Reads use what is there: an empty database or a missing location
     holds no stores, a schema that would need creating or upgrading is refused. Every write and
     `migrate()` raises `BackendError`. Meant for quick lookups such as shell completion; the
     PostgreSQL adapter also bounds every wait in this mode: the connect over all hosts, each
@@ -80,14 +82,14 @@ class MigrationReport:
 
 @runtime_checkable
 class Adapter(Protocol):
-    """A storage backend for store records (spec §3.1).
+    """A storage backend for store records.
 
     Rules every implementation follows (checked by the contract suite):
 
     - Every method validates the store names it receives (defense in depth; the service
       validates first) and checks its arguments before it touches the backend.
     - Every OS, driver or I/O failure is raised as `BackendError`, chained, never raw.
-    - Writes are atomic and guarded by the revision check (D7): nothing is ever overwritten
+    - Writes are atomic and guarded by the revision check: nothing is ever overwritten
       silently.
     - After `close()` (or leaving the `with` block) every data operation raises `BackendError`;
       closing twice is harmless.
@@ -129,7 +131,7 @@ class Adapter(Protocol):
         ...
 
     def write_store(self, record: StoreRecord, *, expected_revision: int) -> None:
-        """Replace a store atomically if nobody changed it since it was read (D7).
+        """Replace a store atomically if nobody changed it since it was read.
 
         Args:
             record: The new content; its revision must be `expected_revision + 1`.
@@ -174,7 +176,7 @@ class Adapter(Protocol):
 
 @runtime_checkable
 class MigratableAdapter(Adapter, Protocol):
-    """An adapter with a versioned schema: the SQL adapters (D11)."""
+    """An adapter with a versioned schema: the SQL adapters."""
 
     def migrate(self) -> MigrationReport:
         """Create (empty database) or upgrade (older schema) the schema; no-op when current.
@@ -190,7 +192,7 @@ class MigratableAdapter(Adapter, Protocol):
 
 
 def check_writable(setup: SetupMode, *, location: str) -> None:
-    """Refuse a write of an adapter opened with `SetupMode.READ_ONLY` (D54).
+    """Refuse a write of an adapter opened with `SetupMode.READ_ONLY`.
 
     Args:
         setup: The mode the adapter was opened with.
@@ -211,7 +213,7 @@ def check_create(record: StoreRecord) -> None:
         record: The new store.
 
     Raises:
-        ValidationError: The name is invalid or the revision is not 1 (D7).
+        ValidationError: The name is invalid or the revision is not 1.
     """
     validate_store_name(record.name)
     if record.revision != 1:
@@ -229,7 +231,7 @@ def check_write(record: StoreRecord, *, expected_revision: int) -> None:
     Raises:
         ValidationError: The name is invalid, `expected_revision` is not an integer >= 1 or is
             `MAX_REVISION` or larger (it cannot be incremented), or the record's revision is not
-            `expected_revision + 1` (D7).
+            `expected_revision + 1`.
     """
     validate_store_name(record.name)
     _check_version(expected_revision, "expected_revision")

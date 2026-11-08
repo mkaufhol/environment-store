@@ -73,7 +73,7 @@ def test_inspection_rejects_meta_that_is_not_a_mapping() -> None:
         DatabaseInspection(tables=_OURS, meta=[("app", META_APP)])  # ty: ignore[invalid-argument-type] - invalid on purpose
 
 
-# --- classify (D11, D13) -----------------------------------------------------------------------
+# --- classify ----------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("tables", [frozenset(), set()], ids=["frozenset", "set"])

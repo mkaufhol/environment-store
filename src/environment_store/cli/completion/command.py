@@ -1,9 +1,9 @@
-"""`envs completion <shell>`: print the shell completion script (spec §6.15, D54).
+"""`envs completion <shell>`: print the shell completion script.
 
 envs never edits shell configuration files; the user adds one line, e.g.
 `eval "$(envs completion zsh)"`. Like `keygen`, the command reads neither the connection nor
-the project file (D44). The script completes the program name envs was run as, so
-`environment-store completion zsh` completes `environment-store`.
+the project file, so a broken project file cannot stop it. The script completes the program
+name envs was run as, so `environment-store completion zsh` completes `environment-store`.
 """
 
 from enum import StrEnum
@@ -44,7 +44,7 @@ def completion(ctx: typer.Context, shell: ShellArg) -> None:
 
 
 def register(app: typer.Typer) -> None:
-    """Register `completion` on the `envs` app; it reads no settings (`OfflineCommand`, D44).
+    """Register `completion` on the `envs` app; it reads no settings (`OfflineCommand`).
 
     Args:
         app: The `envs` app.

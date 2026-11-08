@@ -1,4 +1,4 @@
-"""`envs export-shell`: POSIX statements for `eval` (spec §6.12, D23, D30)."""
+"""`envs export-shell`: POSIX statements for `eval`."""
 
 import subprocess
 from typing import Final

@@ -1,4 +1,4 @@
-"""`envs run`: the merged environment, `--`, process replacement and exit codes (§6.13, PD 28)."""
+"""`envs run`: the merged environment, `--`, process replacement and exit codes."""
 
 import dataclasses
 import os
@@ -316,7 +316,7 @@ def test_end_to_end_missing_command_exits_127(backend: dict[str, str], tmp_path:
 def test_end_to_end_key_variables_never_reach_the_command(
     backend: dict[str, str], tmp_path: Path
 ) -> None:
-    # D53: an encrypted store read with its key variable, plus a variable of an unused store.
+    # An encrypted store read with its key variable, plus a variable of an unused store.
     with EnvironmentStore(backend["ENV_STORE_CONNECTION"]) as library:
         library.create_store("locked", encrypt=True, key=Passphrase(text="pw"))
         library.set("locked", "ENVS_LOCKED", "opened", key=Passphrase(text="pw"))

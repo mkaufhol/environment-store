@@ -1,4 +1,7 @@
-"""Keys of the TUI (D46): no command palette, footers list the keys that work, q quits."""
+"""Keys of the TUI: no command palette, footers list the keys that work, q quits.
+
+The command palette is off because its Screenshot action could save shown values to disk.
+"""
 
 import pytest
 from textual.command import CommandPalette

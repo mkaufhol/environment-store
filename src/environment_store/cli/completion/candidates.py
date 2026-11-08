@@ -1,4 +1,4 @@
-"""What shell completion offers for parameter values (spec §6.15, D54).
+"""What shell completion offers for parameter values.
 
 - Store names, for the parameters that expect an existing store.
 - Variable names of plaintext stores; an encrypted store offers none, because listing them
@@ -41,7 +41,7 @@ _STORE = "store"
 
 
 class PathType(TyperPath):
-    """A path parameter: completion lets the shell complete files (D54).
+    """A path parameter: completion lets the shell complete files.
 
     The value is passed on unchanged, as a string; the commands check it themselves (`-`
     for stdin or stdout, missing files), so nothing about their messages changes.
@@ -78,7 +78,7 @@ class ReadKeyType(PathType):
     ) -> list[CompletionItem]:
         """Offer `STORE=` for existing stores and the path itself; after `STORE=`, the path.
 
-        D33: with one store, `-k PATH` is enough, so the shell also completes the whole text
+        With one store, `-k PATH` is enough, so the shell also completes the whole text
         as a path. The file item comes first: bash's script resets its reply on it, so there
         matching store names win and the files are the fallback.
         """
@@ -130,7 +130,7 @@ def _store_names(ctx: "ClickContext") -> list[str]:
             return []
         with runtime.adapter_opener(settings.connection, SetupMode.READ_ONLY) as adapter:
             return [info.name for info in adapter.list_stores()]
-    # D54: completion never fails visibly; whatever went wrong, it offers nothing.
+    # Completion never fails visibly; whatever went wrong, it offers nothing.
     except Exception:  # noqa: BLE001 - every error, also of a broken extra, means "no candidates"
         return []
 
@@ -143,7 +143,7 @@ def _plain_records(ctx: "ClickContext") -> list[Iterable[str]]:
             return []
         with runtime.adapter_opener(settings.connection, SetupMode.READ_ONLY) as adapter:
             records = [adapter.read_store(store) for store in stores]
-    # D54: completion never fails visibly; whatever went wrong, it offers nothing.
+    # Completion never fails visibly; whatever went wrong, it offers nothing.
     except Exception:  # noqa: BLE001 - every error, also of a broken extra, means "no candidates"
         return []
     # An encrypted record has no plaintext variables; its names would need the key.

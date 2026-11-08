@@ -1,4 +1,4 @@
-"""Connection strings of the file adapters: `json://dir` and `toml://dir` (D9, spec §3.2)."""
+"""Connection strings of the file adapters: `json://dir` and `toml://dir`."""
 
 from pathlib import Path
 

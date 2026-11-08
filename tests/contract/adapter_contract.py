@@ -76,8 +76,8 @@ _PASSPHRASE_META: Final[CipherMeta] = CipherMeta(
     mode=KeyMode.PASSPHRASE,
     kdf=KdfParams(iterations=2, memory_kib=19456, lanes=1, salt=bytes(range(16))),
 )
-# Path traversal, separators, case, length, control characters and non-ASCII (D27),
-# and a leading digit (D40).
+# Path traversal, separators, case, length, control characters and non-ASCII,
+# and a leading digit (the store name in SCREAMING_SNAKE_CASE must be a shell variable name).
 _INVALID_NAMES: Final[tuple[str, ...]] = (
     "",
     "..",
@@ -687,7 +687,7 @@ class AdapterContract:
         with backend.open(setup=setup) as reopened:
             assert reopened.read_store("base") == record
 
-    # --- read-only (D54) -------------------------------------------------------------------
+    # --- read-only (shell completion never writes) -----------------------------------------
 
     def test_read_only_on_an_empty_backend_lists_no_stores(self, backend: Backend) -> None:
         with backend.open(setup=SetupMode.READ_ONLY) as adapter:

@@ -45,7 +45,7 @@ def test_url_without_a_file_path_or_with_extras_is_rejected(url: str) -> None:
 def test_leading_tilde_expands_to_the_home_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # D43: the same path rules as json:// and toml://.
+    # The same path rules as json:// and toml://.
     monkeypatch.setenv("HOME", str(tmp_path))
 
     assert parse_sqlite_url("sqlite:///~/envs/envs.db") == tmp_path / "envs" / "envs.db"

@@ -1,4 +1,4 @@
-"""`envs rm`: delete variables from one store, in one write (spec §6.9, PD 26)."""
+"""`envs rm`: delete variables from one store, in one write."""
 
 from tests.support.cli import CliHarness, assert_exit
 

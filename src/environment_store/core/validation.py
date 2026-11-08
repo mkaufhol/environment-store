@@ -18,16 +18,16 @@ __all__ = [
     "validate_variables",
 ]
 
-# Lowercase only: store names become file names on case-insensitive file systems (D27).
-# A letter first, so the nested prefix `STORE__VAR` is always a shell variable name (D40).
+# Lowercase only: store names become file names on case-insensitive file systems.
+# A letter first, so the nested prefix `STORE__VAR` is always a shell variable name.
 STORE_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z][a-z0-9_-]{0,62}$")
-# Portable POSIX environment variable names, case-sensitive (D33).
+# Portable POSIX environment variable names, case-sensitive.
 VARIABLE_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _LONE_SURROGATE: Final[re.Pattern[str]] = re.compile("[\ud800-\udfff]")
 
 
 def validate_store_name(name: str) -> str:
-    """Check a store name against D27 and D40.
+    """Check a store name: 1 to 63 lowercase letters, digits, `_` or `-`, starting with a letter.
 
     Args:
         name: The store name.
@@ -52,7 +52,7 @@ def validate_store_name(name: str) -> str:
 
 
 def validate_variable_name(name: str) -> str:
-    """Check a variable name against the portable POSIX rule (D33).
+    """Check a variable name against the portable POSIX rule.
 
     Args:
         name: The variable name.
@@ -76,7 +76,7 @@ def validate_variable_name(name: str) -> str:
 
 
 def validate_value(value: str, *, variable: str) -> str:
-    """Check a variable value against D28: any UTF-8 string without NUL.
+    """Check a variable value: any UTF-8 string without NUL.
 
     Args:
         value: The value. It is never included in an error message.

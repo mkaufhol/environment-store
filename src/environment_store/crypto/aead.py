@@ -1,8 +1,8 @@
-"""AES-256-GCM sealing of store payloads (spec §4.1, §4.2, D1, D5).
+"""AES-256-GCM sealing of store payloads.
 
 The whole store is encrypted as one blob: the plaintext is the canonical JSON of
 `{"variables": {...}}`, so no variable name or value leaks. The associated data binds the
-ciphertext to the store name, the payload format version and the cipher metadata (D5): copying a
+ciphertext to the store name, the payload format version and the cipher metadata: copying a
 payload into another store or changing the metadata makes decryption fail.
 
 A sealed payload is `nonce (12 random bytes) || AES-GCM ciphertext and 16-byte tag`.
@@ -42,7 +42,7 @@ def encode_payload(variables: Mapping[str, str]) -> bytes:
 
 
 def associated_data(*, store: str, meta: CipherMeta) -> bytes:
-    """Return the authenticated data of a store's encryption (D5).
+    """Return the authenticated data of a store's encryption.
 
     Args:
         store: The store name.
@@ -116,7 +116,7 @@ def open_sealed(
 
 def _decode_payload(plaintext: bytes) -> dict[str, str] | None:
     # Authenticated but malformed: only a writer holding the key can produce this. Details may
-    # contain variable names (secret, D1), so they are dropped, not chained.
+    # contain variable names (secret, like the values), so they are dropped, not chained.
     try:
         document: object = json.loads(plaintext.decode("utf-8"), object_pairs_hook=_unique_keys)
     except ValueError:  # UnicodeDecodeError, JSONDecodeError, duplicate keys

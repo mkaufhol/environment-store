@@ -10,7 +10,7 @@ import pytest
 import environment_store
 from environment_store.core import errors
 
-# Where each public name is defined (spec §7.3, IMPLEMENTATION-PLAN.md §6 L1).
+# Where each public name is defined.
 _PUBLIC: Final[dict[str, str]] = {
     "EnvironmentStore": "environment_store.library.store",
     "Environment": "environment_store.library.environment",
@@ -57,7 +57,7 @@ def test_module_imports_first_in_a_fresh_interpreter(module: str) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_public_api_is_exactly_the_planned_names() -> None:
+def test_public_api_is_exactly_the_listed_names() -> None:
     assert set(environment_store.__all__) == {"__version__", *_PUBLIC}
 
 

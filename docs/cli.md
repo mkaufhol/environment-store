@@ -150,7 +150,7 @@ $ envs -c json://emvs ls-store
 no stores in /home/me/project/emvs
 ```
 
-**PostgreSQL notes.** These come from the code and spec; they were not run for this guide.
+**PostgreSQL notes.** These come from the code; they were not run for this guide.
 
 - In the user name and password, percent-encode `@`, `/` and `?` (`%40`, `%2F`, `%3F`).
 - `?schema=` must match `[a-z_][a-z0-9_]{0,62}`. Every other query parameter is passed to libpq unchanged, for example `?sslmode=require`.

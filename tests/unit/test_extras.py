@@ -1,4 +1,4 @@
-"""The `all` extra is exactly the union of the other extras (PD 15)."""
+"""The `all` extra is exactly the union of the other extras."""
 
 import tomllib
 from pathlib import Path
@@ -33,7 +33,7 @@ def test_cli_extra_requires_typer_with_vendored_click() -> None:
 
 
 def test_tui_extra_requires_the_tested_textual_line() -> None:
-    # PD 15: the floor is the tested version line, not just any textual.
+    # The floor is the tested version line, not just any textual.
     assert _extras()["tui"] == ["textual>=8.2"]
 
 

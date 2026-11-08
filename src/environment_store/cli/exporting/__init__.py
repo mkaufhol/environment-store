@@ -1,4 +1,4 @@
-"""The export, export-shell and run commands (C4, spec §6.11-§6.13)."""
+"""The export, export-shell and run commands."""
 
 import typer
 

@@ -1,4 +1,4 @@
-"""Option help texts: each command describes the behaviour it has (spec §6, D14, D35)."""
+"""Option help texts: each command describes the behaviour it has."""
 
 import pytest
 import typer

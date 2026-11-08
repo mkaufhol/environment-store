@@ -1,4 +1,4 @@
-r"""The shell side of completion: the scripts and the answers to them (spec §6.15, D54).
+r"""The shell side of completion: the scripts and the answers to them.
 
 The protocol is click's: the script runs the program with `_<PROG>_COMPLETE=<shell>_complete`
 in its environment (`_ENVS_COMPLETE` for `envs`, `_ENVIRONMENT_STORE_COMPLETE` for
@@ -10,7 +10,7 @@ item types), so they are reproduced here on top of the vendored `ShellComplete` 
 parses the line like the real command does. typer's `--install-completion` stays off: envs
 never edits shell configuration files.
 
-Completion is silent (D54): whatever goes wrong while answering, the answer is empty, and
+Completion is silent: whatever goes wrong while answering, the answer is empty, and
 nothing reaches stderr, not even a Python warning.
 """
 
@@ -31,10 +31,10 @@ if TYPE_CHECKING:
 __all__ = ["PASSTHROUGH", "SHELLS", "answer", "complete_var", "program_name", "script"]
 
 PASSTHROUGH: Final = "environment_store.passthrough"
-"""The context meta key of the words after a passthrough command's `--` (C4).
+"""The context meta key of the words after a passthrough command's `--`.
 
 Completion offers none of its own candidates once it is set: the words are the command `run`
-executes, which the shell completes (§6.13, §6.15).
+executes, which the shell completes.
 """
 
 _PROGRAM: Final = "envs"
@@ -313,7 +313,7 @@ def answer(
     prog_name: str,
     instruction: str,
 ) -> str:
-    """Answer one completion request; never raises and never writes to stderr (D54).
+    """Answer one completion request; never raises and never writes to stderr.
 
     Args:
         cli: The root command.
@@ -339,14 +339,15 @@ def answer(
         warnings.simplefilter("ignore")
         try:
             return shell_class(cli, ctx_args, prog_name, complete_var(prog_name)).complete()
-        # D54: a completion that fails offers nothing instead of a traceback.
+        # A completion that fails offers nothing instead of a traceback.
         except Exception:  # noqa: BLE001 - any failure means "no candidates"
             return ""
 
 
 def _glue_separators(words: list[str]) -> list[str]:
     # bash splits words at '=' and ':' (COMP_WORDBREAKS): `-k a=b` arrives as `-k`, `a`, `=`,
-    # `b`, and `-c sqlite:///a.db` as `-c`, `sqlite`, `:`, `///a.db` (§6.15: `-c` on the line).
+    # `b`, and `-c sqlite:///a.db` as `-c`, `sqlite`, `:`, `///a.db` (the backend may come
+    # from `-c` on the line).
     glued: list[str] = []
     attach = False
     for word in words:

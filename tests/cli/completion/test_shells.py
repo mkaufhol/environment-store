@@ -1,4 +1,4 @@
-"""The scripts in real shells, with the installed `envs` / `environment-store` (D54).
+"""The scripts in real shells, with the installed `envs` / `environment-store`.
 
 zsh runs non-interactively with stubs for the completion builtins, so the generated function
 is driven exactly as the completion system calls it. bash is only checked with `bash -n` and

@@ -1,7 +1,9 @@
-"""`envs export-shell`: POSIX statements that load stores into the current shell (§6.12, D23).
+"""`envs export-shell`: POSIX statements that load stores into the current shell.
+
+Only POSIX shells are supported; other shells use `envs run`.
 
 A child process cannot change its parent's environment, so the statements are printed for
-`eval "$(envs export-shell …)"`. Prompts go to stderr (PD 20), so stdout holds only the
+`eval "$(envs export-shell …)"`. Prompts go to stderr, so stdout holds only the
 statements.
 """
 
@@ -21,7 +23,7 @@ from environment_store.formats.shell import posix_exports
 __all__ = ["export_shell"]
 
 
-def export_shell(  # noqa: PLR0913 - the options of spec §6.12
+def export_shell(  # noqa: PLR0913 - the options of envs export-shell
     ctx: typer.Context,
     stores: StoresArg = None,
     *,

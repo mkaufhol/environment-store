@@ -1,4 +1,4 @@
-"""`SetupMode.READ_ONLY` on PostgreSQL: no setup, no writes, a short connect timeout (D54)."""
+"""`SetupMode.READ_ONLY` on PostgreSQL: no setup, no writes, a short connect timeout."""
 
 import socket
 import threading
@@ -183,7 +183,7 @@ def test_read_only_lost_connection_before_the_first_read_raises_backend_error(
 def test_read_only_spends_the_connect_timeout_once_for_all_hosts(
     silent_listeners: list[socket.socket],
 ) -> None:
-    # libpq's connect_timeout is per host; completion waits about 2 s in all (D54).
+    # libpq's connect_timeout is per host; completion waits about 2 s in all.
     hosts = ",".join(f"127.0.0.1:{_port(listener)}" for listener in silent_listeners)
     started = time.monotonic()
 
@@ -225,7 +225,7 @@ def test_read_only_sets_tcp_keepalives_against_a_stalled_network(
 def test_read_only_gives_up_on_a_locked_table(
     postgres_server: PostgresServer, database: str, read: Callable[[PostgresAdapter], object]
 ) -> None:
-    # A migration holding ACCESS EXCLUSIVE must not hang completion until it ends (D54).
+    # A migration holding ACCESS EXCLUSIVE must not hang completion until it ends.
     with open_postgres(postgres_server.url(database)) as writer:
         writer.create_store(_record())
     holder = psycopg.connect(postgres_server.url(database))

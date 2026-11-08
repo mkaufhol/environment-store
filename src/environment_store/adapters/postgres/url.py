@@ -1,4 +1,4 @@
-"""Parsing of PostgreSQL connection strings (spec §3.3.2, D13).
+"""Parsing of PostgreSQL connection strings.
 
 The `?schema=` parameter selects the dedicated schema and is removed before the string reaches
 the driver; everything else is passed on unchanged. The string is split the way libpq splits a
@@ -20,10 +20,10 @@ from environment_store.core.errors import ValidationError
 __all__ = ["DEFAULT_SCHEMA", "SCHEMA_PATTERN", "PostgresTarget", "parse_url"]
 
 DEFAULT_SCHEMA: Final = "environment_store"
-"""The schema used when the connection string has no `?schema=` (D13)."""
+"""The schema used when the connection string has no `?schema=`."""
 
 SCHEMA_PATTERN: Final[re.Pattern[str]] = re.compile(r"[a-z_][a-z0-9_]{0,62}")
-"""The schema name rule of spec §3.3.2; always applied with `fullmatch`."""
+"""The rule for schema names; always applied with `fullmatch`."""
 
 _SCHEME: Final[re.Pattern[str]] = re.compile(r"(postgresql|postgres)://", re.IGNORECASE)
 # libpq ends the user information at the first '@' that comes before any '/'.

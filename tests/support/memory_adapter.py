@@ -55,7 +55,7 @@ class MemoryBackend:
             return self._get(name)
 
     def replace(self, record: StoreRecord, *, expected_revision: int) -> None:
-        """Replace a record if its stored revision is `expected_revision` (D7)."""
+        """Replace a record if its stored revision is `expected_revision`."""
         with self._lock:
             stored = self._get(record.name)
             if stored.revision != expected_revision:

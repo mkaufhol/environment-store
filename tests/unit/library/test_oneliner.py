@@ -482,7 +482,7 @@ def test_public_load_passes_keys_and_flags(tmp_path: Path, monkeypatch: pytest.M
     assert environment.order.value == "first_wins"
 
 
-def test_load_applies_the_variables_in_the_d52_order(
+def test_load_applies_the_variables_in_the_merged_output_order(
     tmp_path: Path, opener: RecordingOpener, backend: MemoryBackend
 ) -> None:
     with EnvironmentStore(

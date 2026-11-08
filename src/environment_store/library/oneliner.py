@@ -1,10 +1,10 @@
-"""`load()`: the one-liner that resolves configuration like the CLI and fills `os.environ` (D36).
+"""`load()`: the one-liner that resolves configuration like the CLI and fills `os.environ`.
 
 Like python-dotenv's `load_dotenv()`: connection, project file, stores and keys are resolved
-exactly as the CLI does (spec §5, §6.0.3; keys: `keys=` > `ENV_STORE_KEY_<STORE>` > `[keys]` >
-prompt, D53), encrypted stores are prompted for on a terminal
-(D3, PD 11, never with `noinput`, D35) and variables already in the environment are kept unless
-`overwrite` is set (PD 14). `load_with` is the same with every boundary injected.
+exactly as the CLI does (keys: `keys=` > `ENV_STORE_KEY_<STORE>` > `[keys]` > prompt),
+encrypted stores are prompted for on a terminal (never with `noinput`) and variables already
+in the environment are kept unless `overwrite` is set. `load_with` is the same with every
+boundary injected.
 """
 
 import os
@@ -38,7 +38,7 @@ from environment_store.library.store import (
 __all__ = ["load", "load_with"]
 
 
-def load(  # noqa: PLR0913 - the keyword-only options of D36
+def load(  # noqa: PLR0913 - keyword-only options, like the CLI's
     *stores: str,
     connection: str | None = None,
     keys: Mapping[str, KeyInput] | None = None,
@@ -48,7 +48,7 @@ def load(  # noqa: PLR0913 - the keyword-only options of D36
     use_project: bool = True,
     noinput: bool = False,
 ) -> Environment:
-    """Load stores into `os.environ`, configured like the CLI (D36).
+    """Load stores into `os.environ`, configured like the CLI.
 
     Args:
         *stores: Stores in load order; none uses the project file's `stores`.
@@ -57,9 +57,9 @@ def load(  # noqa: PLR0913 - the keyword-only options of D36
         keys: Store name → key; beats `ENV_STORE_KEY_<STORE>` and the project file's `[keys]`.
         first_wins: The first store wins instead of the last (beats every other setting).
         overwrite: Replace variables already in `os.environ`.
-        nested: Set prefixed names (`STORE__NAME`, D30) instead of merging.
+        nested: Set prefixed names (`STORE__NAME`) instead of merging.
         use_project: `False` ignores `.envstore.toml`.
-        noinput: Never prompt, even on a terminal (D35).
+        noinput: Never prompt, even on a terminal.
 
     Returns:
         The loaded stores.
@@ -122,7 +122,8 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
         prompter: Asks for keys when interactive and not `noinput`.
         target: Where the variables are applied.
         boundary: The last directory of the project file search.
-        uid: The owner a project file must have (PD 32); `None` for the effective user.
+        uid: The owner a project file must have (or root), else it is ignored; `None`
+            for the effective user.
         opener: Opens the adapter.
 
     Returns:
@@ -132,7 +133,8 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
         ConfigurationError: An empty `connection`; otherwise as for `load`.
     """
     if connection == "":
-        # Checked here: the settings layer words this for the CLI's -c option (D47).
+        # Checked here: the settings layer words this for the CLI's -c option, but library
+        # errors name library parameters.
         message = "connection must not be empty: pass a connection string, or None to configure it"
         raise ConfigurationError(message)
     settings = resolve_settings(
@@ -155,7 +157,7 @@ def load_with(  # noqa: PLR0913 - every boundary is injected
     )
     unique = tuple(dict.fromkeys(names))
     with EnvironmentStore.from_settings(settings, opener=opener, environ=environ) as store:
-        # Like the CLI (PD 18): every store must exist before a key is read or prompted for,
+        # Like the CLI: every store must exist before a key is read or prompted for,
         # so a typo never costs a prompt.
         for name in unique:
             store.store_info(name)
@@ -213,8 +215,8 @@ def _secret(
     try:
         return resolver.existing(name, None, project_key=path)
     except NotEncryptedError as err:
-        # Keys are bound by store name, so a project key for a used plaintext store is an error
-        # (PD 5); the user gave no key, so the message points at where it came from.
+        # Keys are bound by store name, so a project key for a used plaintext store is an error;
+        # the user gave no key, so the message points at where it came from.
         message = (
             f"[keys] in '{settings.project_file}' names a key for store {name!r}, which is not "
             "encrypted: remove the entry"

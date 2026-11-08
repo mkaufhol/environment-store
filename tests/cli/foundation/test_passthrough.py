@@ -1,4 +1,4 @@
-"""`PassthroughCommand`: everything after the first `--` reaches `run` untouched (PD 28)."""
+"""`PassthroughCommand`: everything after the first `--` reaches `run` untouched."""
 
 import json
 

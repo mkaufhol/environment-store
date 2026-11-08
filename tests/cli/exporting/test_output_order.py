@@ -1,4 +1,4 @@
-"""Merged output order (D52) in every CLI output: `ls`, `export`, `export-shell` and `run`.
+"""Merged output order in every CLI output: `ls`, `export`, `export-shell` and `run`.
 
 The stores' variables come in load order, each store's sorted by name; a variable shared by
 several stores keeps its first position and takes the value of the merge order.
@@ -17,7 +17,7 @@ _FIRST_WINS_DOTENV: Final = "DEBUG=True\nENV=development\nDB_NAME=test\n"
 
 
 def _arrange(cli: CliHarness) -> None:
-    """The user's example of D52: store-a and store-b share ENV."""
+    """The documented output order example: store-a and store-b share ENV."""
     library = cli.store()
     library.create_store("store-a")
     library.set_many("store-a", {"ENV": "development", "DEBUG": "True"})

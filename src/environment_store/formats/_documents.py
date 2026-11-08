@@ -9,9 +9,10 @@ __all__ = ["NestedInputError", "flat_variables", "nested_variables"]
 
 
 class NestedInputError(ValidationError):
-    """A JSON or TOML import has a nested object, e.g. a nested export (D33).
+    """A JSON or TOML import has a nested object, e.g. a nested export.
 
-    Its `hint` names `nested=True`; the CLI names its `--nested` option instead (D47).
+    Its `hint` names the library parameter `nested=True`; the CLI names its `--nested`
+    option instead.
 
     Attributes:
         name: The key that holds the nested object.
@@ -37,7 +38,7 @@ class NestedInputError(ValidationError):
 
 
 def flat_variables(document: object, *, format_name: str) -> dict[str, str]:
-    """Check that a parsed document is a flat object of string values (D33).
+    """Check that a parsed document is a flat object of string values.
 
     Args:
         document: The parsed document (an untyped boundary).
@@ -68,7 +69,7 @@ def flat_variables(document: object, *, format_name: str) -> dict[str, str]:
 
 
 def nested_variables(stores: Mapping[str, Mapping[str, str]]) -> dict[str, dict[str, str]]:
-    """Validate a nested document: store name → variables (`--nested`, §6.11).
+    """Validate a nested document: store name → variables (`--nested`).
 
     Args:
         stores: Store names and their variables, in load order.

@@ -1,4 +1,4 @@
-"""`envs set`: set variables in one store, in one write (spec §6.8, D18, D35, D38, PD 25)."""
+"""`envs set`: set variables in one store, in one write."""
 
 from pathlib import Path
 
@@ -158,7 +158,7 @@ def test_set_from_stdin_strips_exactly_one_trailing_newline(
 def test_set_from_empty_stdin_is_refused_and_names_how_to_set_an_empty_value(
     cli_json: CliHarness, stdin: bytes | None
 ) -> None:
-    # D41: zero bytes (< /dev/null, a forgotten pipe) never blanks a variable.
+    # Zero bytes (< /dev/null, a forgotten pipe) never blanks a variable.
     store = cli_json.store()
     store.create_store("a")
     store.set("a", "X", "keep")
@@ -347,7 +347,7 @@ def test_set_with_a_concurrent_change_exits_5(cli_json: CliHarness) -> None:
     assert cli_json.store().variables("a") == {"RACE": "1"}
 
 
-# A value ending in \r cannot round-trip this way: \r plus the appended \n is one CRLF (D38).
+# A value ending in \r cannot round-trip this way: \r plus the appended \n is one CRLF.
 @settings(max_examples=25, deadline=None)
 @given(value=values().filter(lambda value: not value.endswith("\r")))
 def test_any_value_piped_with_one_newline_round_trips_through_get(value: str) -> None:

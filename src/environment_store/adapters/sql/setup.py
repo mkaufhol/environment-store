@@ -1,4 +1,4 @@
-"""What a SQL adapter does with the database it finds on connect (D11, D13).
+"""What a SQL adapter does with the database it finds on connect.
 
 Pure: the adapter inspects the database (its tables and the `meta` rows), `classify` names the
 state and `decide` turns it into an action or refuses. Refusing raises before anything is written,
@@ -73,7 +73,7 @@ class DatabaseInspection:
 
 
 class SetupState(StrEnum):
-    """State of the database found on connect (spec §3.3.2)."""
+    """State of the database found on connect."""
 
     # auto() gives the lowercase member name.
     EMPTY = auto()
@@ -118,7 +118,7 @@ def stored_version(inspection: DatabaseInspection) -> int | None:
 
 
 def classify(inspection: DatabaseInspection, *, client_version: int = SCHEMA_VERSION) -> SetupState:
-    """Name the state of an inspected database (D13).
+    """Name the state of an inspected database.
 
     Args:
         inspection: What the adapter found.
@@ -140,7 +140,7 @@ def classify(inspection: DatabaseInspection, *, client_version: int = SCHEMA_VER
 
 
 def decide(state: SetupState, *, auto_upgrade: bool, location: str = "the database") -> SetupAction:
-    """Decide what to do with a database, or refuse (D11, D13).
+    """Decide what to do with a database, or refuse.
 
     Args:
         state: The state from `classify`.

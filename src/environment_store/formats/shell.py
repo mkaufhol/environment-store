@@ -1,7 +1,8 @@
-"""POSIX shell statements for `export-shell` (spec §6.12, D23).
+"""POSIX shell statements for `export-shell`.
 
 The output is meant for `eval "$(envs export-shell …)"` in bash, zsh, dash and other POSIX
-shells. Values are quoted with `shlex.quote`, so the shell reads them back exactly.
+shells; other shells are not supported, `envs run` works there. Values are quoted with
+`shlex.quote`, so the shell reads them back exactly.
 """
 
 import shlex
@@ -17,7 +18,7 @@ def posix_exports(variables: Mapping[str, str], *, overwrite: bool) -> str:
     """Build shell statements that export variables.
 
     Without `overwrite`, each statement is `[ -n "${NAME+x}" ] || export NAME=…`: a variable
-    that is already set (even to the empty string) is kept. This is the spec's
+    that is already set (even to the empty string) is kept. This is the usual
     `[ -z … ] && export …` with the test inverted, so that a skipped last statement does not
     make `eval` fail and abort scripts running with `set -e`.
 

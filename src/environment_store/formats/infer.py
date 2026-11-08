@@ -1,4 +1,4 @@
-"""File format names and inference from file names (D22)."""
+"""File format names and inference from file names."""
 
 import os
 from enum import StrEnum
@@ -16,7 +16,7 @@ class Format(StrEnum):
 
 
 def infer_format(path: str | os.PathLike[str]) -> Format | None:
-    """Infer a file format from a file name (D22).
+    """Infer a file format from a file name.
 
     `.json` and `.toml` (case-insensitive) win over the dotenv rule, so `.env.json` is JSON.
     Names starting with `.env` (`.env`, `.env.local`, …) and the `.env` suffix are dotenv.

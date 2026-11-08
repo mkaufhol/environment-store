@@ -1,4 +1,4 @@
-"""Output and input files of exports and imports (PD 4, PD 35).
+"""Output and input files of exports and imports.
 
 Output files hold decrypted secrets: they are created with mode `0600`, never replaced unless
 asked, replaced atomically when asked, and never left behind half-written.

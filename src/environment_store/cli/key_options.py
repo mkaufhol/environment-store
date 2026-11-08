@@ -1,4 +1,4 @@
-r"""`-k` parsing (D3, D16, D33, PD 19).
+r"""`-k` parsing.
 
 Reading commands bind keys by store name: `-k store=path` or `-k store=-`; a bare path or `-` is
 the shorthand for a single store. A value is `store=path` when the text before the first `=`
@@ -36,7 +36,7 @@ def parse_reading_keys(values: Sequence[str], stores: Sequence[str]) -> dict[str
     Raises:
         ValidationError: A key for a store not in the list, two keys for one store, an empty
             path, the shorthand with several stores, or more than one `-` (stdin is read
-            once, D3).
+            once).
     """
     sources: dict[str, KeySource] = {}
     for value in values:

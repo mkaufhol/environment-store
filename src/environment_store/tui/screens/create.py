@@ -1,9 +1,9 @@
-"""`CreateStoreScreen`: create a store with any encryption of `create-store` (D55, spec §6.3).
+"""`CreateStoreScreen`: create a store with any encryption of `create-store`.
 
-The name is validated as it is typed (D27, D40), and so are the other inputs, each with its
+The name is validated as it is typed, and so are the other inputs, each with its
 error below it. The store is created before the dialog closes, so a refused key keeps the
-dialog and what was typed. A new passphrase or generated key file comes with the D45 reminder
-that envs does not save it.
+dialog and what was typed. A new passphrase or generated key file comes with the reminder that
+envs does not save it.
 """
 
 from dataclasses import dataclass
@@ -42,7 +42,8 @@ class Created:
 
     Attributes:
         name: The store name.
-        reminder: The D45 reminder for a new passphrase or generated key, or `None`.
+        reminder: The reminder that envs does not save a new passphrase or generated key, or
+            `None`.
     """
 
     name: str
@@ -56,7 +57,7 @@ class _CreateInput(Input):
 
 
 class _CreatePathInput(PathInput):
-    """A path input (D57) whose enter creates the store."""
+    """A path input whose enter creates the store."""
 
     BINDINGS: ClassVar[list[BindingType]] = [Binding("enter", "submit", "Create")]
 
@@ -232,7 +233,7 @@ class CreateStoreScreen(ModalScreen[Created | None]):
         return ""
 
     def _checked_key(self, name: str) -> tuple[NewKey | None, str | None] | None:
-        """Return the chosen key with its D45 reminder, or `None` after showing a problem."""
+        """Return the chosen key with its reminder to keep it, or `None` after showing a problem."""
         tail = f"keep it, or store {name!r} cannot be read again"
         match self._chosen():
             case "passphrase":

@@ -1,8 +1,8 @@
-"""`envs rekey` and `envs encrypt`: give a store a new secret (spec §4.5, D4, D34).
+"""`envs rekey` and `envs encrypt`: give a store a new secret.
 
 Both need exactly one usable choice of `--new-key`, `--generate-key` and `--passphrase`; that
-is checked before any key is read or asked for. The library call runs inside `keep_or_discard`
-(PD 33): a generated key file is removed only if the store provably does not use it.
+is checked before any key is read or asked for. The library call runs inside `keep_or_discard`:
+a generated key file is removed only if the store provably does not use it.
 """
 
 from pathlib import Path
@@ -39,7 +39,7 @@ __all__ = ["encrypt", "rekey"]
 _NEW_KEY_OPTION: Final = "--new-key"
 
 
-def rekey(  # noqa: PLR0913 - the options of spec §4.5
+def rekey(  # noqa: PLR0913 - the options of envs rekey
     ctx: typer.Context,
     *,
     store: StoreOpt,

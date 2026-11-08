@@ -1,7 +1,7 @@
-"""JSON import and export (spec §6.10, §6.11).
+"""JSON import and export.
 
 Exports are indented objects of strings, flat or nested per store. Imports accept only flat
-objects of string values (D33).
+objects of string values.
 """
 
 import json

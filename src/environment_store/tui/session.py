@@ -1,9 +1,9 @@
-"""`StoreSession`: everything the TUI does with stores, on the library facade (D31, PD 29).
+"""`StoreSession`: everything the TUI does with stores, on the library facade.
 
 The screens stay thin: they ask the session and show its results or its errors. Secrets live
 only in the `OpenedStore` of the screen that shows the store and are never stored or cached
-beyond it (D3). Writes are refused when the store changed since it was shown (D7), so a change
-made elsewhere is never overwritten silently.
+beyond it. Writes are refused when the store changed since it was shown, so a change made
+elsewhere is never overwritten silently.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -43,9 +43,9 @@ class OpenedStore:
     Attributes:
         name: The store name.
         secret: The store's key or passphrase; `None` for a plaintext store.
-        revision: The revision the variables were read at (D7).
+        revision: The revision the variables were read at.
         variables: The variables (read-only).
-        from_environment: Whether the secret came from `ENV_STORE_KEY_<STORE>` (D53).
+        from_environment: Whether the secret came from `ENV_STORE_KEY_<STORE>`.
     """
 
     name: str
@@ -81,10 +81,10 @@ class StoreSession:
 
         Args:
             store: The store; the caller closes it.
-            key_paths: The project file's `[keys]`, tried before asking (PD 5).
+            key_paths: The project file's `[keys]`, tried before asking.
             project_file: The project file the keys come from, named in errors about them.
             read_key_file: Reads key and passphrase files.
-            ordered_overwrite: The configured merge order (§5.2): `True` for last wins.
+            ordered_overwrite: The configured merge order: `True` for last wins.
         """
         self._store = store
         self._key_paths = MappingProxyType(dict(key_paths))
@@ -117,7 +117,7 @@ class StoreSession:
         return self._key_paths.get(name)
 
     def environment_secret(self, name: str) -> Secret | None:
-        """Return a store's secret from `ENV_STORE_KEY_<STORE>`, tried first (D53).
+        """Return a store's secret from `ENV_STORE_KEY_<STORE>`, tried first.
 
         Args:
             name: The store name.
@@ -131,13 +131,13 @@ class StoreSession:
         return self._store.environment_secret(name)
 
     def secret_from_file(self, name: str, path: Path) -> Secret:
-        """Read a key or passphrase file and interpret it by the store's key mode (D3).
+        """Read a key or passphrase file and interpret it by the store's key mode.
 
         Args:
             name: The store name.
             path: The file, used as given: `~` is already expanded by the caller (the unlock
                 dialog's path input, or the project file's `[keys]`), since only the typed text
-                tells a leading `~` from `./~` (D57).
+                tells a leading `~` from `./~`.
 
         Returns:
             The secret.
@@ -149,7 +149,7 @@ class StoreSession:
         return self._store.parse_secret(name, self._read_key_file(path))
 
     def secret_from_text(self, name: str, text: str) -> Secret:
-        """Interpret typed text (a passphrase) by the store's key mode (D3).
+        """Interpret typed text (a passphrase) by the store's key mode.
 
         Args:
             name: The store name.
@@ -176,7 +176,7 @@ class StoreSession:
         Raises:
             StoreNotFoundError: The store does not exist.
             NotEncryptedError: The store is plaintext but the project file names a key for it;
-                keys are bound by store name, so this is an error like in the CLI (PD 5).
+                keys are bound by store name, so this is an error like in the CLI.
             CryptoError: The secret is missing or wrong.
         """
         info = self._store.store_info(name)
@@ -209,7 +209,7 @@ class StoreSession:
             The store after the write.
 
         Raises:
-            ConcurrentModificationError: The store changed since it was shown (D7).
+            ConcurrentModificationError: The store changed since it was shown.
             VariableExistsError: The variable exists and `overwrite` is false.
         """
         self._check_unchanged(opened)
@@ -227,20 +227,20 @@ class StoreSession:
             The store after the write.
 
         Raises:
-            ConcurrentModificationError: The store changed since it was shown (D7).
+            ConcurrentModificationError: The store changed since it was shown.
         """
         self._check_unchanged(opened)
         self._store.delete(opened.name, [name], key=opened.secret)
         return self.reload(opened)
 
     def create_store(self, name: str, key: NewKey | None) -> StoreInfo:
-        """Create an empty store, like `create-store` (D55).
+        """Create an empty store, like `create-store`.
 
         A generated key file is removed again when the store was not created, so a failure
         leaves nothing behind; it is kept when the store may already use it.
 
         Args:
-            name: The new store's name (D27, D40).
+            name: The new store's name.
             key: The new secret; `None` for a plaintext store.
 
         Returns:
@@ -276,7 +276,7 @@ class StoreSession:
             raise BackendError(message) from error
 
     def delete_store(self, name: str) -> None:
-        """Delete a store and all its variables; needs no key (D21).
+        """Delete a store and all its variables; needs no key.
 
         Args:
             name: The store name.
@@ -286,17 +286,20 @@ class StoreSession:
     def export(
         self, sources: Sequence[Source], path: Path, options: ExportOptions, *, force: bool
     ) -> None:
-        """Export stores to a file with mode `0600` (D56, PD 4), in output order (D52).
+        """Export stores to a file with mode `0600`, in output order.
+
+        The output order is the load order of the stores, sorted by name within a store; a
+        variable in several stores keeps its first position and takes the merge order's value.
 
         Args:
             sources: The stores in load order with their secrets; an encrypted store without
-                one takes its key from `ENV_STORE_KEY_<STORE>` (D53).
+                one takes its key from `ENV_STORE_KEY_<STORE>`.
             path: The output file.
             options: Format, nested and merge order.
             force: Replace an existing file.
 
         Raises:
-            NotEncryptedError: The project file names a key for a plaintext store (PD 5).
+            NotEncryptedError: The project file names a key for a plaintext store.
             OutputFileExistsError: The file exists and `force` is not set.
         """
         for source in sources:
@@ -313,7 +316,7 @@ class StoreSession:
             return True  # unknown: the store may exist
 
     def _check_project_key(self, info: StoreInfo) -> None:
-        # Keys are bound by store name, so a key for a plaintext store is an error (PD 5).
+        # Keys are bound by store name, so a key for a plaintext store is an error.
         if not info.encrypted and info.name in self._key_paths:
             where = "the project file" if self._project_file is None else f"'{self._project_file}'"
             message = (

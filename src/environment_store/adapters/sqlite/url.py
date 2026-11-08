@@ -1,4 +1,4 @@
-"""SQLite connection strings: `sqlite:///relative.db`, `sqlite:////absolute.db` (spec §3, D43)."""
+"""SQLite connection strings: `sqlite:///relative.db`, `sqlite:////absolute.db`."""
 
 import re
 from pathlib import Path
@@ -21,7 +21,7 @@ def parse_sqlite_url(url: str) -> Path:
     Args:
         url: `sqlite:///relative/path.db` or `sqlite:////absolute/path.db`; the scheme is
             case-insensitive. A leading `~` (`sqlite:///~/envs.db`) expands to the home
-            directory, as for `json://` and `toml://` (D43).
+            directory, as for `json://` and `toml://`.
 
     Returns:
         The path as written, `~` expanded: relative paths stay relative (to the working

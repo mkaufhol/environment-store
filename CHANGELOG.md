@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased] — 2.0.0
 
-Version 2 is a rewrite defined by [SPEC-V2.md](SPEC-V2.md). It is not compatible with 0.1.
+Version 2 is a rewrite, documented in [docs/](docs/README.md). It is not compatible with 0.1.
 
 ### Changed
 

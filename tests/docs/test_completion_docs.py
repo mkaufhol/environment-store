@@ -1,4 +1,4 @@
-"""The guides explain shell completion (D54) and the TUI's store management (D55-D57)."""
+"""The guides explain shell completion and the TUI's store management."""
 
 import re
 import shutil
@@ -25,7 +25,7 @@ _DOCUMENTS: Final = (
     *sorted((_ROOT / "docs").glob("*.md")),
     *sorted(_SKILL_DIR.glob("*.md")),
 )
-# The one line per shell of spec §6.15; envs never edits these files itself.
+# The one setup line per shell; envs never edits these files itself.
 _SETUP_LINES: Final = (
     'eval "$(envs completion zsh)"',
     'eval "$(envs completion bash)"',
@@ -94,7 +94,7 @@ def test_the_installation_guide_enables_completion_after_installing() -> None:
 
 @pytest.mark.parametrize("key", ["**a**", "**d**", "**x**"])
 def test_the_cli_guides_tui_section_lists_the_store_keys(key: str) -> None:
-    # D55, D56: create, remove and export on the stores screen.
+    # Create, remove and export on the stores screen.
     assert key in _section(_CLI_GUIDE, "Terminal UI: `tui`")
 
 

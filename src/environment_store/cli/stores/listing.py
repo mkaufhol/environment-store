@@ -1,6 +1,6 @@
-"""`envs ls-store`: every store with its encryption, never its contents (spec §6.2, D1, PD 23).
+"""`envs ls-store`: every store with its encryption, never its contents.
 
-An empty backend names its location on stderr, so a mistyped connection is visible (D42).
+An empty backend names its location on stderr, so a mistyped connection is visible.
 """
 
 from datetime import UTC, datetime
@@ -25,7 +25,7 @@ def ls_store(ctx: typer.Context, *, as_json: JsonOpt = False) -> None:
     state = get_state(ctx)
     infos = state.open_store(ctx).list_stores()
     if not infos:
-        # D42: a mistyped connection must not look like an empty backend.
+        # A mistyped connection must not look like an empty backend.
         err(f"no stores in {connection_location(state.settings().require_connection())}")
     if as_json:
         emit_json([_json_entry(info) for info in infos])
@@ -42,7 +42,7 @@ def encryption_label(info: StoreInfo) -> str:
 
     Returns:
         `plain`, `encrypted (<mode>)`, or `encrypted (unknown)` for cipher metadata this
-        version does not recognise. No variable count: it would leak information (D1).
+        version does not recognise. No variable count: it would leak information.
     """
     if not info.encrypted:
         return "plain"
@@ -62,6 +62,6 @@ def _json_entry(info: StoreInfo) -> dict[str, JsonValue]:
 
 
 def _timestamp(moment: datetime) -> str:
-    # ISO 8601 in UTC with the conventional "Z" suffix (PD 23).
+    # ISO 8601 in UTC with the conventional "Z" suffix.
     text = moment.astimezone(UTC).isoformat()
     return text.removesuffix(_UTC_SUFFIX) + "Z"

@@ -1,10 +1,10 @@
-"""`envs tui`: start the terminal user interface (spec §6.14, D15, PD 29, PD 31).
+"""`envs tui`: start the terminal user interface.
 
 The settings are resolved like for every command (`EnvsCommand`: connection, project file
 `[keys]`, the merge order for the export dialog). The TUI is interactive, so `--noinput` and a
 stdin or stdout that is not a terminal are refused. The `tui` package is imported only inside
-the command: the one recorded `cli → tui` edge (PD 31); without textual it raises
-`MissingExtraError` (exit 1 with the install hint).
+the command, the one allowed `cli → tui` import, so the CLI loads the TUI only when `envs tui`
+runs; without textual it raises `MissingExtraError` (exit 1 with the install hint).
 """
 
 import typer

@@ -1,4 +1,4 @@
-"""Library errors name library parameters, never CLI flags (D47)."""
+"""Library errors name library parameters, never CLI flags."""
 
 import re
 from pathlib import Path

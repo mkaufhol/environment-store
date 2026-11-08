@@ -1,4 +1,4 @@
-"""`envs completion <shell>` prints the script for the program name in use (§6.15, D44, D54)."""
+"""`envs completion <shell>` prints the script for the program name in use."""
 
 import pytest
 from typer.testing import CliRunner
@@ -48,7 +48,7 @@ def test_each_shell_gets_its_own_script(cli_json: CliHarness, shell: str, marker
 def test_completion_needs_no_connection_and_ignores_a_broken_project_file(
     cli_json: CliHarness,
 ) -> None:
-    # D44: like keygen, a broken .envstore.toml cannot stop it, and it prints no warning.
+    # Like keygen, a broken .envstore.toml cannot stop it, and it prints no warning.
     cli_json.project_file("this is [ not toml")
 
     result = cli_json.invoke("completion", "zsh", connection=False)

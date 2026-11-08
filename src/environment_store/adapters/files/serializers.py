@@ -1,4 +1,4 @@
-"""The two file formats of the file adapters: JSON and TOML (D9).
+"""The two file formats of the file adapters: JSON and TOML.
 
 Both adapters share one implementation and differ only in the `FileSerializer` they use. A
 serializer turns a layout document (see `layout`) into text and back, and knows how its format
@@ -99,4 +99,7 @@ TOML_SERIALIZER: Final[FileSerializer] = FileSerializer(
     loads=tomllib.loads,
     parse_timestamp=_toml_timestamp,
 )
-"""`toml://` store files: read with `tomllib`, written with the built-in writer (D6)."""
+"""`toml://` store files: read with `tomllib`, written with the built-in writer.
+
+The stdlib cannot write TOML, and `cryptography` stays the only required dependency.
+"""

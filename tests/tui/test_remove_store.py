@@ -1,4 +1,4 @@
-"""Removing a store in the TUI: only after its exact name is typed, without a key (D55, D21)."""
+"""Removing a store in the TUI: only after its exact name is typed, without a key."""
 
 from textual.pilot import Pilot
 from textual.widgets import Button, Input, Label

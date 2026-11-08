@@ -1,4 +1,4 @@
-"""Key files and passphrase files (spec §4.2, §4.3, D3, D4).
+"""Key files and passphrase files.
 
 A key file is one line of text: `envstore-key-v1:` followed by the unpadded URL-safe base64 form
 of 32 random bytes. The prefix lets the tool reject a file that is not a key file, e.g. a
@@ -94,7 +94,7 @@ def parse_key(text: str) -> KeyMaterial:
 def looks_like_key_file(text: str) -> bool:
     """Tell whether text is meant as a key file, valid or not.
 
-    Used to refuse a key file given for a `passphrase` store (D3).
+    Used to refuse a key file given for a `passphrase` store.
 
     Args:
         text: Raw secret text.
@@ -128,7 +128,7 @@ def read_key_file(path: Path) -> KeyMaterial:
 
 
 def write_key_file(path: Path, key: KeyMaterial) -> None:
-    """Write a new key file with mode `0600`; never overwrites (D4).
+    """Write a new key file with mode `0600`; never overwrites.
 
     The file is created with `O_CREAT | O_EXCL`, which fails on any existing path, symlinks
     included, so nothing is ever replaced or followed. A partially written file is removed.
@@ -166,7 +166,7 @@ def write_key_file(path: Path, key: KeyMaterial) -> None:
 
 
 def passphrase_from_text(text: str) -> Passphrase:
-    """Turn raw passphrase text from a file or stdin into a passphrase (D3).
+    """Turn raw passphrase text from a file or stdin into a passphrase.
 
     Exactly one trailing line break (LF or CRLF) is stripped; everything else is kept.
 
@@ -187,7 +187,7 @@ def passphrase_from_text(text: str) -> Passphrase:
 
 
 def read_passphrase_file(path: Path) -> Passphrase:
-    """Read a passphrase file; one trailing newline is stripped (D3).
+    """Read a passphrase file; one trailing newline is stripped.
 
     Args:
         path: The passphrase file, UTF-8.

@@ -1,4 +1,4 @@
-"""No runtime import of `click` or typer's private vendored `typer._click` (plan §6.3)."""
+"""No runtime import of `click` or `typer._click`: typer vendors click, and its copy is private."""
 
 import ast
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Confirmations of destructive commands (spec §6 conventions, D33, D35)."""
+"""Confirmations of destructive commands."""
 
 import typer
 

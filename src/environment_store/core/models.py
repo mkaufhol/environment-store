@@ -28,10 +28,10 @@ __all__ = [
 ]
 
 MAX_REVISION: Final[int] = 2**31 - 1
-"""Largest revision of a store (D7): the SQL schema stores it as 32-bit `INTEGER` (spec §3.3.1)."""
+"""Largest revision of a store: the SQL schema stores it as a 32-bit `INTEGER`."""
 
 PAYLOAD_FORMAT_VERSION: Final[int] = 1
-"""Version of the encrypted payload format; part of the associated data (D5)."""
+"""Version of the encrypted payload format; part of the associated data."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -39,11 +39,11 @@ class StoreInfo:
     """One entry of a store listing; needs no key.
 
     Attributes:
-        name: The store name (D27).
+        name: The store name.
         encrypted: Whether the store is encrypted.
         key_mode: The key mode; `None` for plaintext stores and for encrypted stores whose
             cipher metadata this version does not recognise.
-        revision: The current revision (D7).
+        revision: The current revision.
         created_at: Creation time, UTC.
         updated_at: Time of the last write, UTC.
     """
@@ -84,8 +84,8 @@ class StoreRecord:
     Exactly one of `variables` (plaintext) or `ciphertext` + `cipher_meta` (encrypted) is set.
 
     Attributes:
-        name: The store name (D27).
-        revision: Revision counter, starting at 1 (D7).
+        name: The store name.
+        revision: Revision counter, starting at 1.
         created_at: Creation time, UTC.
         updated_at: Time of the last write, UTC, not before `created_at`.
         variables: Plaintext variables (immutable, sorted by name in code point order), or `None`
@@ -231,7 +231,7 @@ class Source:
     """One entry of a load list: a store and, if it is encrypted, its secret.
 
     Attributes:
-        name: The store name (D27).
+        name: The store name.
         secret: The key or passphrase, or `None` for a plaintext store.
     """
 

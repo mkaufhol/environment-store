@@ -1,4 +1,4 @@
-"""First setup, upgrades and refusals of a SQLite file (spec §3.3.2, D11, D13)."""
+"""First setup, upgrades and refusals of a SQLite file."""
 
 import sqlite3
 import threading

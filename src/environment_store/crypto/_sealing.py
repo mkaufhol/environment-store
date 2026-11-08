@@ -1,4 +1,4 @@
-"""Opening and sealing store records for `StoreService` (spec §4.4, D4, D5, D7).
+"""Opening and sealing store records for `StoreService`.
 
 Private helpers of the service: which key goes with a store, its plaintext variables, and the
 next record to write, sealed with a fresh nonce or plain.
@@ -63,7 +63,7 @@ def not_encrypted_message(name: str) -> str:
 
 
 def secret_from_text(name: str, meta: CipherMeta | None, text: str) -> Secret:
-    """Interpret raw secret text by the store's key mode (D3).
+    """Interpret raw secret text by the store's key mode.
 
     Args:
         name: The store the secret is for.
@@ -135,7 +135,7 @@ def copy_sealing(
     """
     if encryption == "same":
         # Same secret, same metadata: no second key derivation. Only the name in the
-        # associated data changes, so the payload is sealed again (D5).
+        # associated data changes, so the payload is sealed again.
         return source
     if encryption == "plain":
         return None
@@ -179,7 +179,7 @@ def seal_record(  # noqa: PLR0913 - keyword-only mirror of the record fields
     """Build a record, sealed with a fresh nonce or plain.
 
     Args:
-        name: The store name; bound into the ciphertext (D5).
+        name: The store name; bound into the ciphertext.
         variables: The plaintext variables.
         sealing: How to encrypt them; `None` for a plaintext record.
         created_at: Creation time.

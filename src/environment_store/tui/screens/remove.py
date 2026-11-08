@@ -1,8 +1,8 @@
-"""`RemoveStoreScreen`: remove a store after its name is typed exactly (D55, D21).
+"""`RemoveStoreScreen`: remove a store after its name is typed exactly.
 
 Removing deletes the store with all its variables and cannot be undone, so a yes is not
 enough: the Remove action works only while the typed text equals the store name. Like
-`rm-store` it needs no key, also for an encrypted store (D21).
+`rm-store` it needs no key, also for an encrypted store.
 """
 
 from typing import ClassVar, override

@@ -1,4 +1,4 @@
-"""Behaviour of the file adapters beyond the contract suite (spec §3.2, D7, D9, D27)."""
+"""Behaviour of the file adapters beyond the contract suite."""
 
 import errno
 import os
@@ -161,7 +161,7 @@ def umask_022() -> Iterator[None]:
 def test_directories_created_on_first_write_are_private(
     tmp_path: Path, serializer: FileSerializer
 ) -> None:
-    # D43: mode 0700 for the store directory and every intermediate one, whatever the umask.
+    # Mode 0700 for the store directory and every intermediate one, whatever the umask.
     directory = tmp_path / "a" / "b"
 
     with FileAdapter(directory, serializer=serializer) as adapter:
@@ -472,7 +472,7 @@ def test_missing_store_raises_not_found(
             operation()
 
 
-# --- store name path safety (D27) ---------------------------------------------------------------
+# --- store name path safety ---------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", ["../outside", "..", "a/../../outside", "/etc/abs", "sub/base"])

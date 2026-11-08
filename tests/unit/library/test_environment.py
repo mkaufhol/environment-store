@@ -34,7 +34,7 @@ STORE_B: Final = ("store-b", {"ENV": "staging", "DB_NAME": "test"})
 
 
 def test_variables_last_wins_in_store_order_each_store_sorted() -> None:
-    # D52: base's names first, then staging's new ones; HOST keeps its first position.
+    # Base's names first, then staging's new ones; HOST keeps its first position.
     assert list(_env(BASE, STAGING).variables().items()) == [
         ("HOST", "staging.example"),
         ("PORT", "5432"),
@@ -42,7 +42,7 @@ def test_variables_last_wins_in_store_order_each_store_sorted() -> None:
     ]
 
 
-def test_variables_follow_the_d52_example() -> None:
+def test_variables_follow_store_order_then_names_last_wins() -> None:
     assert list(_env(STORE_A, STORE_B).variables().items()) == [
         ("DEBUG", "True"),
         ("ENV", "staging"),
@@ -50,7 +50,7 @@ def test_variables_follow_the_d52_example() -> None:
     ]
 
 
-def test_variables_first_wins_keep_the_d52_order_and_the_first_value() -> None:
+def test_variables_first_wins_keep_the_output_order_and_the_first_value() -> None:
     assert list(_env(STORE_A, STORE_B, order=MergeOrder.FIRST_WINS).variables().items()) == [
         ("DEBUG", "True"),
         ("ENV", "development"),
@@ -87,11 +87,11 @@ def test_nested_flat_keys_follow_store_order_each_store_sorted() -> None:
         ("toml", 'DEBUG = "True"\nENV = "staging"\nDB_NAME = "test"\n'),
     ],
 )
-def test_dumps_keeps_the_d52_order_in_every_format(fmt: str, expected: str) -> None:
+def test_dumps_keeps_the_output_order_in_every_format(fmt: str, expected: str) -> None:
     assert _env(STORE_A, STORE_B).dumps(fmt) == expected
 
 
-def test_apply_sets_the_variables_in_the_d52_order() -> None:
+def test_apply_sets_the_variables_in_the_output_order() -> None:
     environ: dict[str, str] = {}
 
     _env(STORE_A, STORE_B).apply(environ=environ)
@@ -149,7 +149,7 @@ def test_environment_refuses_an_unknown_order() -> None:
         Environment(stores=(), order="sideways")  # ty: ignore[invalid-argument-type] - the point
 
 
-# --- apply (PD 14) -----------------------------------------------------------------------------
+# --- apply -------------------------------------------------------------------------------------
 
 
 def test_apply_sets_missing_variables_only_and_returns_them() -> None:

@@ -1,4 +1,4 @@
-"""Where a connection string points, for messages such as ls-store's `no stores in` (D42, D43)."""
+"""Where a connection string points, for messages such as ls-store's `no stores in`."""
 
 from pathlib import Path
 
@@ -48,9 +48,9 @@ def test_sqlite_path_of_an_unknown_user_stays_unexpanded(
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
-    location = connection_location("sqlite:///~no_such_user_d42/e.db")
+    location = connection_location("sqlite:///~no_such_user_envstore/e.db")
 
-    assert location == str(Path.cwd() / "~no_such_user_d42" / "e.db")
+    assert location == str(Path.cwd() / "~no_such_user_envstore" / "e.db")
 
 
 @pytest.mark.parametrize(
