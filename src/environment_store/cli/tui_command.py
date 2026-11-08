@@ -1,9 +1,10 @@
 """`envs tui`: start the terminal user interface (spec §6.14, D15, PD 29, PD 31).
 
 The settings are resolved like for every command (`EnvsCommand`: connection, project file
-`[keys]`). The TUI is interactive, so `--noinput` and a stdin or stdout that is not a terminal
-are refused. The `tui` package is imported only inside the command: the one recorded `cli → tui`
-edge (PD 31); without textual it raises `MissingExtraError` (exit 1 with the install hint).
+`[keys]`, the merge order for the export dialog). The TUI is interactive, so `--noinput` and a
+stdin or stdout that is not a terminal are refused. The `tui` package is imported only inside
+the command: the one recorded `cli → tui` edge (PD 31); without textual it raises
+`MissingExtraError` (exit 1 with the install hint).
 """
 
 import typer
@@ -38,4 +39,9 @@ def tui(ctx: typer.Context) -> None:
 
     store = state.open_store(ctx)
     settings = state.settings()
-    run_tui(store, key_paths=settings.key_paths, project_file=settings.project_file)
+    run_tui(
+        store,
+        key_paths=settings.key_paths,
+        project_file=settings.project_file,
+        ordered_overwrite=settings.ordered_overwrite,
+    )

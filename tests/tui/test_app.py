@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from textual.app import AutopilotCallbackType
 from textual.pilot import Pilot
+from textual.widgets import Checkbox, SelectionList
 
 from environment_store.core.errors import MissingExtraError
 from environment_store.core.models import StoreInfo
@@ -71,6 +72,29 @@ def test_run_tui_names_the_project_file_in_its_errors(
 
     [message] = messages
     assert message.startswith(f"[keys] in '{project}'")
+
+
+def test_run_tui_gives_the_export_dialog_the_configured_merge_order(
+    store: EnvironmentStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store.create_store("a")
+    first_wins: list[bool] = []
+
+    async def auto_pilot(pilot: Pilot[object]) -> None:
+        await pilot.pause()
+        await pilot.press("x")
+        await pilot.pause()
+        pilot.app.screen.query_one(SelectionList).toggle("a")
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        first_wins.append(pilot.app.screen.query_one("#first-wins", Checkbox).value)
+        pilot.app.exit()
+
+    _run_headless(monkeypatch, auto_pilot)
+
+    run_tui(store, key_paths={}, ordered_overwrite=False)
+
+    assert first_wins == [True]
 
 
 def test_run_tui_after_a_crash_exits_non_zero_without_locals_in_the_traceback(

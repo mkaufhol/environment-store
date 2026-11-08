@@ -1,8 +1,9 @@
 """`UnlockScreen`: ask for the key of an encrypted store (D3, PD 29).
 
-The user types the path of a key or passphrase file, or the passphrase itself (hidden). The
-store is read with it before the dialog closes, so a wrong key keeps the store locked and the
-dialog open; the key is never remembered beyond the shown store (D3).
+The user types the path of a key or passphrase file (with path completion, D57), or the
+passphrase itself (hidden). The store is read with it before the dialog closes, so a wrong key
+keeps the store locked and the dialog open; the key is never remembered beyond the shown store
+(D3).
 """
 
 from pathlib import Path
@@ -18,6 +19,7 @@ from environment_store.core.errors import EnvironmentStoreError
 from environment_store.core.models import StoreInfo
 from environment_store.core.secrets import Secret
 from environment_store.tui.messages import message_for, notify_problem
+from environment_store.tui.paths import PathInput
 from environment_store.tui.session import OpenedStore, StoreSession
 
 __all__ = ["UnlockScreen", "describe_encryption"]
@@ -41,6 +43,12 @@ def describe_encryption(info: StoreInfo) -> str:
 
 class _KeyInput(Input):
     """An input whose enter unlocks, and says so in the footer."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("enter", "submit", "Unlock")]
+
+
+class _KeyPathInput(PathInput):
+    """The key file path (with path completion, D57); its enter unlocks."""
 
     BINDINGS: ClassVar[list[BindingType]] = [Binding("enter", "submit", "Unlock")]
 
@@ -72,7 +80,7 @@ class UnlockScreen(ModalScreen[OpenedStore | None]):
                 f"Unlock store {self._info.name!r}, {describe_encryption(self._info)}",
                 markup=False,
             )
-            yield _KeyInput(placeholder="Key or passphrase file, e.g. ~/.keys/a.key", id="path")
+            yield _KeyPathInput(placeholder="Key or passphrase file, e.g. ~/.keys/a.key", id="path")
             yield _KeyInput(placeholder="or the passphrase", password=True, id="passphrase")
             with Horizontal(classes="buttons"):
                 yield Button("Unlock", id="unlock", variant="primary")

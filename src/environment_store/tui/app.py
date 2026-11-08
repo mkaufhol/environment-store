@@ -1,7 +1,8 @@
 """`EnvironmentStoreApp` and `run_tui`: the Textual app on the library facade (D31, PD 29).
 
-Browse stores, unlock encrypted ones (project `[keys]` first), view masked values and add,
-edit or delete variables. Store lifecycle, import / export and key lifecycle stay in the CLI.
+Browse, create and remove stores (D55), export them to a file (D56), unlock encrypted ones
+(`ENV_STORE_KEY_<STORE>`, then project `[keys]`), view masked values and add, edit or delete
+variables. Copying, moving, import and the key lifecycle stay in the CLI.
 """
 
 from collections.abc import Mapping
@@ -48,6 +49,19 @@ class EnvironmentStoreApp(App[None]):
     .buttons Button {
         margin-right: 2;
     }
+    .dialog Label {
+        width: 100%;
+    }
+    .dialog .fields {
+        height: auto;
+    }
+    .error {
+        color: $error;
+    }
+    .dialog SelectionList {
+        height: auto;
+        max-height: 20;
+    }
     """
 
     _session: StoreSession
@@ -59,6 +73,7 @@ class EnvironmentStoreApp(App[None]):
         key_paths: Mapping[str, Path],
         project_file: Path | None = None,
         read_key_file: ReadKeyFile = read_secret_file,
+        ordered_overwrite: bool = True,
     ) -> None:
         """Create the app.
 
@@ -67,10 +82,15 @@ class EnvironmentStoreApp(App[None]):
             key_paths: The project file's `[keys]`, tried before asking (PD 5).
             project_file: The project file the keys come from, named in errors about them.
             read_key_file: Reads key and passphrase files.
+            ordered_overwrite: The configured merge order (§5.2), the export dialog's default.
         """
         super().__init__()
         self._session = StoreSession(
-            store, key_paths=key_paths, project_file=project_file, read_key_file=read_key_file
+            store,
+            key_paths=key_paths,
+            project_file=project_file,
+            read_key_file=read_key_file,
+            ordered_overwrite=ordered_overwrite,
         )
 
     @override
@@ -90,7 +110,11 @@ class EnvironmentStoreApp(App[None]):
 
 
 def run_tui(
-    store: EnvironmentStore, *, key_paths: Mapping[str, Path], project_file: Path | None = None
+    store: EnvironmentStore,
+    *,
+    key_paths: Mapping[str, Path],
+    project_file: Path | None = None,
+    ordered_overwrite: bool = True,
 ) -> None:
     """Run the TUI in the terminal until the user quits.
 
@@ -98,12 +122,18 @@ def run_tui(
         store: The open store; the caller closes it.
         key_paths: The project file's `[keys]`.
         project_file: The project file the keys come from, named in errors about them.
+        ordered_overwrite: The configured merge order (§5.2), the export dialog's default.
 
     Raises:
         SystemExit: The app stopped after an unexpected error (its traceback is printed); the
             exit code is the app's non-zero return code, so `envs tui` does not report success.
     """
-    app = EnvironmentStoreApp(store, key_paths=key_paths, project_file=project_file)
+    app = EnvironmentStoreApp(
+        store,
+        key_paths=key_paths,
+        project_file=project_file,
+        ordered_overwrite=ordered_overwrite,
+    )
     app.run()
     if app.return_code:
         raise SystemExit(app.return_code)

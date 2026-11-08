@@ -6,20 +6,30 @@ beyond it (D3). Writes are refused when the store changed since it was shown (D7
 made elsewhere is never overwritten silently.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 
 from environment_store.config.secrets import read_secret_file
 from environment_store.core.errors import (
+    BackendError,
     ConcurrentModificationError,
+    EnvironmentStoreError,
     KeySourceError,
     NotEncryptedError,
+    StoreExistsError,
 )
+from environment_store.core.merge import MergeOrder
 from environment_store.core.models import StoreInfo
 from environment_store.core.secrets import Secret
+from environment_store.core.validation import validate_store_name
+from environment_store.library.keys import generate_key_file
+from environment_store.library.sources import Source
 from environment_store.library.store import EnvironmentStore
+from environment_store.tui.choices import ExportOptions, KeyFile, NewKey, TypedPassphrase
+from environment_store.tui.messages import message_for
 
 __all__ = ["OpenedStore", "ReadKeyFile", "StoreSession"]
 
@@ -36,12 +46,14 @@ class OpenedStore:
         secret: The store's key or passphrase; `None` for a plaintext store.
         revision: The revision the variables were read at (D7).
         variables: The variables (read-only).
+        from_environment: Whether the secret came from `ENV_STORE_KEY_<STORE>` (D53).
     """
 
     name: str
     secret: Secret | None = field(repr=False)
     revision: int
     variables: Mapping[str, str] = field(repr=False)
+    from_environment: bool = False
 
     def __post_init__(self) -> None:
         """Freeze the variables."""
@@ -55,6 +67,7 @@ class StoreSession:
     _key_paths: Mapping[str, Path]
     _project_file: Path | None
     _read_key_file: ReadKeyFile
+    _ordered_overwrite: bool
 
     def __init__(
         self,
@@ -63,6 +76,7 @@ class StoreSession:
         key_paths: Mapping[str, Path],
         project_file: Path | None = None,
         read_key_file: ReadKeyFile = read_secret_file,
+        ordered_overwrite: bool = True,
     ) -> None:
         """Work on an open store.
 
@@ -71,11 +85,18 @@ class StoreSession:
             key_paths: The project file's `[keys]`, tried before asking (PD 5).
             project_file: The project file the keys come from, named in errors about them.
             read_key_file: Reads key and passphrase files.
+            ordered_overwrite: The configured merge order (§5.2): `True` for last wins.
         """
         self._store = store
         self._key_paths = MappingProxyType(dict(key_paths))
         self._project_file = project_file
         self._read_key_file = read_key_file
+        self._ordered_overwrite = ordered_overwrite
+
+    @property
+    def ordered_overwrite(self) -> bool:
+        """The configured merge order, the export dialog's default (`False`: first wins)."""
+        return self._ordered_overwrite
 
     def stores(self) -> list[StoreInfo]:
         """List every store; needs no key.
@@ -163,13 +184,7 @@ class StoreSession:
             CryptoError: The secret is missing or wrong.
         """
         info = self._store.store_info(name)
-        if not info.encrypted and name in self._key_paths:
-            where = "the project file" if self._project_file is None else f"'{self._project_file}'"
-            message = (
-                f"[keys] in {where} names a key for store {name!r}, which is not encrypted: "
-                "remove the entry"
-            )
-            raise NotEncryptedError(message)
+        self._check_project_key(info)
         revision = info.revision
         variables = self._store.variables(name, key=secret)
         return OpenedStore(name=name, secret=secret, revision=revision, variables=variables)
@@ -221,6 +236,95 @@ class StoreSession:
         self._check_unchanged(opened)
         self._store.delete(opened.name, [name], key=opened.secret)
         return self.reload(opened)
+
+    def create_store(self, name: str, key: NewKey | None) -> StoreInfo:
+        """Create an empty store, like `create-store` (D55).
+
+        A generated key file is removed again when the store was not created, so a failure
+        leaves nothing behind; it is kept when the store may already use it.
+
+        Args:
+            name: The new store's name (D27, D40).
+            key: The new secret; `None` for a plaintext store.
+
+        Returns:
+            The new store's listing entry.
+
+        Raises:
+            ValidationError: An invalid name, or the path for a new key file exists already.
+            StoreExistsError: The store exists already.
+            CryptoError: An existing key file cannot be read or is no key file.
+            BackendError: The store cannot be written; for a generated key file the message
+                says that it was kept.
+        """
+        if key is None:
+            return self._store.create_store(name)
+        if isinstance(key, KeyFile):
+            return self._store.create_store(name, encrypt=True, key=key.path)
+        if isinstance(key, TypedPassphrase):
+            return self._store.create_store(name, encrypt=True, key=key.passphrase)
+        # Everything refusable is checked before the key file is written.
+        validate_store_name(name)
+        generate_key_file(key.path)
+        try:
+            return self._store.create_store(name, encrypt=True, key=key.path)
+        except EnvironmentStoreError as error:
+            if isinstance(error, StoreExistsError) or not self._exists(name):
+                with suppress(OSError):
+                    key.path.unlink(missing_ok=True)
+                raise
+            message = (
+                f"{message_for(error)}; kept the generated key file '{key.path}': store "
+                f"{name!r} may already be encrypted with it"
+            )
+            raise BackendError(message) from error
+
+    def delete_store(self, name: str) -> None:
+        """Delete a store and all its variables; needs no key (D21).
+
+        Args:
+            name: The store name.
+        """
+        self._store.delete_store(name)
+
+    def export(
+        self, sources: Sequence[Source], path: Path, options: ExportOptions, *, force: bool
+    ) -> None:
+        """Export stores to a file with mode `0600` (D56, PD 4), in output order (D52).
+
+        Args:
+            sources: The stores in load order with their secrets; an encrypted store without
+                one takes its key from `ENV_STORE_KEY_<STORE>` (D53).
+            path: The output file.
+            options: Format, nested and merge order.
+            force: Replace an existing file.
+
+        Raises:
+            NotEncryptedError: The project file names a key for a plaintext store (PD 5).
+            OutputFileExistsError: The file exists and `force` is not set.
+        """
+        for source in sources:
+            if source.key is None:
+                self._check_project_key(self._store.store_info(source.name))
+        order = MergeOrder.FIRST_WINS if options.first_wins else MergeOrder.LAST_WINS
+        environment = self._store.load(sources, order=order)
+        environment.to_file(path, fmt=options.fmt, nested=options.nested, force=force)
+
+    def _exists(self, name: str) -> bool:
+        try:
+            return name in {info.name for info in self._store.list_stores()}
+        except EnvironmentStoreError:
+            return True  # unknown: the store may exist
+
+    def _check_project_key(self, info: StoreInfo) -> None:
+        # Keys are bound by store name, so a key for a plaintext store is an error (PD 5).
+        if not info.encrypted and info.name in self._key_paths:
+            where = "the project file" if self._project_file is None else f"'{self._project_file}'"
+            message = (
+                f"[keys] in {where} names a key for store {info.name!r}, which is not "
+                "encrypted: remove the entry"
+            )
+            raise NotEncryptedError(message)
 
     def _check_unchanged(self, opened: OpenedStore) -> None:
         if self._store.store_info(opened.name).revision != opened.revision:

@@ -142,7 +142,11 @@ def test_envs_tui_gives_the_tui_a_store_with_the_cli_environment(
     seen: list[Secret | None] = []
 
     def fake_run_tui(
-        store: EnvironmentStore, *, key_paths: Mapping[str, Path], project_file: Path | None
+        store: EnvironmentStore,
+        *,
+        key_paths: Mapping[str, Path],
+        project_file: Path | None,
+        ordered_overwrite: bool,
     ) -> None:
         seen.append(store.environment_secret("p"))
 

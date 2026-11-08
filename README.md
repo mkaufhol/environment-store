@@ -110,8 +110,8 @@ are already set are kept unless you pass `overwrite=True`.
 - **Shell completion.** `eval "$(envs completion zsh)"` in `~/.zshrc` (or `bash`, 4.4 or newer; `fish` writes a
   completions file) completes commands, options, existing store names, variable names of plaintext stores and
   paths. It never asks for a key and never changes anything.
-- **Terminal UI.** `envs tui` lets you browse stores and add, edit and delete variables, with values masked and
-  each screen's keys in its footer.
+- **Terminal UI.** `envs tui` lets you browse, create, remove and export stores and add, edit and delete variables,
+  with values masked, path completion and each screen's keys in its footer.
 
 ## Documentation
 
