@@ -115,6 +115,28 @@ Rules:
 
 ## 8. Git
 
-- Branch per change off `feature/v2` while V2 is in development.
+- Branch per change off `main`.
 - Small commits with an imperative subject line (`Add merge logic for ordered stores`) and a body explaining why.
 - Never commit secrets, key files, `.env` files or coverage output.
+- Record user-visible changes under `## [Unreleased]` in `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)).
+
+## 9. Releasing
+
+Releases are published from `main` by the Release workflow (`.github/workflows/release.yml`) with PyPI trusted
+publishing; nobody uploads by hand.
+
+1. In `CHANGELOG.md`, turn `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`, add a new empty `## [Unreleased]`
+   above it and update the compare links at the bottom.
+2. Set the version: `uv version X.Y.Z` (updates `pyproject.toml` and `uv.lock`), and update documented sample
+   output that shows the version (`tests/docs` fails until you do).
+3. Merge to `main` through a pull request.
+4. Optional: run the Release workflow by hand with target `testpypi` and try the result:
+   `uvx --find-links https://test.pypi.org/simple/environment-store/ --from 'environment-store[cli]==X.Y.Z' envs --version`.
+   This takes only `environment-store` from TestPyPI and every dependency from PyPI; the pin makes it fail
+   instead of falling back to an older release on PyPI. Before the first run, add a pending trusted publisher
+   for this repository, `release.yml` and the `testpypi` environment on TestPyPI.
+5. Tag the release commit on `main` and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+The workflow refuses a tag that is not on `main`, whose name does not match the package version, or that has no
+`## [X.Y.Z]` entry in `CHANGELOG.md`. It then builds, checks and publishes the distributions to PyPI and creates
+the GitHub release with the files attached (marked as a pre-release for `rc`, `a`, `b` and `dev` versions).

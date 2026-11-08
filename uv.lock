@@ -287,7 +287,7 @@ wheels = [
 
 [[package]]
 name = "environment-store"
-version = "2.0.0.dev0"
+version = "2.0.0"
 source = { editable = "." }
 default-groups = ["dev", "testing"]
 dependencies = [

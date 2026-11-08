@@ -12,11 +12,10 @@ These docs use [uv](https://docs.astral.sh/uv/) and show pip as the alternative.
 - `uv add` records the library in your project's `pyproject.toml` and lock file, and `uv run` runs code and
   commands in that project's environment.
 
-> **2.0 is not on PyPI yet.** PyPI has only the old 0.1 line (`0.1.0rc1`, `0.1.0rc2`), which has no `envs`
-> command and no `cli` extra. uv and pip fall back to those pre-releases when nothing else exists, so
-> `uv tool install 'environment-store[cli]'` installs 0.1 today, not 2.0. Until 2.0 is published,
-> [install from the repository](#install-from-the-repository-the-only-way-today). Whatever route you take, check
-> with `envs --version`: it must print `environment-store 2.0.0.dev0` or later.
+> **0.1 is a different line.** The 0.1 pre-releases on PyPI were an earlier, incompatible design with no `envs`
+> command and no `cli` extra, and 2.0 cannot read their data. If you have 0.1 installed, uninstall it first
+> (`uv tool uninstall environment-store` or `pip uninstall environment-store`). Whatever route you take, check
+> with `envs --version`: it must print `environment-store 2.0.0` or later.
 
 ## Which install do I need?
 
@@ -30,57 +29,55 @@ These docs use [uv](https://docs.astral.sh/uv/) and show pip as the alternative.
 | the library with PostgreSQL in your app | `uv add 'environment-store[postgres]'` | `pip install 'environment-store[postgres]'` |
 | the command inside a uv project | `uv add --dev 'environment-store[cli]'`, then `uv run envs ...` | |
 
-These commands are for after the 2.0 release. Today, put the repository URL behind the same extras, as shown in
-the next section. The quotes around `environment-store[...]` matter in zsh, which would otherwise treat the
-brackets as a pattern.
+The quotes around `environment-store[...]` matter in zsh, which would otherwise treat the brackets as a pattern.
 
 The package installs two executables, `environment-store` and `envs` (see [Entry points](#entry-points)).
 `uvx 'environment-store[cli]' --version` runs the long one without `--from`; `uvx` needs `--from` only to call
 the short name `envs`, because that name differs from the package name.
 
-## Install from the repository (the only way today)
-
-uv installs straight from the Git repository. Write the extras after the package name and the branch after the
-URL:
+## Install with uv
 
 ```console
-$ uv tool install 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2'
+$ uv tool install 'environment-store[cli]'
 $ envs --version
-environment-store 2.0.0.dev0
+environment-store 2.0.0
 ```
 
-More extras work the same way, for example `'environment-store[cli,postgres] @ git+https://...@feature/v2'`. The
-same URL works for a one-off run and for the library:
+The same package name works for a one-off run and for the library:
 
 ```console
-$ uvx --from 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2' envs --version
-environment-store 2.0.0.dev0
-$ uv add 'environment-store[postgres] @ git+https://github.com/mkaufhol/environment-store@feature/v2'
+$ uvx --from 'environment-store[cli]' envs --version
+environment-store 2.0.0
+$ uv add 'environment-store[postgres]'
 ```
 
-`uv add` writes `environment-store[postgres]` to your dependencies and the Git source to `[tool.uv.sources]`, so
-switching to the PyPI release later means deleting that source. `uv tool upgrade environment-store` fetches the
-latest commit of the branch. If `envs` is not found after `uv tool install`, uv's tool directory (usually
-`~/.local/bin`) is not on your `PATH`; `uv tool update-shell` adds it.
+`uv tool upgrade environment-store` installs a newer release later. If `envs` is not found after
+`uv tool install`, uv's tool directory (usually `~/.local/bin`) is not on your `PATH`; `uv tool update-shell`
+adds it.
 
-With pip, the same URL works inside a virtual environment:
+With pip, install inside a virtual environment:
 
 ```console
 $ python3.13 -m venv .venv
 $ . .venv/bin/activate
-$ pip install 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2'
+$ pip install 'environment-store[cli]'
 ```
+
+## Install the development version
+
+The `main` branch holds the next release. uv installs it straight from the Git repository, with the extras after
+the package name: `uv tool install 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store'`.
+`uv tool upgrade environment-store` then fetches the latest commit.
 
 ### From a clone
 
-To work on the code, or to follow the branch with `git pull`, clone the repository:
+To work on the code, or to follow `main` with `git pull`, clone the repository:
 
 ```console
 $ git clone https://github.com/mkaufhol/environment-store.git
 $ cd environment-store
-$ git switch feature/v2
 $ uv run --extra cli envs --version
-environment-store 2.0.0.dev0
+environment-store 2.0.0
 ```
 
 `uv run` creates the project's `.venv` on first use and runs the command in it. To get `envs` on your `PATH`
@@ -133,15 +130,9 @@ Error: this feature needs the optional 'postgres' dependencies: uv add 'environm
 
 Pick the command that matches how you installed: `uv tool install` for the `envs` tool (it always lists `cli`, since
 the tool needs it), `uv add` or `pip install` for the library in your project or virtual environment. If the tool
-already has other extras, list them too, because `uv tool install` replaces the extras (see above). Until 2.0 is on
-PyPI, append the repository URL as shown in [Install from the repository](#install-from-the-repository-the-only-way-today).
+already has other extras, list them too, because `uv tool install` replaces the extras (see above).
 `envs tui` without `tui` gives the same message for `'tui'`. In Python, the error is `MissingExtraError`, whose
 `extra` attribute names the missing extra (`'postgres'`).
-
-## Pre-releases on PyPI
-
-If 2.0 is first published as a pre-release (for example `2.0.0rc1`), pin it so that uv and pip cannot pick 0.1:
-`uv tool install 'environment-store[cli]>=2.0.0rc1'` or `pip install 'environment-store[cli]>=2.0.0rc1'`.
 
 ## Man page and tldr page
 
@@ -169,13 +160,13 @@ The package installs two console commands that are exactly the same program:
 
 ```console
 $ python -m environment_store.cli --version
-environment-store 2.0.0.dev0
+environment-store 2.0.0
 ```
 
 `python -m` needs the package in the Python you run: after `pip install` into an activated virtual environment,
 or with `uv run python -m environment_store.cli` in a uv project. After `uv tool install` the package lives in the
 tool's isolated environment, so plain `python` does not find it (`ModuleNotFoundError`); use `envs` there, or run
-`uv run --no-project --with 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2' python -m environment_store.cli --version`.
+`uv run --no-project --with 'environment-store[cli]' python -m environment_store.cli --version`.
 
 Tab completion for both names is set up as described in [Enable shell completion](#enable-shell-completion).
 
@@ -197,14 +188,14 @@ To check the library, import it from the Python that has it installed: an activa
 
 ```console
 $ python -c 'import environment_store; print(environment_store.__version__)'
-2.0.0.dev0
+2.0.0
 $ uv run python -c 'import environment_store; print(environment_store.__version__)'
-2.0.0.dev0
+2.0.0
 ```
 
 After `uv tool install` the library is in the tool's isolated environment, where plain `python` cannot import it.
 Without a project, use
-`uv run --no-project --with 'environment-store @ git+https://github.com/mkaufhol/environment-store@feature/v2' python -c 'import environment_store; print(environment_store.__version__)'`.
+`uv run --no-project --with environment-store python -c 'import environment_store; print(environment_store.__version__)'`.
 
 ## Enable shell completion
 

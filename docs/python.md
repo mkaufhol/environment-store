@@ -40,8 +40,6 @@ pip install environment-store                # the same with pip
 pip install 'environment-store[postgres]'
 ```
 
-2.0 is not on PyPI yet. Until it is, add it from the repository:
-`uv add 'environment-store[postgres] @ git+https://github.com/mkaufhol/environment-store@feature/v2'`.
 [Installation](installation.md#optional-extras) explains every extra and the pip equivalents.
 
 If you open a `postgresql://` connection without the `postgres` extra, you get a
@@ -800,6 +798,6 @@ one from `load()` or `EnvironmentStore.load()`. Its `repr` hides the values.
 | `Format` | `DOTENV = "dotenv"`, `JSON = "json"`, `TOML = "toml"` |
 | `SetupMode` | `AUTO = "auto"`, `NONE = "none"` |
 | `CredentialsInProjectFileWarning` | `UserWarning` subclass emitted by `load()` |
-| `__version__` | The package version, e.g. `'2.0.0.dev0'` |
+| `__version__` | The package version, e.g. `'2.0.0'` |
 
 The error classes are listed in [Which errors should I catch?](#which-errors-should-i-catch).

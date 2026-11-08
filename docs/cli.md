@@ -8,7 +8,7 @@
 
 This guide covers the command line from start to finish. It starts with the ideas you need, then describes every command, and ends with recipes for common jobs. New here? The [quick start page](quickstart.md) is a shorter walk-through. For the Python API, see [python.md](python.md); all pages are listed in the [docs index](README.md).
 
-All examples on this page were run against `environment-store 2.0.0.dev0`. The output shown is real. Lines such as `created store 'base'` are status messages printed on **stderr**; data (values, listings, exports) goes to **stdout**.
+All examples on this page were run against `environment-store 2.0.0`. The output shown is real. Lines such as `created store 'base'` are status messages printed on **stderr**; data (values, listings, exports) goes to **stdout**.
 
 ## Contents
 
@@ -49,13 +49,7 @@ uv tool install 'environment-store[all]'            # CLI, PostgreSQL and the te
 uvx --from 'environment-store[cli]' envs --version  # run once, without installing
 ```
 
-**2.0 is not on PyPI yet**, so today these commands would find the old 0.1 line. Until the release, install from the repository with the same extras:
-
-```sh
-uv tool install 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2'
-```
-
-With pip, use `pip install 'environment-store[cli]'` inside a virtual environment. [installation.md](installation.md) has the details: every extra in a table, the library install with `uv add`, installing from a clone, and pip.
+With pip, use `pip install 'environment-store[cli]'` inside a virtual environment. [installation.md](installation.md) has the details: every extra in a table, the library install with `uv add`, the development version from the repository or a clone, and pip.
 
 | Extra | Adds |
 |---|---|
@@ -68,7 +62,7 @@ Check the install:
 
 ```console
 $ envs --version
-environment-store 2.0.0.dev0
+environment-store 2.0.0
 ```
 
 `envs` and `environment-store` are the same program, and `python -m environment_store.cli` works too. If an extra is missing, the command tells you which one to install, for example `Error: this feature needs the optional 'postgres' dependencies: uv add 'environment-store[postgres]' (or pip install 'environment-store[postgres]'); for the CLI tool: uv tool install 'environment-store[cli,postgres]'`. For the `envs` tool, use the last command: it reinstalls the tool with the extra added (list any other extras the tool already has, too).

@@ -29,9 +29,6 @@ uv tool install 'environment-store[all]'
 pip install 'environment-store[cli,tui]'
 ```
 
-2.0 is not on PyPI yet; until it is, append the repository URL:
-`uv tool install 'environment-store[cli,tui] @ git+https://github.com/mkaufhol/environment-store@feature/v2'`.
-
 Without Textual, `envs tui` stops with exit code 1 and tells you what to install:
 
 ```

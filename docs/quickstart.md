@@ -10,18 +10,17 @@ everything afterwards.
 ## 1. Install
 
 Install the command with [uv](https://docs.astral.sh/uv/). `uv tool install` gives it its own isolated environment
-and puts `envs` on your `PATH`. Version 2.0 is not on PyPI yet (the package there is the old 0.1 line, which has
-no `envs` command), so install it from the Git repository:
+and puts `envs` on your `PATH`:
 
 ```console
-$ uv tool install 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2'
+$ uv tool install 'environment-store[cli]'
 $ envs --version
-environment-store 2.0.0.dev0
+environment-store 2.0.0
 ```
 
-Then change into your empty work directory for the rest of the guide. Once 2.0 is on PyPI, the command is
-`uv tool install 'environment-store[cli]'`. With pip, run `pip install` with the same text inside a virtual
-environment.
+Then change into your empty work directory for the rest of the guide. With pip, run
+`pip install 'environment-store[cli]'` inside a virtual environment. If you have the old 0.1 pre-release
+installed, uninstall it first (see [Installation](installation.md)).
 
 The `[cli]` extra adds the `envs` command. It is also installed as `environment-store`; both names run the same
 tool. `envs -h` shows the help of every command. See [Installation](installation.md) for PostgreSQL support, the
@@ -254,11 +253,11 @@ The `envs` tool from step 1 lives in its own environment, so your Python cannot 
 `uv run --with` runs the script in a temporary environment that has it:
 
 ```console
-$ uv run --with 'environment-store @ git+https://github.com/mkaufhol/environment-store@feature/v2' python app.py
+$ uv run --with environment-store python app.py
 db.example.com s3cr3t-pa55
 ```
 
-In a real project, add the library once with `uv add environment-store` (today with the same `@ git+...` URL) and
+In a real project, add the library once with `uv add environment-store` and
 run `uv run python app.py`, or `pip install` it into your virtual environment and run `python app.py`.
 
 Like the CLI, `load()` keeps variables that are already set unless you pass `overwrite=True`, and it reads

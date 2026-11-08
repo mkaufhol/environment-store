@@ -1,6 +1,7 @@
 """The user documentation and the agent skill stay in sync with the CLI and with each other."""
 
 import re
+import tomllib
 from pathlib import Path
 from typing import Final
 
@@ -32,6 +33,17 @@ _HTML_ANCHOR: Final = re.compile(r"""<a\s+(?:name|id)=["']([^"']+)["']""")
 # A quoted MissingExtraError message, up to the end of its line or of its code span.
 _MISSING_EXTRA: Final = re.compile(r"this feature needs the optional '(\w+)' dependencies: [^`\n]*")
 _MAN_PAGE: Final = _ROOT / "docs" / "man" / "share" / "man" / "man1" / "envs.1"
+_CHANGELOG: Final = _ROOT / "CHANGELOG.md"
+_PROJECT_FILES: Final = (
+    *_DOCUMENTS,
+    _MAN_PAGE,
+    _CHANGELOG,
+    _ROOT / "CLAUDE.md",
+    _ROOT / "CONTRIBUTING.md",
+)
+# `environment-store 2.0.0` as `envs --version` prints it, or a bare version in a code span.
+_SHOWN_VERSION: Final = re.compile(r"environment-store (\d[\w.]*)|`'?(\d+\.\d+\.\d+[\w.]*)'?`")
+_REPOSITORY: Final = "https://github.com/mkaufhol/environment-store"
 
 
 def _registered_commands() -> list[str]:
@@ -73,6 +85,13 @@ def _anchors(document: Path) -> set[str]:
         seen[slug] = count + 1
         anchors.add(f"{slug}-{count}" if count else slug)
     return anchors
+
+
+def _package_version() -> str:
+    pyproject = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    version = pyproject["project"]["version"]
+    assert isinstance(version, str)
+    return version
 
 
 def _document_id(document: Path) -> str:
@@ -166,3 +185,90 @@ def test_no_document_claims_there_is_no_shell_completion(document: Path) -> None
     # `envs completion` exists; an older sentence saying otherwise would mislead.
     prose = " ".join(document.read_text(encoding="utf-8").split())
     assert not re.search(r"\bno (?:built-in )?shell completion\b", prose, re.IGNORECASE)
+
+
+@pytest.mark.parametrize("document", _PROJECT_FILES, ids=_document_id)
+def test_no_document_points_to_the_feature_branch(document: Path) -> None:
+    # main is the base branch since 2.0; feature/v2 links break once it is deleted.
+    assert "feature/v2" not in document.read_text(encoding="utf-8")
+
+
+def test_readme_has_only_absolute_links() -> None:
+    # PyPI renders the README without the repository, so a relative link would break there.
+    assert _relative_links(_ROOT / "README.md") == []
+
+
+def test_readme_links_into_the_repository_point_to_main() -> None:
+    prose = _prose(_ROOT / "README.md")
+    targets = [*_MARKDOWN_LINK.findall(prose), *_HTML_LINK.findall(prose)]
+    repository = [target for target in targets if target.startswith(f"{_REPOSITORY}/")]
+
+    assert repository
+    assert [
+        target
+        for target in repository
+        if not target.startswith((f"{_REPOSITORY}/blob/main/", f"{_REPOSITORY}/tree/main/"))
+    ] == []
+
+
+@pytest.mark.parametrize("document", _DOCUMENTS, ids=_document_id)
+def test_documented_versions_are_the_package_version(document: Path) -> None:
+    # Sample output such as `envs --version` must stay real across releases.
+    shown = {
+        printed or quoted
+        for printed, quoted in _SHOWN_VERSION.findall(document.read_text(encoding="utf-8"))
+    }
+
+    assert shown <= {_package_version()}
+
+
+def test_package_is_a_final_release() -> None:
+    assert re.fullmatch(r"\d+\.\d+\.\d+", _package_version())
+
+
+def test_changelog_has_an_entry_for_the_package_version() -> None:
+    changelog = _CHANGELOG.read_text(encoding="utf-8")
+    version = re.escape(_package_version())
+
+    assert re.search(rf"^## \[{version}\] - \d{{4}}-\d{{2}}-\d{{2}}$", changelog, re.MULTILINE)
+    assert re.search(rf"^\[{version}\]: {_REPOSITORY}/compare/", changelog, re.MULTILINE)
+
+
+def test_changelog_keeps_an_unreleased_section_above_the_releases() -> None:
+    headings = re.findall(r"^## \[([^\]]+)\]", _CHANGELOG.read_text(encoding="utf-8"), re.MULTILINE)
+
+    assert headings[:2] == ["Unreleased", _package_version()]
+
+
+def test_testpypi_check_installs_only_the_package_from_testpypi() -> None:
+    # PyPI has the old 0.1 line, and anyone can upload look-alike dependencies to TestPyPI: take
+    # only environment-store from TestPyPI, pinned so that uv fails instead of falling back.
+    contributing = _prose(_ROOT / "CONTRIBUTING.md")
+    commands = [span for span in _CODE_SPAN.findall(contributing) if "test.pypi.org" in span]
+
+    assert commands
+    for command in commands:
+        assert "--find-links https://test.pypi.org/simple/environment-store/" in command
+        assert "'environment-store[cli]==X.Y.Z'" in command
+        assert "-index" not in command
+
+
+def test_readme_tells_0_1_users_to_uninstall_it_first() -> None:
+    # With 0.1 installed, `pip install 'environment-store[cli]'` keeps 0.1 and installs no `envs`.
+    readme = _prose(_ROOT / "README.md")
+    note = readme[readme.index("Version 2.0 is a rewrite") :].split("\n\n", 1)[0]
+
+    assert "uninstall it first" in note
+    assert f"{_REPOSITORY}/blob/main/docs/installation.md" in note
+
+
+def test_changelog_names_every_environment_variable_the_package_reads() -> None:
+    read = {
+        "ENV_STORE_KEY_" if name.startswith("ENV_STORE_KEY_") else name
+        for source in (_ROOT / "src").rglob("*.py")
+        for name in re.findall(r"ENV_STORE_[A-Z_]+", source.read_text(encoding="utf-8"))
+    }
+    changelog = _CHANGELOG.read_text(encoding="utf-8")
+
+    assert read
+    assert sorted(name for name in read if name not in changelog) == []

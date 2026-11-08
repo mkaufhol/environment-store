@@ -25,7 +25,7 @@ against the real CLI.
 
 | Task | Where to look |
 |---|---|
-| install it? | [Installation](installation.md) (with uv; 2.0 is not on PyPI yet, so install from the repository) |
+| install it? | [Installation](installation.md) (with uv or pip, from PyPI) |
 | know which extra I need? | [Optional extras](installation.md#optional-extras) |
 | read the man page or the tldr page? | [Reference pages](cli.md#reference-pages-man-and-tldr) |
 | get Tab completion in bash, zsh or fish? | [Enable shell completion](installation.md#enable-shell-completion), [what completes](cli.md#shell-completion) |

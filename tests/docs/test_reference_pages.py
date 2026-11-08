@@ -229,13 +229,15 @@ def test_man_page_names_both_executables() -> None:
     assert re.match(r"\s*envs, environment-store - \S", name)
 
 
-@pytest.mark.parametrize("section", ["DESCRIPTION", "EXAMPLES"])
-def test_man_page_install_commands_name_the_repository_until_2_0_is_on_pypi(section: str) -> None:
-    # PyPI still serves 0.1, which has no envs command; the plain PyPI form must
-    # not stand alone wherever the page shows how to install or run envs.
-    text = _plain(_man_sections()[section])
+def test_man_page_installs_envs_from_pypi() -> None:
+    text = _plain(_man_sections()["DESCRIPTION"]).replace("\\(dq", '"')
 
-    assert "git+https://github.com/mkaufhol/environment-store@feature/v2" in text
+    assert 'uv tool install "environment-store[cli]"' in text
+
+
+def test_man_page_installs_nothing_from_a_git_url() -> None:
+    # 2.0 is on PyPI; a Git URL would pin readers to an unreleased branch.
+    assert "git+" not in _plain(_MAN_PAGE.read_text(encoding="utf-8"))
 
 
 def test_man_page_documents_every_registered_command_and_no_other() -> None:
