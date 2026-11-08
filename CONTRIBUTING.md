@@ -3,6 +3,9 @@
 These rules are **binding** for all code in this repository, written by humans or agents. When a rule here
 conflicts with convenience, the rule wins.
 
+The [developer guide](docs/development/README.md) explains how to follow them in this code base: the
+architecture, the test helpers, the tools, and checklists for adding an adapter, a command or a TUI screen.
+
 ## 1. Toolchain
 
 | Tool | Purpose | Command |
@@ -12,7 +15,7 @@ conflicts with convenience, the rule wins.
 | ty | type checking, warnings are errors | `uv run ty check --error-on-warning` |
 | pytest + coverage | tests, 100 % line **and** branch coverage | `uv run coverage run -m pytest && uv run coverage report` |
 | bandit | security linting of `src/` | `uv run bandit -q -c pyproject.toml -r src` |
-| pre-commit | runs all of the above on commit | `uv run pre-commit run --all-files` |
+| pre-commit | runs ruff, ty and bandit on commit (not the tests) | `uv run pre-commit install`, `uv run pre-commit run --all-files` |
 
 **Definition of done** for every change — all must pass locally and in CI:
 
@@ -42,7 +45,8 @@ Rules:
   another test's state or on execution order.
 - Use **Hypothesis** property tests for round-trips (values through every adapter, serializers, escaping,
   encryption).
-- No network access in tests. PostgreSQL tests use a throwaway local cluster, never a shared server.
+- No network access in tests. PostgreSQL tests use a throwaway server: a private local cluster that the tests
+  start, or a disposable server named by `ENV_STORE_TEST_POSTGRES_URL` (as in CI), never a shared server.
 - Every adapter passes the shared **adapter contract suite** (`tests/contract/`) in addition to its own tests.
 - 100 % line and branch coverage. `# pragma: no cover` is forbidden except for the patterns configured in
   `[tool.coverage.report] exclude_also` (`if TYPE_CHECKING:`, `...` protocol bodies, `raise NotImplementedError`,
@@ -127,8 +131,9 @@ publishing; nobody uploads by hand.
 
 1. In `CHANGELOG.md`, turn `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`, add a new empty `## [Unreleased]`
    above it and update the compare links at the bottom.
-2. Set the version: `uv version X.Y.Z` (updates `pyproject.toml` and `uv.lock`), and update documented sample
-   output that shows the version (`tests/docs` fails until you do).
+2. Set the version: `uv version X.Y.Z` (updates `pyproject.toml` and `uv.lock`), and update everything that
+   shows it: documented sample output (`tests/docs` fails until you do), the date and version in the man page
+   header, and `tests/unit/test_version.py`.
 3. Merge to `main` through a pull request.
 4. Optional: run the Release workflow by hand with target `testpypi` and try the result:
    `uvx --find-links https://test.pypi.org/simple/environment-store/ --from 'environment-store[cli]==X.Y.Z' envs --version`.

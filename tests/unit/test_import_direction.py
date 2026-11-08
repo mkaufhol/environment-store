@@ -23,7 +23,7 @@ _SRC: Final = Path(environment_store.__file__).parent
 
 # Layer -> the layers it may import from. Layers not listed here are not restricted yet.
 # Adapters are layered per subpackage: `adapters.<name>`; `adapters` alone is the package root.
-_ALLOWED: Final[dict[str, frozenset[str]]] = {
+ALLOWED_IMPORTS: Final[dict[str, frozenset[str]]] = {
     "core": frozenset({"core"}),
     "crypto": frozenset({"core", "crypto"}),
     "service": frozenset({"core", "crypto", "service"}),
@@ -71,9 +71,9 @@ def _imported_modules(source: str) -> list[str]:
 
 def _violations(module: str, source: str) -> list[str]:
     layer = _layer(module)
-    if layer not in _ALLOWED:
+    if layer not in ALLOWED_IMPORTS:
         return []
-    allowed = _ALLOWED[layer] | _MODULE_EXCEPTIONS.get(module, frozenset())
+    allowed = ALLOWED_IMPORTS[layer] | _MODULE_EXCEPTIONS.get(module, frozenset())
     return [
         imported
         for imported in _imported_modules(source)
@@ -166,9 +166,12 @@ def test_module_imports_only_from_lower_layers(module: str, path: Path) -> None:
 def _layer_packages() -> list[tuple[str, frozenset[str]]]:
     """Each restricted layer's top module present in the tree, with the layers it must not load."""
     return [
-        (module, frozenset(_ALLOWED) - _ALLOWED[layer] - {layer} - _parent_layers(layer))
+        (
+            module,
+            frozenset(ALLOWED_IMPORTS) - ALLOWED_IMPORTS[layer] - {layer} - _parent_layers(layer),
+        )
         for module, _ in _source_modules()
-        if (layer := _layer(module)) in _ALLOWED and module == f"{_PACKAGE}.{layer}"
+        if (layer := _layer(module)) in ALLOWED_IMPORTS and module == f"{_PACKAGE}.{layer}"
     ]
 
 
@@ -186,6 +189,17 @@ def test_layer_packages_are_found_in_the_source_tree() -> None:
         "environment_store.cli",
         "environment_store.tui",
     } <= found
+
+
+def test_every_package_and_adapter_subpackage_has_import_rules() -> None:
+    # An unlisted layer would go unchecked, so a new adapter must get its own entry.
+    packages = {
+        path.parent.relative_to(_SRC).as_posix().replace("/", ".")
+        for pattern in ("*/__init__.py", "adapters/*/__init__.py")
+        for path in _SRC.glob(pattern)
+    }
+
+    assert packages <= set(ALLOWED_IMPORTS)
 
 
 def test_adapter_subpackages_may_not_load_each_other() -> None:

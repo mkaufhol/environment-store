@@ -12,17 +12,23 @@ from typer.main import get_command
 
 from environment_store.cli._typer import EnvsGroup
 from environment_store.cli.app import app
+from environment_store.core.connection import ADAPTER_FACTORIES
 from environment_store.core.errors import MissingExtraError
+from tests.unit.test_import_direction import ALLOWED_IMPORTS
 
 _ROOT: Final = Path(__file__).parents[2]
 _CLI_GUIDE: Final = _ROOT / "docs" / "cli.md"
 _SKILL_DIR: Final = _ROOT / ".claude" / "skills" / "environment-store-cli"
 _SKILL: Final = _SKILL_DIR / "SKILL.md"
+_DEVELOPER_GUIDE: Final = _ROOT / "docs" / "development"
 _DOCUMENTS: Final = (
     _ROOT / "README.md",
     *sorted((_ROOT / "docs").glob("*.md")),
+    *sorted(_DEVELOPER_GUIDE.glob("*.md")),
     *sorted(_SKILL_DIR.glob("*.md")),
 )
+# Documents whose relative links must resolve: the documentation plus the contributor rules.
+_LINKED_DOCUMENTS: Final = (*_DOCUMENTS, _ROOT / "CLAUDE.md", _ROOT / "CONTRIBUTING.md")
 
 _FENCE: Final = re.compile(r"^(```|~~~).*?^\1", re.MULTILINE | re.DOTALL)
 _CODE_SPAN: Final = re.compile(r"`([^`\n]+)`")
@@ -117,7 +123,7 @@ def test_agent_skill_mentions_every_registered_command(command: str) -> None:
     assert command in _mentioned_words(_SKILL)
 
 
-@pytest.mark.parametrize("document", _DOCUMENTS, ids=_document_id)
+@pytest.mark.parametrize("document", _LINKED_DOCUMENTS, ids=_document_id)
 def test_relative_links_point_to_existing_files(document: Path) -> None:
     missing = [
         target
@@ -128,7 +134,7 @@ def test_relative_links_point_to_existing_files(document: Path) -> None:
     assert missing == []
 
 
-@pytest.mark.parametrize("document", _DOCUMENTS, ids=_document_id)
+@pytest.mark.parametrize("document", _LINKED_DOCUMENTS, ids=_document_id)
 def test_relative_links_to_markdown_headings_point_to_existing_anchors(document: Path) -> None:
     broken: list[str] = []
     for target in _relative_links(document):
@@ -150,6 +156,84 @@ def test_documentation_index_links_every_guide() -> None:
     guides = {path.name for path in (_ROOT / "docs").glob("*.md") if path.name != "README.md"}
 
     assert guides <= linked
+
+
+def _links_to(document: Path) -> set[Path]:
+    return {
+        (document.parent / target.partition("#")[0]).resolve()
+        for target in _relative_links(document)
+        if target.partition("#")[0]
+    }
+
+
+def test_developer_guide_index_links_every_page_of_the_guide() -> None:
+    pages = {page.resolve() for page in _DEVELOPER_GUIDE.glob("*.md") if page.name != "README.md"}
+
+    assert pages
+    assert pages <= _links_to(_DEVELOPER_GUIDE / "README.md")
+
+
+@pytest.mark.parametrize(
+    "document",
+    [_ROOT / "docs" / "README.md", _ROOT / "CONTRIBUTING.md", _ROOT / "CLAUDE.md"],
+    ids=_document_id,
+)
+def test_the_developer_guide_is_linked_from_the_index_and_the_contributor_rules(
+    document: Path,
+) -> None:
+    assert (_DEVELOPER_GUIDE / "README.md").resolve() in _links_to(document)
+
+
+# `src/environment_store/core/merge.py`, `tests/support/cli.py::CliHarness`, `pyproject.toml:12`.
+_REPOSITORY_PATH: Final = re.compile(
+    r"((?:src|tests|docs|\.github|\.claude)/[\w./-]*[\w/]|pyproject\.toml|CHANGELOG\.md|"
+    r"CONTRIBUTING\.md|CLAUDE\.md|\.pre-commit-config\.yaml)(?:::(\w+)|:\d+(?:-\d+)?)?"
+)
+
+
+def _developer_guide_paths() -> list[tuple[str, str, str]]:
+    return [
+        (page.name, match.group(1), match.group(2) or "")
+        for page in sorted(_DEVELOPER_GUIDE.glob("*.md"))
+        for span in _CODE_SPAN.findall(_FENCE.sub("", page.read_text(encoding="utf-8")))
+        if (match := _REPOSITORY_PATH.fullmatch(span))
+    ]
+
+
+def test_the_developer_guide_names_repository_paths() -> None:
+    assert len(_developer_guide_paths()) > 50
+
+
+@pytest.mark.parametrize(("page", "path", "name"), _developer_guide_paths())
+def test_every_path_the_developer_guide_names_exists(page: str, path: str, name: str) -> None:
+    target = _ROOT / path
+
+    assert target.exists(), f"{page} names {path}, which does not exist"
+    if name:
+        assert re.search(rf"\b{name}\b", target.read_text(encoding="utf-8")), (
+            f"{page} names {path}::{name}, which the file does not define or use"
+        )
+
+
+# | `cli` | `core`, `config`, `library`, `formats`, `cli` |
+_LAYER_ROW: Final = re.compile(r"^\| `([\w.]+)` \| ((?:`[\w.]+`(?:, )?)+) \|", re.MULTILINE)
+
+
+def test_architecture_guide_shows_the_enforced_import_rules() -> None:
+    guide = (_DEVELOPER_GUIDE / "architecture.md").read_text(encoding="utf-8")
+    documented = {
+        layer: frozenset(re.findall(r"`([\w.]+)`", allowed))
+        for layer, allowed in _LAYER_ROW.findall(guide)
+    }
+
+    assert documented == ALLOWED_IMPORTS
+
+
+@pytest.mark.parametrize("scheme", sorted(ADAPTER_FACTORIES))
+def test_adapter_guide_names_every_registered_scheme(scheme: str) -> None:
+    guide = (_DEVELOPER_GUIDE / "adapters.md").read_text(encoding="utf-8")
+
+    assert f"`{scheme}://" in guide
 
 
 def test_python_guide_names_every_public_name_of_the_library() -> None:

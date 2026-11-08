@@ -20,6 +20,7 @@ against the real CLI.
 | [Deploying with encrypted stores](deployment.md) | give a deployed app its keys on Heroku, Kubernetes, in containers or CI, as `ENV_STORE_KEY_<STORE>` or a mounted file; rotate them |
 | [Terminal UI](tui.md) | create, remove and export stores and browse and edit variables interactively with `envs tui` |
 | [Agent skill](../.claude/skills/environment-store-cli/SKILL.md) | let a coding agent use the `envs` CLI safely |
+| [Developer guide](development/README.md) | change or extend Environment Store itself: architecture, conventions, tests, tools, new adapters |
 
 ## How do I…
 

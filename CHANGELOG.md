@@ -54,6 +54,8 @@ changed, and there is no migration path from 0.1 stores. The
   names of plaintext stores and paths. Completion only reads and never asks for a key.
 - **Reference pages**: the wheel installs the `envs(1)` man page (also as `environment-store(1)`); the repository
   has a tldr page and an agent skill for coding agents that drive the CLI.
+- **Developer guide** in `docs/development/` for contributors and coding agents: architecture and import rules,
+  code conventions, testing, tools, and checklists for adding a storage adapter, a CLI command or a TUI screen.
 
 ### Changed
 
