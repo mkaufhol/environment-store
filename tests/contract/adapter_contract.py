@@ -674,8 +674,8 @@ class AdapterContract:
             first.delete_store("base")
             assert second.list_stores() == []
 
-    @pytest.mark.parametrize("setup", list(SetupMode))
-    def test_every_setup_mode_gives_a_working_adapter(
+    @pytest.mark.parametrize("setup", [SetupMode.AUTO, SetupMode.NONE])
+    def test_every_writable_setup_mode_gives_a_working_adapter(
         self, backend: Backend, setup: SetupMode
     ) -> None:
         record = _plain()
@@ -686,6 +686,42 @@ class AdapterContract:
 
         with backend.open(setup=setup) as reopened:
             assert reopened.read_store("base") == record
+
+    # --- read-only (D54) -------------------------------------------------------------------
+
+    def test_read_only_on_an_empty_backend_lists_no_stores(self, backend: Backend) -> None:
+        with backend.open(setup=SetupMode.READ_ONLY) as adapter:
+            assert adapter.list_stores() == []
+            with pytest.raises(StoreNotFoundError):
+                adapter.read_store("base")
+
+    def test_read_only_reads_what_is_there(self, backend: Backend) -> None:
+        plain, sealed = _plain(variables={"A": "1"}), _sealed()
+        with backend.open() as adapter:
+            adapter.create_store(plain)
+            adapter.create_store(sealed)
+
+        with backend.open(setup=SetupMode.READ_ONLY) as adapter:
+            assert adapter.list_stores() == [plain.info, sealed.info]
+            assert adapter.read_store("base") == plain
+            assert adapter.read_store("secret") == sealed
+
+    def test_read_only_refuses_every_write_and_changes_nothing(self, backend: Backend) -> None:
+        record = _plain()
+        with backend.open() as adapter:
+            adapter.create_store(record)
+
+        with backend.open(setup=SetupMode.READ_ONLY) as adapter:
+            with pytest.raises(BackendError, match="read-only"):
+                adapter.create_store(_plain("other"))
+            with pytest.raises(BackendError, match="read-only"):
+                adapter.write_store(_next(record, B="2"), expected_revision=1)
+            with pytest.raises(BackendError, match="read-only"):
+                adapter.delete_store("base")
+
+        with backend.open() as adapter:
+            assert adapter.list_stores() == [record.info]
+            assert adapter.read_store("base") == record
 
     def test_open_returns_a_new_instance_each_time(self, backend: Backend) -> None:
         with backend.open() as first, backend.open() as second:

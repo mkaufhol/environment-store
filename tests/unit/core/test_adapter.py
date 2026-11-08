@@ -10,9 +10,10 @@ from environment_store.core.adapter import (
     MigrationReport,
     SetupMode,
     check_create,
+    check_writable,
     check_write,
 )
-from environment_store.core.errors import ValidationError
+from environment_store.core.errors import BackendError, ValidationError
 from environment_store.core.models import MAX_REVISION, StoreRecord
 from tests.support.memory_adapter import MemoryAdapter, MemoryBackend
 
@@ -29,8 +30,20 @@ def _forge_name(record: StoreRecord, name: str) -> StoreRecord:
     return record
 
 
-def test_setup_modes_are_auto_and_none() -> None:
-    assert [mode.value for mode in SetupMode] == ["auto", "none"]
+def test_setup_modes_are_auto_none_and_read_only() -> None:
+    assert [mode.value for mode in SetupMode] == ["auto", "none", "read_only"]
+
+
+@pytest.mark.parametrize("setup", [SetupMode.AUTO, SetupMode.NONE])
+def test_check_writable_accepts_the_modes_that_may_write(setup: SetupMode) -> None:
+    check_writable(setup, location="the backend")
+
+
+def test_check_writable_refuses_read_only_and_names_the_location() -> None:
+    with pytest.raises(BackendError, match="read-only") as raised:
+        check_writable(SetupMode.READ_ONLY, location="/data/envs.db")
+
+    assert "/data/envs.db" in str(raised.value)
 
 
 def test_memory_adapter_satisfies_the_adapter_protocol_but_is_not_migratable() -> None:

@@ -1,14 +1,53 @@
-"""Private directories for the SQLite database file (D43, spec §3.2).
+"""Private directories and files for the SQLite database (D43, spec §3.2).
 
 The same rule as `adapters.files.directories`; adapter subpackages do not import each other.
 """
 
+import os
 from pathlib import Path
 from typing import Final
 
-__all__ = ["make_private_directory"]
+__all__ = ["create_private_file", "is_missing", "make_private_directory"]
 
 _DIRECTORY_MODE: Final[int] = 0o700
+_FILE_MODE: Final[int] = 0o600
+
+
+def is_missing(path: Path) -> bool:
+    """Tell whether a path does not exist.
+
+    Only "does not exist" counts: other errors (no permission, a file as parent) are left to
+    `sqlite3.connect` to report.
+
+    Args:
+        path: The path.
+
+    Returns:
+        Whether it is missing.
+    """
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
+def create_private_file(path: Path) -> None:
+    """Create a missing database file with mode 0600, like the file backend's store files.
+
+    SQLite gives its -wal and -shm files the database file's mode, so they are private too.
+    An existing file keeps its mode; a failure is left to `sqlite3.connect` to report.
+
+    Args:
+        path: The database file.
+    """
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, _FILE_MODE)
+    except OSError:
+        return
+    os.close(fd)
 
 
 def make_private_directory(directory: Path) -> None:

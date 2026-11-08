@@ -37,6 +37,7 @@ def test_every_server_backed_module_carries_the_postgres_marker() -> None:
     assert {Path(path).name for path in marked} == {
         "test_adapter.py",
         "test_contract.py",
+        "test_read_only.py",
         "test_security.py",
         "test_setup.py",
     }

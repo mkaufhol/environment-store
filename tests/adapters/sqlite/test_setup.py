@@ -282,7 +282,7 @@ def test_migrate_creates_the_schema_in_a_new_file(tmp_path: Path) -> None:
     assert meta_rows(path)["schema_version"] == "1"
 
 
-@pytest.mark.parametrize("setup", list(SetupMode))
+@pytest.mark.parametrize("setup", [SetupMode.AUTO, SetupMode.NONE])
 def test_migrate_is_a_no_op_on_a_current_schema(tmp_path: Path, setup: SetupMode) -> None:
     path = _db(tmp_path)
     with open_sqlite(url_of(path)) as adapter:

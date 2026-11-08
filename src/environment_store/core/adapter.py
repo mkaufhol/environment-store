@@ -10,7 +10,7 @@ from enum import StrEnum, auto
 from types import TracebackType
 from typing import Protocol, Self, runtime_checkable
 
-from environment_store.core.errors import ValidationError
+from environment_store.core.errors import BackendError, ValidationError
 from environment_store.core.models import MAX_REVISION, StoreInfo, StoreRecord
 from environment_store.core.validation import validate_store_name
 
@@ -20,6 +20,7 @@ __all__ = [
     "MigrationReport",
     "SetupMode",
     "check_create",
+    "check_writable",
     "check_write",
 ]
 
@@ -29,12 +30,19 @@ class SetupMode(StrEnum):
 
     `AUTO` (default): SQL adapters inspect the database on open and create or upgrade it as the
     spec allows. `NONE`: open does not inspect; `migrate()` creates or upgrades explicitly and any
-    data operation first runs the `AUTO` check lazily. File adapters accept and ignore the mode.
+    data operation first runs the `AUTO` check lazily. File adapters need no setup.
+
+    `READ_ONLY`: nothing is ever created, set up, upgraded or written, not even a lock or
+    journal file (D43, D54). Reads use what is there: an empty database or a missing location
+    holds no stores, a schema that would need creating or upgrading is refused. Every write and
+    `migrate()` raises `BackendError`. Meant for quick lookups such as shell completion; the
+    PostgreSQL adapter also connects with a short timeout in this mode.
     """
 
-    # auto() gives the lowercase member name: "auto", "none".
+    # auto() gives the lowercase member name: "auto", "none", "read_only".
     AUTO = auto()
     NONE = auto()
+    READ_ONLY = auto()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -178,6 +186,21 @@ class MigratableAdapter(Adapter, Protocol):
             SchemaTooNewError: The schema is newer than this client.
         """
         ...
+
+
+def check_writable(setup: SetupMode, *, location: str) -> None:
+    """Refuse a write of an adapter opened with `SetupMode.READ_ONLY` (D54).
+
+    Args:
+        setup: The mode the adapter was opened with.
+        location: Where the stores are, for the message (never credentials).
+
+    Raises:
+        BackendError: The adapter is read-only; nothing was touched.
+    """
+    if setup is SetupMode.READ_ONLY:
+        message = f"{location} was opened read-only and cannot be changed"
+        raise BackendError(message)
 
 
 def check_create(record: StoreRecord) -> None:

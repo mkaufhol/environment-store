@@ -6,31 +6,22 @@ raised as `BackendError` naming the schema and database, never credentials or st
 """
 
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
 from types import TracebackType
 from typing import Final, Self
 
 import psycopg
 from psycopg import sql
 from psycopg.rows import TupleRow
-from psycopg.types.json import Jsonb
 
+from environment_store.adapters.postgres import rows as table
 from environment_store.adapters.postgres.schema import (
     apply_migrations,
     inspect_schema,
     lock_schema,
 )
 from environment_store.adapters.postgres.url import PostgresTarget, parse_url
-from environment_store.adapters.sql.codec import (
-    Dialect,
-    StoreInfoRow,
-    StoreRow,
-    record_to_row,
-    row_to_info,
-    row_to_record,
-)
+from environment_store.adapters.sql.codec import Dialect, row_to_info, row_to_record
 from environment_store.adapters.sql.migrations import POSTGRES_MIGRATIONS, Migration, pending
-from environment_store.adapters.sql.schema import STORE_INFO_COLUMNS, STORES_COLUMNS
 from environment_store.adapters.sql.setup import (
     SetupAction,
     SetupState,
@@ -38,7 +29,13 @@ from environment_store.adapters.sql.setup import (
     decide,
     stored_version,
 )
-from environment_store.core.adapter import MigrationReport, SetupMode, check_create, check_write
+from environment_store.core.adapter import (
+    MigrationReport,
+    SetupMode,
+    check_create,
+    check_writable,
+    check_write,
+)
 from environment_store.core.errors import (
     BackendError,
     ConcurrentModificationError,
@@ -49,29 +46,16 @@ from environment_store.core.errors import (
 from environment_store.core.models import StoreInfo, StoreRecord
 from environment_store.core.validation import validate_store_name
 
-__all__ = ["PostgresAdapter", "open_postgres"]
+__all__ = ["READ_ONLY_CONNECT_TIMEOUT", "PostgresAdapter", "open_postgres"]
 
-_COLUMNS: Final = sql.SQL(", ").join(map(sql.Identifier, STORES_COLUMNS))
-_INFO_COLUMNS: Final = sql.SQL(", ").join(map(sql.Identifier, STORE_INFO_COLUMNS))
-_PLACEHOLDERS: Final = sql.SQL(", ").join(sql.Placeholder() for _ in STORES_COLUMNS)
+READ_ONLY_CONNECT_TIMEOUT: Final = 2
+"""Seconds a `SetupMode.READ_ONLY` adapter waits for the server (D54); libpq's minimum."""
 
-# COLLATE "C" sorts UTF-8 by byte, which is code point order, whatever the database collation.
-_LIST: Final = sql.SQL('SELECT {columns} FROM {schema}.stores ORDER BY name COLLATE "C"')
-_READ: Final = sql.SQL("SELECT {columns} FROM {schema}.stores WHERE name = %s")
-_CREATE: Final = sql.SQL(
-    "INSERT INTO {schema}.stores ({columns}) VALUES ({values}) ON CONFLICT (name) DO NOTHING"
-)
-# The revision check and the replacement are one statement, so the check is atomic (D7).
-_WRITE: Final = sql.SQL(
-    "UPDATE {schema}.stores SET encrypted = %s, cipher_meta = %s, variables = %s, "
-    "ciphertext = %s, revision = %s, created_at = %s, updated_at = %s "
-    "WHERE name = %s AND revision = %s"
-)
-_REVISION: Final = sql.SQL("SELECT revision FROM {schema}.stores WHERE name = %s")
-_DELETE: Final = sql.SQL("DELETE FROM {schema}.stores WHERE name = %s")
 # TIMESTAMPTZ is sent in the session time zone: in local time, an instant near year 1 or 9999 UTC
 # can fall in year 0 or 10000, which the driver cannot load. A plain SET persists after COMMIT.
 _PIN_UTC: Final = sql.SQL("SET TIME ZONE 'UTC'")
+# READ_ONLY: the server refuses any write of this session too (D54).
+_READ_ONLY_SESSION: Final = sql.SQL("SET default_transaction_read_only = on")
 
 
 def open_postgres(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "PostgresAdapter":
@@ -80,7 +64,8 @@ def open_postgres(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "PostgresAd
     Args:
         url: `postgresql://user@host/db?schema=<name>`; `schema` defaults to
             `environment_store` and is removed before the URL reaches the driver.
-        setup: `AUTO` inspects and, if empty, creates the schema now; `NONE` only connects.
+        setup: `AUTO` inspects and, if empty, creates the schema now; `NONE` only connects;
+            `READ_ONLY` connects with a short timeout and never sets anything up (D54).
 
     Returns:
         The open adapter.
@@ -99,10 +84,13 @@ class PostgresAdapter:
     With `SetupMode.AUTO` the schema is inspected on open: missing or empty → created at the
     latest version in one transaction; ours and current → used; anything else is refused
     (outdated → run `migrate`, D11). With `SetupMode.NONE` the same check runs before the first
-    data operation, and `migrate()` may create or upgrade the schema instead.
+    data operation, and `migrate()` may create or upgrade the schema instead. With
+    `SetupMode.READ_ONLY` the session is read-only, a missing or empty schema holds no stores, any
+    other schema than a current one is refused, and writes and `migrate()` raise (D54).
     """
 
     _target: PostgresTarget
+    _setup: SetupMode
     _migrations: tuple[Migration, ...]
     _connection: psycopg.Connection[TupleRow]
     _ready: bool
@@ -128,6 +116,7 @@ class PostgresAdapter:
                 closed again.
         """
         self._target = target
+        self._setup = setup
         # pending(..., None) validates the numbering and returns all migrations in order.
         self._migrations = tuple(pending(migrations, None))
         self._ready = False
@@ -152,9 +141,9 @@ class PostgresAdapter:
         Returns:
             One entry per store.
         """
-        statement = self._sql(_LIST, columns=_INFO_COLUMNS)
-        rows = self._run("listing stores", lambda c: c.execute(statement).fetchall())
-        return [row_to_info(_info_row(row), dialect=Dialect.POSTGRES) for row in rows]
+        statement = self._sql(table.LIST, columns=table.INFO_COLUMNS)
+        rows = self._read("listing stores", lambda c: c.execute(statement).fetchall(), empty=[])
+        return [row_to_info(table.info_row(row), dialect=Dialect.POSTGRES) for row in rows]
 
     def create_store(self, record: StoreRecord) -> None:
         """Create a new store; of two racing creates exactly one wins.
@@ -166,8 +155,9 @@ class PostgresAdapter:
             StoreExistsError: A store with this name exists.
         """
         check_create(record)
-        statement = self._sql(_CREATE, columns=_COLUMNS, values=_PLACEHOLDERS)
-        parameters = _parameters(record)
+        check_writable(self._setup, location=self._target.location)
+        statement = self._sql(table.CREATE, columns=table.COLUMNS, values=table.PLACEHOLDERS)
+        parameters = table.record_parameters(record)
         created = self._run(
             f"creating store {record.name!r}", lambda c: c.execute(statement, parameters).rowcount
         )
@@ -188,13 +178,15 @@ class PostgresAdapter:
             StoreNotFoundError: The store does not exist.
         """
         validate_store_name(name)
-        statement = self._sql(_READ, columns=_COLUMNS)
-        row = self._run(
-            f"reading store {name!r}", lambda c: c.execute(statement, (name,)).fetchone()
+        statement = self._sql(table.READ, columns=table.COLUMNS)
+        row = self._read(
+            f"reading store {name!r}",
+            lambda c: c.execute(statement, (name,)).fetchone(),
+            empty=None,
         )
         if row is None:
             raise self._not_found(name)
-        return row_to_record(_store_row(row), dialect=Dialect.POSTGRES)
+        return row_to_record(table.store_row(row), dialect=Dialect.POSTGRES)
 
     def write_store(self, record: StoreRecord, *, expected_revision: int) -> None:
         """Replace a store if its stored revision is still `expected_revision` (D7).
@@ -208,9 +200,10 @@ class PostgresAdapter:
             ConcurrentModificationError: The stored revision differs; nothing was written.
         """
         check_write(record, expected_revision=expected_revision)
-        name, *values = _parameters(record)
+        check_writable(self._setup, location=self._target.location)
+        name, *values = table.record_parameters(record)
         parameters = (*values, name, expected_revision)
-        write, revision = self._sql(_WRITE), self._sql(_REVISION)
+        write, revision = self._sql(table.WRITE), self._sql(table.REVISION)
 
         def attempt(connection: psycopg.Connection[TupleRow]) -> tuple[bool, TupleRow | None]:
             if connection.execute(write, parameters).rowcount:
@@ -238,7 +231,8 @@ class PostgresAdapter:
             StoreNotFoundError: The store does not exist.
         """
         validate_store_name(name)
-        statement = self._sql(_DELETE)
+        check_writable(self._setup, location=self._target.location)
+        statement = self._sql(table.DELETE)
         deleted = self._run(
             f"deleting store {name!r}", lambda c: c.execute(statement, (name,)).rowcount
         )
@@ -257,8 +251,10 @@ class PostgresAdapter:
             DatabaseNotCleanError: The schema holds foreign content.
             SchemaTooNewError: The schema is newer than this client.
             SetupPrivilegeError: The user lacks a privilege the migration needs.
+            BackendError: The adapter is closed or read-only.
         """
         self._check_open()
+        check_writable(self._setup, location=self._target.location)
         return self._set_up(auto_upgrade=True)
 
     # --- lifecycle -----------------------------------------------------------------------
@@ -287,6 +283,13 @@ class PostgresAdapter:
         # The driver's exception is not chained: its text may quote the password, and the
         # redacted copy below is all a traceback may show (CONTRIBUTING §6).
         try:
+            if self._setup is SetupMode.READ_ONLY:
+                # D54: completion must not hang on a slow server; this overrides the URL's.
+                return psycopg.connect(
+                    self._target.conninfo,
+                    autocommit=True,
+                    connect_timeout=READ_ONLY_CONNECT_TIMEOUT,
+                )
             return psycopg.connect(self._target.conninfo, autocommit=True)
         except psycopg.Error as err:
             detail = self._target.redact(str(err).strip())
@@ -337,6 +340,36 @@ class PostgresAdapter:
         operation = "setting up the schema"
         raise self._driver_error(operation, failure)
 
+    def _read[T](
+        self, operation: str, work: Callable[[psycopg.Connection[TupleRow]], T], *, empty: T
+    ) -> T:
+        """`_run` for a read; read-only, a missing or empty schema gives `empty` (D54)."""
+        self._check_open()
+        if self._setup is SetupMode.READ_ONLY and not self._ready and not self._check_read_only():
+            return empty
+        return self._run(operation, work)
+
+    def _check_read_only(self) -> bool:
+        """Inspect without setting up or locking; `False` for a missing or empty schema."""
+        try:
+            with self._connection.transaction():
+                # Plain SETs persist after COMMIT, for the whole session.
+                self._connection.execute(_PIN_UTC)
+                self._connection.execute(_READ_ONLY_SESSION)
+                inspection, _ = inspect_schema(self._connection, self._target.schema)
+        except psycopg.Error as err:
+            failure = err
+        else:
+            state = classify(inspection, client_version=self._migrations[-1].version)
+            if state is SetupState.EMPTY:
+                return False
+            decide(state, auto_upgrade=False, location=self._target.location)
+            self._ready = True
+            return True
+        # Raised outside the except block, so that a dropped driver error is not kept as context.
+        operation = "checking the schema"
+        raise self._driver_error(operation, failure)
+
     def _run[T](self, operation: str, work: Callable[[psycopg.Connection[TupleRow]], T]) -> T:
         """Run `work` on the connection, after the lazy setup check; wrap driver errors."""
         self._check_open()
@@ -377,51 +410,3 @@ class PostgresAdapter:
 
     def _sql(self, template: sql.SQL, **parts: sql.Composable) -> sql.Composed:
         return template.format(schema=sql.Identifier(self._target.schema), **parts)
-
-
-def _parameters(record: StoreRecord) -> tuple[object, ...]:
-    """The `stores` column values of a record, in DDL order, ready for psycopg."""
-    row = record_to_row(record, dialect=Dialect.POSTGRES)
-    return (
-        row.name,
-        row.encrypted,
-        None if row.cipher_meta is None else Jsonb(row.cipher_meta),
-        None if row.variables is None else Jsonb(row.variables),
-        row.ciphertext,
-        row.revision,
-        row.created_at,
-        row.updated_at,
-    )
-
-
-def _utc(value: datetime) -> datetime:
-    # The session is pinned to UTC (_PIN_UTC); this only normalises the driver's tzinfo. A stored
-    # instant outside years 1 to 9999 UTC already fails while loading, as a BackendError.
-    return value.astimezone(UTC)
-
-
-def _store_row(row: TupleRow) -> StoreRow:
-    # Driver values are untrusted; the codec validates every column.
-    name, encrypted, cipher_meta, variables, ciphertext, revision, created, updated = row
-    return StoreRow(
-        name=name,
-        encrypted=encrypted,
-        cipher_meta=cipher_meta,
-        variables=variables,
-        ciphertext=ciphertext,
-        revision=revision,
-        created_at=_utc(created),
-        updated_at=_utc(updated),
-    )
-
-
-def _info_row(row: TupleRow) -> StoreInfoRow:
-    name, encrypted, cipher_meta, revision, created, updated = row
-    return StoreInfoRow(
-        name=name,
-        encrypted=encrypted,
-        cipher_meta=cipher_meta,
-        revision=revision,
-        created_at=_utc(created),
-        updated_at=_utc(updated),
-    )
