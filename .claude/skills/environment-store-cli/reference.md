@@ -125,6 +125,14 @@ commands, options, fixed values (`-t`, the shells), existing store names (never 
 never creates a file, directory or schema, and offers nothing when the backend is missing, broken or slow.
 Any other shell name is a usage error (exit 1).
 
+Instead of the `eval` line the user can save the script once as a file (faster shell start; rerun after
+upgrading). The same rule applies: never write these files or edit `plugins=(...)` unless the user asked.
+zsh autoloads it as `_envs` from any `fpath` directory added before `compinit` (its first line is
+`#compdef envs`); for Oh My Zsh that is `$ZSH_CUSTOM/plugins/envs/_envs` plus `envs` in `plugins=(...)`.
+bash-completion 2 loads `${XDG_DATA_HOME:-~/.local/share}/bash-completion/completions/envs` on demand.
+For `environment-store` replace every `envs` in these names. Details: the repository's `docs/cli.md`,
+section "Saving the script as a file".
+
 ## Project file `.envstore.toml`
 
 - Found by walking up from the current directory; the first regular file wins.

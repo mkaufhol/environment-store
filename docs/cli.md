@@ -1280,6 +1280,64 @@ The stores come from the same backend the command would use: `-c` on the line yo
 
 **Completion is read-only and silent.** It never prompts, never prints anything to stderr, and never creates or changes anything: no file, directory or database schema, so pressing Tab with a mistyped `-c json://typo` does not create `typo/`. When the backend is missing, unreachable, refuses the connection or is slow (PostgreSQL gets a 2-second connection timeout), or the project file is broken, completion simply offers nothing. If store names do not complete, run the command itself (for example `envs ls-store`) to see the error.
 
+### Saving the script as a file
+
+Instead of running `envs completion` at every shell start with `eval`, you can save the script once as a file where your shell finds it. This works with Oh My Zsh, with plain zsh or another zsh plugin manager, and with bash and the bash-completion package. The shell then starts faster, because no `envs` process runs at start-up. The saved file, like the `eval` line, runs `envs` each time you press Tab, so the command must be on your `PATH` then: after `uv tool install` or in an activated virtual environment it is; `uv run envs ...` is not completed.
+
+**Oh My Zsh.** Make a small custom plugin that holds nothing but the completion file:
+
+```sh
+mkdir -p "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/envs"
+envs completion zsh > "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/envs/_envs"
+```
+
+Then add `envs` to the `plugins=(...)` list in `~/.zshrc`, for example `plugins=(git envs)`, and open a new shell (`exec zsh`). Oh My Zsh accepts a plugin directory that contains only a file named `_<plugin>` and adds it to zsh's function path (`fpath`) before it runs `compinit`. The script's first line is `#compdef envs`, so `compinit` binds it to `envs`. Do not also keep the `eval` line in `~/.zshrc`: one of the two is enough.
+
+**Plain zsh and other zsh plugin managers.** The same file works from any directory on `fpath`, as long as that directory is added before `compinit` runs. Without a framework:
+
+```sh
+mkdir -p ~/.zfunc
+envs completion zsh > ~/.zfunc/_envs
+```
+
+In `~/.zshrc`, put the `fpath` line above your existing `compinit` call. If your `~/.zshrc` has no `compinit` yet, add both lines:
+
+```sh
+fpath=(~/.zfunc $fpath)
+autoload -Uz compinit && compinit
+```
+
+Plugin managers such as zinit, antidote or Prezto have their own place for completion files; put `_envs` there.
+
+**bash with the bash-completion package.** bash-completion (version 2) is a separate package that must be installed and loaded from your bash start-up file; on macOS, `brew install bash-completion@2` and add the line its install notes print to the file they name. It loads a command's completion the first time you press Tab after it, from `$XDG_DATA_HOME/bash-completion/completions/`, which is `~/.local/share/bash-completion/completions/` when `XDG_DATA_HOME` is not set (if you set `BASH_COMPLETION_USER_DIR`, it is `$BASH_COMPLETION_USER_DIR/completions/` instead). The file is named after the command:
+
+```sh
+mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions"
+envs completion bash > "${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/envs"
+```
+
+bash 4.4 or newer is still required (see the bash note above).
+
+**Keep the file current.** A saved script is not updated by itself: run the command that wrote it again after upgrading Environment Store. Changes to an existing file take effect in every new shell. If zsh does not offer completions from a newly added file (this can happen when your setup runs `compinit -C`), its completion cache is stale: delete the dump file and open a new shell. By default the dump is `.zcompdump` in your home directory, or in `$ZDOTDIR` if you set it; Oh My Zsh names it `.zcompdump-<host>-<zsh version>` there, or uses `$ZSH_COMPDUMP`:
+
+```sh
+rm -f "${ZDOTDIR:-$HOME}"/.zcompdump*(N) ${ZSH_COMPDUMP:+"$ZSH_COMPDUMP"}; exec zsh
+```
+
+**`environment-store` as the command name.** The script completes the name it was generated with, and zsh and bash-completion find the file by that name. If you call the long name, use the commands for your setup with every `envs` replaced by `environment-store`, including the directory and file names and the `plugins=(...)` entry:
+
+```sh
+# Oh My Zsh, then add environment-store to plugins=(...)
+mkdir -p "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/environment-store"
+environment-store completion zsh > "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/environment-store/_environment-store"
+
+# plain zsh, with ~/.zfunc on fpath as above
+environment-store completion zsh > ~/.zfunc/_environment-store
+
+# bash with bash-completion
+environment-store completion bash > "${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/environment-store"
+```
+
 ---
 
 ## Output modes

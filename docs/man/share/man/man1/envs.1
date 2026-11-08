@@ -649,6 +649,32 @@ Run as
 .BR environment\-store ,
 the script completes that name.
 .PP
+Instead of the
+.B eval
+line, the script can be saved once as a file, which also makes the shell
+start faster.
+For zsh, save it as
+.I _envs
+in a directory on
+.B fpath
+that is added before
+.B compinit
+runs; the script's first line is
+.BR "#compdef envs" .
+With Oh My Zsh that is
+.I $ZSH_CUSTOM/plugins/envs/_envs
+with
+.B envs
+added to
+.BR plugins=(...) .
+For bash with bash\-completion 2, save it as
+.I envs
+in
+.I $XDG_DATA_HOME/bash\-completion/completions
+(by default
+.IR ~/.local/share/bash\-completion/completions ).
+Run the command again after upgrading.
+.PP
 It completes commands, options and fixed option values, existing store names
 wherever an existing store is expected (never for a new name such as
 .B create\-store

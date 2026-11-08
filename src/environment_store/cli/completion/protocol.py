@@ -128,7 +128,9 @@ _ZSH_SCRIPT: Final = r"""#compdef %(prog_name)s
 }
 
 if [[ $zsh_eval_context[-1] == loadautofunc ]]; then
-    # autoload from fpath, call function directly
+    # autoload from fpath: only this first call runs here, so bind the command to the
+    # completer for every later Tab, then complete now
+    compdef %(complete_func)s %(prog_name)s
     %(complete_func)s "$@"
 else
     # eval/source/. command, register function for later

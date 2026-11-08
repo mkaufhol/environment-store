@@ -94,6 +94,38 @@ def test_zsh_completes_store_names(cli_json: CliHarness, prog_name: str) -> None
 
 
 @pytest.mark.skipif(_ZSH is None, reason="zsh is not installed")
+@pytest.mark.parametrize("prog_name", ["envs", "environment-store"])
+def test_zsh_completes_on_every_tab_when_autoloaded_from_fpath(
+    cli_json: CliHarness, prog_name: str
+) -> None:
+    # Saved as `_<prog>` in an fpath directory (Oh My Zsh plugin, ~/.zfunc), compinit binds the
+    # command to the autoloaded function. Only its first call runs in the `loadautofunc` context;
+    # every later Tab must still complete, not just re-register the completer.
+    assert _ZSH is not None
+    cli_json.store().create_store("alpha")
+    functions = cli_json.root / "functions"
+    functions.mkdir()
+    (functions / f"_{prog_name}").write_text(
+        _script(prog_name, "zsh", cli_json.root), encoding="utf-8"
+    )
+    words = " ".join(f"'{word}'" for word in [prog_name, "-c", cli_json.connection, "ls", ""])
+    body = (
+        f"{_ZSH_STUBS}\n"
+        "typeset -gA _comps\n"
+        "compdef() { _comps[$2]=$1 }\n"
+        f"fpath=({functions} $fpath)\nautoload -Uz _{prog_name}\n"
+        f"_comps[{prog_name}]=_{prog_name}\n"  # what compinit does for `#compdef <prog>`
+        f"tab() {{ words=({words}); CURRENT=5; PREFIX=''; ${{_comps[{prog_name}]}}; print TAB }}\n"
+        "tab; tab; tab\n"
+    )
+
+    result = _run([_ZSH, "-f", "-c", body], cli_json.root, _environment())
+
+    assert result.stderr == ""
+    assert result.stdout.splitlines() == ["alpha", "TAB"] * 3
+
+
+@pytest.mark.skipif(_ZSH is None, reason="zsh is not installed")
 def test_zsh_describes_commands_with_their_help(cli_json: CliHarness) -> None:
     lines = _zsh(cli_json, "envs", ["envs", "ls"])
 

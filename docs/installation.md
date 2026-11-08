@@ -224,6 +224,9 @@ envs completion fish > ~/.config/fish/completions/envs.fish
 - The command must be on your `PATH` when you press Tab: after `uv tool install` or in an activated virtual
   environment it is. `uv run envs ...` is not completed.
 - If you call the long name, generate the script with it: `eval "$(environment-store completion zsh)"`.
+- With zsh (Oh My Zsh, another plugin manager or plain `fpath`) or bash with bash-completion you can save
+  the script as a file instead of the `eval` line, which also makes the shell start faster: see
+  [Saving the script as a file](cli.md#saving-the-script-as-a-file).
 
 Completion only reads: it never asks for a key, never prints errors and never creates or changes anything. The
 [Shell completion](cli.md#shell-completion) section of the CLI guide lists what completes and what does not.

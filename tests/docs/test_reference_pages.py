@@ -337,6 +337,21 @@ def test_man_page_documents_the_project_file() -> None:
     assert _mentions(_man_sections()["FILES"], ".envstore.toml")
 
 
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "_envs",
+        "fpath",
+        "compinit",
+        "#compdef envs",
+        "bash-completion/completions",
+        "after upgrading",
+    ],
+)
+def test_man_page_completion_section_explains_saving_the_script_as_a_file(phrase: str) -> None:
+    assert phrase in _plain(_command_sections()["completion"])
+
+
 @pytest.mark.parametrize("phrase", ["create", "remove", "export", "path completion"])
 def test_man_page_tui_section_names_store_management_export_and_path_completion(
     phrase: str,

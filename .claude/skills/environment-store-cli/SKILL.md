@@ -172,8 +172,9 @@ Notes that trip agents up:
   existing file (exit 1), refuses `-`, and needs an existing parent directory (`mkdir -p keys`).
 - Key files are secrets: keep them out of git (e.g. `keys/` or `*.key` in `.gitignore`).
 - `cp-store --plain` is the only way to decrypt (there is no `decrypt` command).
-- `envs completion SHELL` only prints a script for the user's interactive shell. Do not add it to
-  `~/.zshrc`, `~/.bashrc` or fish's completions unless the user asked; then give them the line
+- `envs completion SHELL` only prints a script for the user's interactive shell. Do not add it to a
+  start-up file or save it as a completion file (`~/.zshrc`, `~/.bashrc`, `fpath`, Oh My Zsh
+  plugins, bash-completion or fish completions) unless the user asked; then give them the line
   from [reference.md](reference.md#shell-completion) (bash needs 4.4 or newer).
 - Store names: `^[a-z][a-z0-9_-]{0,62}$` (`dev`, `customer-a`; not `Prod`, not `1st`). Variable
   names: `^[A-Za-z_][A-Za-z0-9_]*$`.
