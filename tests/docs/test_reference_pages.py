@@ -337,6 +337,20 @@ def test_man_page_documents_the_project_file() -> None:
     assert _mentions(_man_sections()["FILES"], ".envstore.toml")
 
 
+@pytest.mark.parametrize("phrase", ["create", "remove", "export", "path completion"])
+def test_man_page_tui_section_names_store_management_export_and_path_completion(
+    phrase: str,
+) -> None:
+    # D55-D57, as docs/tui.md describes them.
+    assert _mentions(_command_sections()["tui"], phrase), phrase
+
+
+def test_man_page_tui_section_lists_the_new_keys() -> None:
+    # D55-D57: the stores screen's a, d and x, and Tab in a path input.
+    heads = _plain(_tagged_paragraph_heads(_command_sections()["tui"])).split("\n")
+    assert [head.split()[-1] for head in heads] == ["a", "d", "x", "Tab"]
+
+
 @pytest.mark.skipif(shutil.which("mandoc") is None, reason="mandoc is not installed")
 def test_man_page_renders_without_mandoc_warnings() -> None:
     mandoc = shutil.which("mandoc")

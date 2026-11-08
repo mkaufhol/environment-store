@@ -177,7 +177,8 @@ or with `uv run python -m environment_store.cli` in a uv project. After `uv tool
 tool's isolated environment, so plain `python` does not find it (`ModuleNotFoundError`); use `envs` there, or run
 `uv run --no-project --with 'environment-store[cli] @ git+https://github.com/mkaufhol/environment-store@feature/v2' python -m environment_store.cli --version`.
 
-There is no built-in shell completion.
+Shell completion for bash (4.4 or newer), zsh and fish comes with `envs completion`; see the
+[CLI guide](cli.md) or `man envs`.
 
 ## Check the installation
 

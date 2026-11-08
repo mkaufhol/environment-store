@@ -598,11 +598,33 @@ Encrypt with a passphrase: read from stdin when piped, else asked twice.
 .SS tui
 .B envs tui
 .PP
-Start the terminal user interface: browse stores, view, add, edit and delete
-variables.
+Start the terminal user interface: browse, create, remove and export stores;
+view, add, edit and delete variables.
 Needs the
 .B tui
 extra.
+Every screen's footer lists its keys; on the stores screen:
+.TP
+.B a
+Create a store, with every encryption option of
+.BR create\-store .
+.TP
+.B d
+Remove the selected store, after its name is typed exactly; needs no key.
+.TP
+.B x
+Export stores to a file, like
+.BR export :
+choose the stores in order, the format and options, then the path.
+An existing file is only replaced after a confirmation; files get mode 0600.
+.TP
+.B Tab
+In a path input (the export path and the key file fields), accept the
+suggested path completion; otherwise move to the next field.
+A leading
+.I ~
+is expanded and directories end in
+.IR / .
 .SS completion
 .B envs completion
 .BR bash | zsh | fish

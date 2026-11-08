@@ -159,3 +159,10 @@ def test_quoted_missing_extra_messages_match_the_error(document: Path) -> None:
     quoted = [(match.group(0), match.group(1)) for match in _MISSING_EXTRA.finditer(text)]
 
     assert [line for line, extra in quoted if line != str(MissingExtraError(extra))] == []
+
+
+@pytest.mark.parametrize("document", _DOCUMENTS, ids=lambda path: path.name)
+def test_no_document_claims_there_is_no_shell_completion(document: Path) -> None:
+    # D54 added `envs completion`; an older sentence saying otherwise would mislead.
+    prose = " ".join(document.read_text(encoding="utf-8").split())
+    assert not re.search(r"\bno (?:built-in )?shell completion\b", prose, re.IGNORECASE)
