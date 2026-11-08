@@ -21,7 +21,7 @@ teaches coding agents how to drive the CLI safely.
 
 The docs use [uv](https://docs.astral.sh/uv/): `uv tool install` gives `envs` its own isolated environment and
 puts only the command on your `PATH`, `uvx` runs it once without installing, and `uv add` adds the library to a
-project. pip works too. Python 3.13 or newer is needed.
+project. pip works too. Python 3.12 or newer is needed.
 
 | Extra | Adds | Install with uv | pip |
 |---|---|---|---|

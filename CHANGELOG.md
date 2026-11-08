@@ -58,7 +58,7 @@ changed, and there is no migration path from 0.1 stores. The
 ### Changed
 
 - Rebuilt from scratch: named stores instead of the organisation / project / environment / service hierarchy.
-- Requires Python 3.13 or newer. The core depends on `cryptography` only; PostgreSQL, CLI and TUI are extras
+- Requires Python 3.12 or newer. The core depends on `cryptography` only; PostgreSQL, CLI and TUI are extras
   (`postgres`, `cli`, `tui`, `all`).
 
 ### Removed

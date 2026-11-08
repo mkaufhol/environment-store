@@ -59,7 +59,7 @@ Rules:
   and a comment explaining why.
 - No `Any` in public signatures. Inside the code, `Any` is allowed only at untyped boundaries (e.g. parsed JSON),
   immediately narrowed and validated.
-- Use modern syntax (Python 3.13+): `list[str]`, `X | None`, PEP 695 generics (`def f[T](x: T) -> T`), `type`
+- Use modern syntax (Python 3.12+): `list[str]`, `X | None`, PEP 695 generics (`def f[T](x: T) -> T`), `type`
   aliases, `typing.Self`, `typing.override` on overriding methods, `Literal` and `enum.StrEnum` for closed sets.
 - Interfaces are `typing.Protocol`s; implementations do not need to inherit from them.
 - Ship `py.typed`.

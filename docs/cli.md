@@ -40,7 +40,7 @@ All examples on this page were run against `environment-store 2.0.0`. The output
 
 ## Install
 
-Environment Store needs Python 3.13 or newer. The CLI is the optional `cli` extra. These docs use [uv](https://docs.astral.sh/uv/): `uv tool install` puts `envs` into its own isolated environment and links the command onto your `PATH`, so it never mixes with other packages and needs no global `pip`. `uvx` runs it once without installing anything.
+Environment Store needs Python 3.12 or newer. The CLI is the optional `cli` extra. These docs use [uv](https://docs.astral.sh/uv/): `uv tool install` puts `envs` into its own isolated environment and links the command onto your `PATH`, so it never mixes with other packages and needs no global `pip`. `uvx` runs it once without installing anything.
 
 ```sh
 uv tool install 'environment-store[cli]'            # CLI with JSON, TOML and SQLite backends

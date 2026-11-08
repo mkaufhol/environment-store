@@ -281,3 +281,56 @@ def test_changelog_names_every_environment_variable_the_package_reads() -> None:
 
     assert read
     assert sorted(name for name in read if name not in changelog) == []
+
+
+def _setting(*keys: str) -> object:
+    """A value of pyproject.toml, e.g. `_setting("tool", "ruff", "target-version")`."""
+    value: object = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    for key in keys:
+        assert isinstance(value, dict)
+        value = value[key]
+    return value
+
+
+def _minimum_python() -> str:
+    requires = _setting("project", "requires-python")
+    assert isinstance(requires, str)
+    match = re.fullmatch(r">=(3\.\d+)", requires)
+    assert match
+    return match.group(1)
+
+
+# "Python 3.12 or newer", "**Python 3.12 or newer**", "Python 3.12+", "python3.12 -m venv".
+_PYTHON_MINIMUM: Final = re.compile(
+    r"[Pp]ython\**\s?(3\.\d+)(?:\+| or newer)|python(3\.\d+) -m venv"
+)
+
+
+@pytest.mark.parametrize(
+    "document", [*_DOCUMENTS, _MAN_PAGE, _ROOT / "CONTRIBUTING.md"], ids=_document_id
+)
+def test_every_documented_minimum_python_is_requires_python(document: Path) -> None:
+    found = {a or b for a, b in _PYTHON_MINIMUM.findall(document.read_text(encoding="utf-8"))}
+    assert found <= {_minimum_python()}
+
+
+def test_the_changelog_entry_of_the_version_names_the_minimum_python() -> None:
+    changelog = _CHANGELOG.read_text(encoding="utf-8")
+    entry = changelog.split(f"## [{_package_version()}]", 1)[1].split("\n## [", 1)[0]
+    assert f"Python {_minimum_python()} or newer" in entry
+
+
+def test_the_tools_and_classifiers_start_at_the_minimum_python() -> None:
+    minimum = _minimum_python()
+    classifiers = _setting("project", "classifiers")
+    assert isinstance(classifiers, list)
+    assert f"Programming Language :: Python :: {minimum}" in classifiers
+    assert _setting("tool", "ruff", "target-version") == "py" + minimum.replace(".", "")
+    assert _setting("tool", "ty", "environment", "python-version") == minimum
+
+
+def test_ci_tests_the_minimum_python() -> None:
+    ci = (_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    matrix = re.search(r"^\s*python: \[(.*)\]$", ci, re.MULTILINE)
+    assert matrix
+    assert f'"{_minimum_python()}"' in matrix.group(1).split(", ")

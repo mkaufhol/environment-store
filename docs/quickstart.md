@@ -4,7 +4,7 @@ This guide takes you from nothing to a working setup in about ten minutes. You w
 encrypted store, set and read variables, write a `.env` file, start a command with the variables and load them in
 Python. Every command below was run against the real CLI, and the output shown is what it printed.
 
-You need Python 3.13 or newer and a POSIX shell (bash, zsh). Work in an empty directory so you can delete
+You need Python 3.12 or newer and a POSIX shell (bash, zsh). Work in an empty directory so you can delete
 everything afterwards.
 
 ## 1. Install

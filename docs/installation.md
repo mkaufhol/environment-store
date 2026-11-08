@@ -1,6 +1,6 @@
 # Installation
 
-Environment Store is a Python package named `environment-store`. It needs **Python 3.13 or newer** and runs on
+Environment Store is a Python package named `environment-store`. It needs **Python 3.12 or newer** and runs on
 Linux, macOS and Windows (the CLI's `run` command and the project file trust check behave slightly differently on
 Windows; see the [CLI reference](cli.md)).
 
@@ -58,7 +58,7 @@ adds it.
 With pip, install inside a virtual environment:
 
 ```console
-$ python3.13 -m venv .venv
+$ python3.12 -m venv .venv
 $ . .venv/bin/activate
 $ pip install 'environment-store[cli]'
 ```
@@ -87,7 +87,7 @@ everywhere instead, install the clone as an editable tool, so a `git pull` updat
 $ uv tool install -e '.[cli]'
 ```
 
-With pip: `python3.13 -m venv .venv && . .venv/bin/activate && pip install -e '.[cli]'`. To use the clone as a
+With pip: `python3.12 -m venv .venv && . .venv/bin/activate && pip install -e '.[cli]'`. To use the clone as a
 library in another project's virtual environment, install it by path from there: `uv pip install -e
 '/path/to/environment-store[postgres]'` or `pip install -e '/path/to/environment-store[postgres]'`.
 

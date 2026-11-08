@@ -27,7 +27,7 @@ with [the setup below](#set-up-the-example-stores), and the output shown is the 
 
 ## Install
 
-The library needs Python 3.13 or newer. In a uv project, add it with `uv add` and run your code
+The library needs Python 3.12 or newer. In a uv project, add it with `uv add` and run your code
 with `uv run`; with pip, install it into your virtual environment:
 
 ```sh
