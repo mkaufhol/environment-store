@@ -9,7 +9,7 @@ import threading
 from types import TracebackType
 from typing import Self
 
-from environment_store.core.adapter import SetupMode, check_create, check_write
+from environment_store.core.adapter import SetupMode, check_create, check_writable, check_write
 from environment_store.core.errors import (
     BackendError,
     ConcurrentModificationError,
@@ -85,7 +85,7 @@ class MemoryAdapter:
 
     Attributes:
         backend: The shared storage.
-        setup: The setup mode it was opened with (accepted and ignored, like file adapters).
+        setup: The setup mode it was opened with; `READ_ONLY` refuses writes.
     """
 
     backend: MemoryBackend
@@ -108,6 +108,7 @@ class MemoryAdapter:
         """Create a new store at revision 1."""
         check_create(record)
         self._check_open()
+        check_writable(self.setup, location="the memory backend")
         self.backend.create(record)
 
     def read_store(self, name: str) -> StoreRecord:
@@ -120,12 +121,14 @@ class MemoryAdapter:
         """Replace a store if nobody changed it since `expected_revision` was read."""
         check_write(record, expected_revision=expected_revision)
         self._check_open()
+        check_writable(self.setup, location="the memory backend")
         self.backend.replace(record, expected_revision=expected_revision)
 
     def delete_store(self, name: str) -> None:
         """Delete a store."""
         validate_store_name(name)
         self._check_open()
+        check_writable(self.setup, location="the memory backend")
         self.backend.delete(name)
 
     def close(self) -> None:

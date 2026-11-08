@@ -17,6 +17,7 @@ from importlib.metadata import version
 
 from environment_store.cli import encryption, exporting, migrate, stores, tui_command, variables
 from environment_store.cli._typer import EnvsGroup
+from environment_store.cli.completion import command as completion_command
 from environment_store.cli.output import out
 from environment_store.cli.runtime import Runtime
 from environment_store.cli.state import CliState
@@ -34,8 +35,10 @@ _HELP: Final = (
 _CONTEXT_SETTINGS: Final = {"help_option_names": ["-h", "--help"]}
 
 
-def _print_version(value: bool) -> None:  # noqa: FBT001 - typer's option callback signature
-    if value:
+def _print_version(ctx: typer.Context, value: bool) -> None:  # noqa: FBT001 - typer's signature
+    # D54: while completing, click parses the line leniently and still runs eager callbacks;
+    # completion prints nothing but its answer (like click's own --help and --version).
+    if value and not ctx.resilient_parsing:
         out(f"{_DISTRIBUTION} {version(_DISTRIBUTION)}")
         raise typer.Exit
 
@@ -116,6 +119,7 @@ def build_app() -> typer.Typer:
     exporting.register(app)
     encryption.register(app)
     tui_command.register(app)
+    completion_command.register(app)
     return app
 
 

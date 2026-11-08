@@ -9,6 +9,7 @@ from typing import Annotated
 
 import typer
 
+from environment_store.cli.completion.candidates import complete_variables
 from environment_store.cli.loading import load_for_reading
 from environment_store.cli.options import FirstWinsOpt, JsonOpt, ReadKeysOpt, StoresArg
 from environment_store.cli.output import (
@@ -34,7 +35,10 @@ SourceOpt = Annotated[
         "NAME and store).",
     ),
 ]
-KeyArg = Annotated[str, typer.Argument(metavar="KEY", help="The variable name.")]
+KeyArg = Annotated[
+    str,
+    typer.Argument(metavar="KEY", help="The variable name.", autocompletion=complete_variables),
+]
 
 
 def list_variables(  # noqa: PLR0913 - one parameter per option of the command

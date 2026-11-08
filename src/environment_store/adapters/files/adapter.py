@@ -38,7 +38,7 @@ from environment_store.adapters.files.serializers import (
     FileSerializer,
 )
 from environment_store.adapters.files.url import directory_from_url
-from environment_store.core.adapter import SetupMode, check_create, check_write
+from environment_store.core.adapter import SetupMode, check_create, check_writable, check_write
 from environment_store.core.errors import (
     BackendError,
     ConcurrentModificationError,
@@ -64,7 +64,7 @@ def open_json(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "FileAdapter":
 
     Args:
         url: `json://relative/dir`, `json:///absolute/dir` or `json://~/dir`.
-        setup: Accepted for the common factory signature and ignored: files need no setup.
+        setup: Files need no setup; `READ_ONLY` refuses every write (D54).
 
     Returns:
         The adapter.
@@ -82,7 +82,7 @@ def open_toml(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "FileAdapter":
 
     Args:
         url: `toml://relative/dir`, `toml:///absolute/dir` or `toml://~/dir`.
-        setup: Accepted for the common factory signature and ignored: files need no setup.
+        setup: Files need no setup; `READ_ONLY` refuses every write (D54).
 
     Returns:
         The adapter.
@@ -101,7 +101,8 @@ class FileAdapter:
     Attributes:
         directory: The store directory; created on the first write.
         serializer: The file format.
-        setup: The setup mode it was opened with (accepted and ignored).
+        setup: The setup mode it was opened with; files need no setup, `READ_ONLY` refuses
+            writes (D54).
         lock_timeout: Seconds to wait for another writer of the same store.
     """
 
@@ -124,7 +125,7 @@ class FileAdapter:
         Args:
             directory: The store directory.
             serializer: The file format.
-            setup: Accepted and ignored, like by every file adapter.
+            setup: Files need no setup; `READ_ONLY` refuses every write (D54).
             lock_timeout: Seconds to wait for another writer of the same store.
         """
         self.directory = directory
@@ -174,6 +175,7 @@ class FileAdapter:
         """
         check_create(record)
         self._check_open()
+        check_writable(self.setup, location=str(self.directory))
         text = self.serializer.dumps(record_to_document(record))
         with self._os_errors(f"create store {record.name!r}"):
             make_private_directory(self.directory)
@@ -232,6 +234,7 @@ class FileAdapter:
         """
         check_write(record, expected_revision=expected_revision)
         self._check_open()
+        check_writable(self.setup, location=str(self.directory))
         text = self.serializer.dumps(record_to_document(record))
         with self._os_errors(f"write store {record.name!r}"):
             self._require_file(record.name)
@@ -264,6 +267,7 @@ class FileAdapter:
         """
         validate_store_name(name)
         self._check_open()
+        check_writable(self.setup, location=str(self.directory))
         with self._os_errors(f"delete store {name!r}"):
             self._require_file(name)
             with self._lock(name):

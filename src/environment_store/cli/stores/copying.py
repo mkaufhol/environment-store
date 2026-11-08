@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 import typer
 
+from environment_store.cli.completion.candidates import complete_stores
 from environment_store.cli.options import GenerateKeyOpt, NewKeyOpt, PassphraseOpt, WriteKeyOpt
 from environment_store.cli.output import err
 from environment_store.cli.secrets import existing_secret, keep_or_discard, new_secret
@@ -26,7 +27,16 @@ __all__ = ["cp_store", "mv_store"]
 
 _NEW_KEY_OPTION: Final = "--new-key"
 
-SrcArg = Annotated[str, typer.Argument(metavar="SRC", help="The source store.", show_default=False)]
+SrcArg = Annotated[
+    str,
+    typer.Argument(
+        metavar="SRC",
+        help="The source store.",
+        show_default=False,
+        autocompletion=complete_stores,
+    ),
+]
+# The target is a new name: never completed (D54).
 DstArg = Annotated[str, typer.Argument(metavar="DST", help="The new store.", show_default=False)]
 ToOpt = Annotated[
     str | None,

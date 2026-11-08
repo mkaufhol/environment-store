@@ -9,6 +9,7 @@ from environment_store.core.adapter import (
     MigrationReport,
     SetupMode,
     check_create,
+    check_writable,
     check_write,
 )
 from environment_store.core.clock import (
@@ -142,6 +143,7 @@ __all__ = [
     "VariableExistsError",
     "VariableNotFoundError",
     "check_create",
+    "check_writable",
     "check_write",
     "connection_has_credentials",
     "connection_location",

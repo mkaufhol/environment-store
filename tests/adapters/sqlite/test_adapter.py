@@ -13,7 +13,7 @@ from typing import Final
 import pytest
 
 from environment_store.adapters.sqlite import SqliteAdapter, open_sqlite
-from environment_store.adapters.sqlite import adapter as adapter_module
+from environment_store.adapters.sqlite import connection as connection_module
 from environment_store.adapters.sqlite.schema import transaction
 from environment_store.core.adapter import Adapter, MigratableAdapter, SetupMode
 from environment_store.core.connection import open_adapter
@@ -148,7 +148,7 @@ def test_an_existing_database_file_keeps_its_mode(path: Path) -> None:
 # --- missing files and directories (D43) ---------------------------------------------------
 
 
-@pytest.mark.parametrize("setup", list(SetupMode))
+@pytest.mark.parametrize("setup", [SetupMode.AUTO, SetupMode.NONE])
 @pytest.mark.parametrize("parent", ["existing", "missing"])
 def test_opening_and_reading_a_missing_database_creates_nothing(
     tmp_path: Path, setup: SetupMode, parent: str
@@ -170,14 +170,14 @@ def test_opening_and_reading_a_missing_database_creates_nothing(
 @pytest.fixture
 def deleted_after_check(monkeypatch: pytest.MonkeyPatch) -> None:
     """The first existence check finds the file, but it is gone when SQLite opens it."""
-    real = adapter_module._missing
+    real = connection_module.is_missing
     checks: list[Path] = []
 
     def missing(path: Path) -> bool:
         checks.append(path)
         return False if len(checks) == 1 else real(path)
 
-    monkeypatch.setattr(adapter_module, "_missing", missing)
+    monkeypatch.setattr(connection_module, "is_missing", missing)
 
 
 @pytest.mark.usefixtures("umask_022", "deleted_after_check")

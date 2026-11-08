@@ -509,7 +509,7 @@ $ ENV_STORE_ORDERED_OVERWRITE=maybe envs ls
 Error: invalid value 'maybe' for ENV_STORE_ORDERED_OVERWRITE: use true/false/1/0/yes/no
 ```
 
-Running `envs` with no command prints the help and exits with code 1. There is no shell completion.
+Running `envs` with no command prints the help and exits with code 1. Shell completion for bash (4.4 or newer), zsh and fish: add `eval "$(envs completion zsh)"` (or `bash`) to your shell's start-up file, or write `envs completion fish` to `~/.config/fish/completions/envs.fish`; see `man envs`.
 
 ---
 

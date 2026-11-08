@@ -11,15 +11,22 @@
   never take their store (`-s`) from the project file.
 - `OfflineCommand` resolves no settings: `keygen` reads neither the connection nor the project
   file, so a broken `.envstore.toml` cannot stop it (D44).
+- `EnvsGroup` also answers shell completion requests (`_<PROG>_COMPLETE` in the environment)
+  through `completion.protocol`, silently (D54); typer's own completion options stay off.
 - `PassthroughCommand` splits the arguments at the first `--` before parsing; the tail is the
   command `run` executes, untouched (C4).
 """
 
-from typing import TYPE_CHECKING, ClassVar, Final, cast, override
+import os
+import sys
+from collections.abc import MutableMapping
+from typing import TYPE_CHECKING, Any, ClassVar, Final, cast, override
 
 import typer
 from typer.core import TyperCommand, TyperGroup, TyperOption
 
+from environment_store.cli.completion.protocol import PASSTHROUGH, answer
+from environment_store.cli.completion.protocol import complete_var as _complete_var
 from environment_store.cli.errors import ExitCode, exit_code_for, message_for
 from environment_store.cli.output import err, out
 from environment_store.cli.state import get_state
@@ -37,7 +44,6 @@ __all__ = [
     "passthrough_args",
 ]
 
-_PASSTHROUGH: Final = "environment_store.passthrough"
 _SEPARATOR: Final = "--"
 _PROGRAM: Final = "envs"
 _STORE_PARAMETER: Final = "store"
@@ -63,6 +69,24 @@ class EnvsGroup(TyperGroup):
         except typer.TyperException as error:
             error.exit_code = ExitCode.USAGE
             raise
+
+    @override
+    def _main_shell_completion(
+        self,
+        # Any: click's own type for the context arguments that main() passes through.
+        ctx_args: MutableMapping[str, Any],
+        prog_name: str,
+        complete_var: str | None = None,
+    ) -> None:
+        """Answer a completion request and exit with 0; return if there is none (D54)."""
+        variable = complete_var or _complete_var(prog_name)
+        instruction = os.environ.get(variable)
+        if not instruction:
+            return
+        response = answer(self, ctx_args, prog_name, instruction)
+        if response:
+            out(response)
+        sys.exit(0)
 
     @override
     def parse_args(self, ctx: "ClickContext", args: list[str]) -> list[str]:
@@ -170,7 +194,7 @@ class PassthroughCommand(EnvsCommand):
         """Split at the first `--`; parse only the part before it."""
         if _SEPARATOR in args:
             index = args.index(_SEPARATOR)
-            ctx.meta[_PASSTHROUGH] = args[index + 1 :]
+            ctx.meta[PASSTHROUGH] = args[index + 1 :]
             args = args[:index]
         return super().parse_args(ctx, args)
 
@@ -184,5 +208,5 @@ def passthrough_args(ctx: typer.Context) -> list[str] | None:
     Returns:
         The arguments (possibly empty), or `None` if there was no `--`.
     """
-    passthrough: list[str] | None = ctx.meta.get(_PASSTHROUGH)
+    passthrough: list[str] | None = ctx.meta.get(PASSTHROUGH)
     return passthrough

@@ -7,9 +7,9 @@ one connection writes; the busy timeout makes writers queue instead of failing.
 
 A missing database file is created, with its missing parent directories (mode 0700), by the
 first write only (D43): opening and reading a missing file create nothing, they find no stores.
+`SetupMode.READ_ONLY` opens the file read-only and never sets it up (D54).
 """
 
-import os
 import sqlite3
 import threading
 from collections.abc import Generator, Sequence
@@ -28,13 +28,15 @@ from environment_store.adapters.sql.codec import (
 )
 from environment_store.adapters.sql.migrations import SQLITE_MIGRATIONS, Migration, pending
 from environment_store.adapters.sql.schema import STORE_INFO_COLUMNS, STORES_COLUMNS
-from environment_store.adapters.sqlite.directories import make_private_directory
-from environment_store.adapters.sqlite.schema import set_up, transaction
+from environment_store.adapters.sql.setup import SetupState, classify, decide
+from environment_store.adapters.sqlite.connection import connect_file
+from environment_store.adapters.sqlite.schema import inspect, set_up, transaction
 from environment_store.adapters.sqlite.url import parse_sqlite_url
 from environment_store.core.adapter import (
     MigrationReport,
     SetupMode,
     check_create,
+    check_writable,
     check_write,
 )
 from environment_store.core.errors import (
@@ -54,8 +56,6 @@ BUSY_TIMEOUT_SECONDS: Final[float] = 30.0
 
 # Literal statements with parameters only; the column lists match STORES_COLUMNS and
 # STORE_INFO_COLUMNS (checked by the tests).
-_FILE_MODE: Final = 0o600
-
 _LIST: Final = "SELECT name, encrypted, cipher_meta, revision, created_at, updated_at FROM stores"
 _READ: Final = (
     "SELECT name, encrypted, cipher_meta, variables, ciphertext, revision, created_at, "
@@ -81,7 +81,7 @@ def open_sqlite(url: str, /, *, setup: SetupMode = SetupMode.AUTO) -> "SqliteAda
         url: `sqlite:///relative.db`, `sqlite:////absolute/path.db` or `sqlite:///~/envs.db`.
         setup: `AUTO` inspects an existing file now and creates or upgrades the schema (D11);
             `NONE` defers that to `migrate()` or the first data operation. A missing file is
-            set up by the first write.
+            set up by the first write. `READ_ONLY` never writes (D54).
 
     Returns:
         The open adapter.
@@ -126,7 +126,8 @@ class SqliteAdapter:
             path: The database file; a relative path is resolved against the working
                 directory now. A missing file is not created here but by the first write
                 (`create_store` or `migrate`), with its missing parent directories (D43).
-            setup: When the schema is checked: now (`AUTO`) or lazily (`NONE`).
+            setup: When the schema is checked: now (`AUTO`) or lazily (`NONE`); `READ_ONLY`
+                checks it lazily and never sets anything up.
             migrations: The dialect's migrations; the last one is this client's schema
                 version. Tests pass their own to exercise upgrades.
             busy_timeout: Seconds to wait for locks held by other connections.
@@ -190,6 +191,7 @@ class SqliteAdapter:
             StoreExistsError: A store with this name exists.
         """
         check_create(record)
+        check_writable(self.setup, location=str(self.path))
         row = record_to_row(record, dialect=Dialect.SQLITE)
         with self._session(create=True) as connection:
             inserted = (
@@ -236,6 +238,7 @@ class SqliteAdapter:
             ConcurrentModificationError: The stored revision differs; nothing was written.
         """
         check_write(record, expected_revision=expected_revision)
+        check_writable(self.setup, location=str(self.path))
         row = record_to_row(record, dialect=Dialect.SQLITE)
         parameters = (
             row.encrypted,
@@ -273,6 +276,7 @@ class SqliteAdapter:
             StoreNotFoundError: The store does not exist.
         """
         validate_store_name(name)
+        check_writable(self.setup, location=str(self.path))
         with self._session(create=False) as connection:
             deleted = 0 if connection is None else connection.execute(_DELETE, (name,)).rowcount
         if not deleted:
@@ -289,8 +293,9 @@ class SqliteAdapter:
         Raises:
             DatabaseNotCleanError: The file holds foreign content; nothing changed.
             SchemaTooNewError: The schema is newer than this client; nothing changed.
-            BackendError: The adapter is closed or the file cannot be written.
+            BackendError: The adapter is closed or read-only, or the file cannot be written.
         """
+        check_writable(self.setup, location=str(self.path))
         with self._lock, self._errors():
             return self._set_up(self._open_connection(create=True))
 
@@ -326,8 +331,20 @@ class SqliteAdapter:
         with self._lock, self._errors():
             connection = self._open_connection(create=create)
             if connection is not None and not self._ready:
-                self._set_up(connection)
+                connection = self._prepare(connection)
             yield connection
+
+    def _prepare(self, connection: sqlite3.Connection) -> sqlite3.Connection | None:
+        if self.setup is not SetupMode.READ_ONLY:
+            self._set_up(connection)
+            return connection
+        # D54: check, never create or upgrade; an empty file holds no stores, like a missing one.
+        state = classify(inspect(connection), client_version=len(self._migrations))
+        if state is SetupState.EMPTY:
+            return None
+        decide(state, auto_upgrade=False, location=str(self.path))
+        self._ready = True
+        return connection
 
     def _set_up(self, connection: sqlite3.Connection) -> MigrationReport:
         report = set_up(
@@ -364,65 +381,14 @@ class SqliteAdapter:
         # Connects once the file exists (another connection may have created it since open);
         # with `create`, a missing file and its missing directories are created first (D43).
         if self._connection is None:
-            if create:
-                make_private_directory(self.path.parent)
-                _create_private(self.path)
-            elif _missing(self.path):
-                return None
-            # Without `create`, mode=rw: SQLite never creates the file itself (with its default
-            # mode, 0644) when it is deleted between the check above and this connect.
-            mode = "rwc" if create else "rw"
-            try:
-                # check_same_thread=False: the lock, not the creating thread, guards the
-                # connection.
-                connection = sqlite3.connect(
-                    f"{self.path.as_uri()}?mode={mode}",
-                    timeout=self._busy_timeout,
-                    autocommit=True,
-                    check_same_thread=False,
-                    uri=True,
-                )
-            except sqlite3.OperationalError:
-                if not create and _missing(self.path):
-                    return None
-                raise
-            # Freed pages are zeroed: a deleted or replaced plaintext value leaves no trace.
-            connection.execute("PRAGMA secure_delete = ON")
-            # The driver's own UTF-8 decode error quotes the whole column (secret values); with
-            # surrogateescape invalid bytes reach the codec, which reports them without a value.
-            connection.text_factory = _decode_text
-            self._connection = connection
+            self._connection = connect_file(
+                self.path,
+                create=create,
+                read_only=self.setup is SetupMode.READ_ONLY,
+                busy_timeout=self._busy_timeout,
+            )
         return self._connection
 
 
 def _not_found(name: str, path: Path) -> StoreNotFoundError:
     return StoreNotFoundError(f"store {name!r} not found in {path}")
-
-
-def _missing(path: Path) -> bool:
-    # Only "does not exist" counts: other errors (no permission, a file as parent) are left to
-    # `sqlite3.connect` to report.
-    try:
-        path.stat()
-    except FileNotFoundError:
-        return True
-    except OSError:
-        return False
-    return False
-
-
-def _create_private(path: Path) -> None:
-    """Create a missing database file with mode 0600, like the file backend's store files.
-
-    SQLite gives its -wal and -shm files the database file's mode, so they are private too.
-    An existing file keeps its mode; a failure is left to `sqlite3.connect` to report.
-    """
-    try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, _FILE_MODE)
-    except OSError:
-        return
-    os.close(fd)
-
-
-def _decode_text(data: bytes) -> str:
-    return data.decode("utf-8", errors="surrogateescape")

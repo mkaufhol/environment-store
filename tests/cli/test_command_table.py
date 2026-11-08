@@ -35,8 +35,8 @@ def _registered_commands() -> set[str]:
     return set(group.commands)
 
 
-def test_spec_command_overview_lists_eighteen_commands() -> None:
-    assert len(_spec_commands()) == 18
+def test_spec_command_overview_lists_nineteen_commands() -> None:
+    assert len(_spec_commands()) == 19
 
 
 def test_registered_commands_are_exactly_the_spec_command_overview() -> None:
