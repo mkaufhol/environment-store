@@ -381,7 +381,7 @@ def test_unlock_needs_exactly_one_of_path_and_passphrase(
         await pilot.click("#unlock")
         await pilot.pause()
         assert isinstance(app.screen, UnlockScreen)
-        assert notifications(app) == ["enter either a key or passphrase file, or the passphrase"]
+        assert notifications(app) == ["enter either a passphrase file path or the passphrase"]
 
     run_app(passphrase_store, scenario)
 

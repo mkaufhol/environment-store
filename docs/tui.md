@@ -284,17 +284,19 @@ when you open it, and during an export for every chosen encrypted store (see
 ```
   Unlock store 'prod', encrypted (keyfile)
   ┌──────────────────────────────────────────────┐
-  │ Key or passphrase file, e.g. ~/.keys/a.key   │
+  │ Key file path, e.g. ~/.keys/a.key            │
   └──────────────────────────────────────────────┘
   ┌──────────────────────────────────────────────┐
-  │ or the passphrase                            │
+  │ or paste the key itself                      │
   └──────────────────────────────────────────────┘
        Unlock         Cancel (esc)
 
  ⏎ Unlock  tab Complete path  esc Cancel
 ```
 
-The key file field completes paths (see [Path completion](#path-completion)).
+The placeholders follow the store's key mode: a `passphrase` store shows **Passphrase file path, e.g.
+~/.keys/a.pass** and **or type the passphrase**. The path field completes paths (see
+[Path completion](#path-completion)).
 
 ### Confirm
 
@@ -503,22 +505,27 @@ When you open an encrypted store, the TUI looks for its key in this order:
    unlocking with the key file '/home/me/project/keys/prod.key' from the project file failed: cannot read key or passphrase file '/home/me/project/keys/prod.key': No such file or directory
    ```
 
-In the Unlock dialog fill in **exactly one** of the two fields:
+In the Unlock dialog fill in **exactly one** of the two fields. Their placeholders name what the store needs:
 
-- **Key or passphrase file**: the path to a key file (from `envs keygen`) for a `keyfile` store, or to a file that
-  holds the passphrase for a `passphrase` store. `~` is expanded. One trailing newline in a passphrase file is
-  ignored.
-- **or the passphrase**: type the passphrase itself. The field is hidden. For a `keyfile` store you can paste the
-  key text here instead (the `envstore-key-v1:...` line, for example from a password manager after `envs keygen -`),
-  so the key never has to be on disk. If you type a passphrase into this field for a `keyfile` store, you get
-  `unlocking with the typed passphrase failed: not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen`.
+| Store | First field (a path, shown as you type) | Second field (hidden) |
+|---|---|---|
+| `keyfile` | **Key file path**: a key file from `envs keygen` | **or paste the key itself**: the key text, the `envstore-key-v1:...` line |
+| `passphrase` | **Passphrase file path**: a file that holds the passphrase | **or type the passphrase** |
+
+- The first field takes a path only. `~` is expanded, and one trailing newline in a passphrase file is ignored.
+- The second field is hidden. Pasting the key there, for example from a password manager after `envs keygen -`,
+  means the key never has to be on disk. If you type something that is not a key into it for a `keyfile` store, you
+  get `unlocking with the pasted key failed: not a valid key file: expected one line 'envstore-key-v1:<base64url of 32 bytes>'; create one with envs keygen`.
+- Key text in the first field is not used, because that field shows what you type: the dialog clears the field and
+  says `that is a key, not a file path: paste it into the hidden field below`.
 
 Then press `Enter` or click **Unlock**. The store is decrypted before the dialog closes:
 
 - With the wrong key the dialog stays open, shows the error with the input it came from, for example
   `unlocking with the key file 'old.key' failed: cannot decrypt store 'prod': wrong key or passphrase, or the stored data was modified`,
   and clears the passphrase field.
-- With both fields empty, or both filled, it asks you to `enter either a key or passphrase file, or the passphrase`.
+- With both fields empty, or both filled, it asks you to `enter either the key file path or the key itself` (for a
+  `passphrase` store: `enter either a passphrase file path or the passphrase`).
 - A key file for a passphrase store, or a passphrase file for a keyfile store, is refused with the same messages as
   in the CLI (see [Encryption](encryption.md)).
 
