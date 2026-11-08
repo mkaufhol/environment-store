@@ -37,6 +37,7 @@ __all__ = ["PathType", "ReadKeyType", "complete_stores", "complete_variables"]
 
 _SEPARATOR = "="
 _FILE = "file"
+_STORE = "store"
 
 
 class PathType(TyperPath):
@@ -75,12 +76,18 @@ class ReadKeyType(PathType):
     def shell_complete(
         self, ctx: "ClickContext", param: "Parameter", incomplete: str
     ) -> list[CompletionItem]:
-        """Offer `STORE=` for existing stores; after the `=`, the shell completes the path."""
+        """Offer `STORE=` for existing stores and the path itself; after `STORE=`, the path.
+
+        D33: with one store, `-k PATH` is enough, so the shell also completes the whole text
+        as a path. The file item comes first: bash's script resets its reply on it, so there
+        matching store names win and the files are the fallback.
+        """
         name, separator, path = incomplete.partition(_SEPARATOR)
         if separator and STORE_NAME_PATTERN.fullmatch(name):
             return [CompletionItem(path, type=_FILE)]
         prefixed = (name + _SEPARATOR for name in _store_names(ctx))
-        return [CompletionItem(value) for value in prefixed if value.startswith(incomplete)]
+        stores = [CompletionItem(value) for value in prefixed if value.startswith(incomplete)]
+        return [CompletionItem(incomplete, type=_FILE), *stores]
 
 
 def complete_stores(ctx: typer.Context, incomplete: str) -> list[str]:
@@ -99,8 +106,9 @@ def complete_stores(ctx: typer.Context, incomplete: str) -> list[str]:
 def complete_variables(ctx: typer.Context, incomplete: str) -> list[str]:
     """The variables of the plaintext stores in question that start with `incomplete`.
 
-    The stores are `-s` (writing commands), else the positional stores, else the project
-    file's `stores` (`get KEY` comes before its stores). Encrypted stores offer nothing.
+    The stores are `-s` for writing commands, which never use the project file's stores;
+    otherwise the positional stores, else the project file's `stores` (`get KEY` comes before
+    its stores). Encrypted stores offer nothing.
 
     Args:
         ctx: The context of the command being completed.
@@ -143,9 +151,10 @@ def _plain_records(ctx: "ClickContext") -> list[Iterable[str]]:
 
 
 def _stores_in_question(ctx: "ClickContext", settings: Settings) -> tuple[str, ...]:
-    store = ctx.params.get("store")
-    if isinstance(store, str):
-        return (store,)
+    if any(param.name == _STORE for param in ctx.command.params):
+        # A writing command: only its `-s`, never the project file's stores.
+        store = ctx.params.get(_STORE)
+        return (store,) if isinstance(store, str) else ()
     stores = ctx.params.get("stores")
     if stores:
         return tuple(dict.fromkeys(stores))

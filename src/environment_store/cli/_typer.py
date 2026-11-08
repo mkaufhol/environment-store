@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, cast, override
 import typer
 from typer.core import TyperCommand, TyperGroup, TyperOption
 
-from environment_store.cli.completion.protocol import answer
+from environment_store.cli.completion.protocol import PASSTHROUGH, answer
 from environment_store.cli.completion.protocol import complete_var as _complete_var
 from environment_store.cli.errors import ExitCode, exit_code_for, message_for
 from environment_store.cli.output import err, out
@@ -44,7 +44,6 @@ __all__ = [
     "passthrough_args",
 ]
 
-_PASSTHROUGH: Final = "environment_store.passthrough"
 _SEPARATOR: Final = "--"
 _PROGRAM: Final = "envs"
 _STORE_PARAMETER: Final = "store"
@@ -195,7 +194,7 @@ class PassthroughCommand(EnvsCommand):
         """Split at the first `--`; parse only the part before it."""
         if _SEPARATOR in args:
             index = args.index(_SEPARATOR)
-            ctx.meta[_PASSTHROUGH] = args[index + 1 :]
+            ctx.meta[PASSTHROUGH] = args[index + 1 :]
             args = args[:index]
         return super().parse_args(ctx, args)
 
@@ -209,5 +208,5 @@ def passthrough_args(ctx: typer.Context) -> list[str] | None:
     Returns:
         The arguments (possibly empty), or `None` if there was no `--`.
     """
-    passthrough: list[str] | None = ctx.meta.get(_PASSTHROUGH)
+    passthrough: list[str] | None = ctx.meta.get(PASSTHROUGH)
     return passthrough

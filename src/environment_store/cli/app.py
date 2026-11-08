@@ -35,8 +35,10 @@ _HELP: Final = (
 _CONTEXT_SETTINGS: Final = {"help_option_names": ["-h", "--help"]}
 
 
-def _print_version(value: bool) -> None:  # noqa: FBT001 - typer's option callback signature
-    if value:
+def _print_version(ctx: typer.Context, value: bool) -> None:  # noqa: FBT001 - typer's signature
+    # D54: while completing, click parses the line leniently and still runs eager callbacks;
+    # completion prints nothing but its answer (like click's own --help and --version).
+    if value and not ctx.resilient_parsing:
         out(f"{_DISTRIBUTION} {version(_DISTRIBUTION)}")
         raise typer.Exit
 

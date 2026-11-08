@@ -14,6 +14,11 @@ from psycopg import sql
 from psycopg.rows import TupleRow
 
 from environment_store.adapters.postgres import rows as table
+from environment_store.adapters.postgres.read_only import (
+    READ_ONLY_CONNECT_TIMEOUT,
+    READ_ONLY_SESSION,
+    connect_read_only,
+)
 from environment_store.adapters.postgres.schema import (
     apply_migrations,
     inspect_schema,
@@ -48,14 +53,9 @@ from environment_store.core.validation import validate_store_name
 
 __all__ = ["READ_ONLY_CONNECT_TIMEOUT", "PostgresAdapter", "open_postgres"]
 
-READ_ONLY_CONNECT_TIMEOUT: Final = 2
-"""Seconds a `SetupMode.READ_ONLY` adapter waits for the server (D54); libpq's minimum."""
-
 # TIMESTAMPTZ is sent in the session time zone: in local time, an instant near year 1 or 9999 UTC
 # can fall in year 0 or 10000, which the driver cannot load. A plain SET persists after COMMIT.
 _PIN_UTC: Final = sql.SQL("SET TIME ZONE 'UTC'")
-# READ_ONLY: the server refuses any write of this session too (D54).
-_READ_ONLY_SESSION: Final = sql.SQL("SET default_transaction_read_only = on")
 
 
 def open_postgres(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "PostgresAdapter":
@@ -65,7 +65,8 @@ def open_postgres(url: str, *, setup: SetupMode = SetupMode.AUTO) -> "PostgresAd
         url: `postgresql://user@host/db?schema=<name>`; `schema` defaults to
             `environment_store` and is removed before the URL reaches the driver.
         setup: `AUTO` inspects and, if empty, creates the schema now; `NONE` only connects;
-            `READ_ONLY` connects with a short timeout and never sets anything up (D54).
+            `READ_ONLY` bounds every wait (connect, query, network) and never sets anything up
+            (D54).
 
     Returns:
         The open adapter.
@@ -285,11 +286,7 @@ class PostgresAdapter:
         try:
             if self._setup is SetupMode.READ_ONLY:
                 # D54: completion must not hang on a slow server; this overrides the URL's.
-                return psycopg.connect(
-                    self._target.conninfo,
-                    autocommit=True,
-                    connect_timeout=READ_ONLY_CONNECT_TIMEOUT,
-                )
+                return connect_read_only(self._target.conninfo)
             return psycopg.connect(self._target.conninfo, autocommit=True)
         except psycopg.Error as err:
             detail = self._target.redact(str(err).strip())
@@ -355,7 +352,8 @@ class PostgresAdapter:
             with self._connection.transaction():
                 # Plain SETs persist after COMMIT, for the whole session.
                 self._connection.execute(_PIN_UTC)
-                self._connection.execute(_READ_ONLY_SESSION)
+                for setting in READ_ONLY_SESSION:
+                    self._connection.execute(setting)
                 inspection, _ = inspect_schema(self._connection, self._target.schema)
         except psycopg.Error as err:
             failure = err

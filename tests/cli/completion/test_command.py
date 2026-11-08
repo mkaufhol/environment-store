@@ -94,3 +94,13 @@ def test_program_name_falls_back_to_envs_for_names_a_shell_cannot_complete(
 )
 def test_complete_var_is_derived_like_click_and_typer(prog_name: str, expected: str) -> None:
     assert complete_var(prog_name) == expected
+
+
+def test_the_fish_script_puts_the_store_prefix_back_before_completed_paths(
+    cli_json: CliHarness,
+) -> None:
+    # The answer after `-k STORE=` is only the path; fish's token still has `STORE=` in front.
+    result = CliRunner().invoke(app, ["completion", "fish"], prog_name="envs")
+
+    assert "string match -r -- '^[^=]*=' \"$token\"" in result.stdout
+    assert 'echo "$prefix$path"' in result.stdout

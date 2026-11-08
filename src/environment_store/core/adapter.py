@@ -36,7 +36,8 @@ class SetupMode(StrEnum):
     journal file (D43, D54). Reads use what is there: an empty database or a missing location
     holds no stores, a schema that would need creating or upgrading is refused. Every write and
     `migrate()` raises `BackendError`. Meant for quick lookups such as shell completion; the
-    PostgreSQL adapter also connects with a short timeout in this mode.
+    PostgreSQL adapter also bounds every wait in this mode: the connect over all hosts, each
+    query and lock wait, and a stalled network.
     """
 
     # auto() gives the lowercase member name: "auto", "none", "read_only".

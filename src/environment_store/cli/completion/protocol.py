@@ -28,13 +28,23 @@ from typer.completion import shell_completion
 if TYPE_CHECKING:
     from typer._click import Command
 
-__all__ = ["SHELLS", "answer", "complete_var", "program_name", "script"]
+__all__ = ["PASSTHROUGH", "SHELLS", "answer", "complete_var", "program_name", "script"]
+
+PASSTHROUGH: Final = "environment_store.passthrough"
+"""The context meta key of the words after a passthrough command's `--` (C4).
+
+Completion offers none of its own candidates once it is set: the words are the command `run`
+executes, which the shell completes (§6.13, §6.15).
+"""
 
 _PROGRAM: Final = "envs"
 # A name a shell can complete; `python -m environment_store.cli` falls back to `envs`.
 _PROGRAM_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 _COMPLETE: Final = "complete"
-_SEPARATOR: Final = "="
+# bash splits words at both (COMP_WORDBREAKS). No candidate of envs contains ':' (store and
+# variable names cannot), so the reply needs no trimming like `__ltrim_colon_completions`.
+_WORD_BREAKS: Final = frozenset({"=", ":"})
+_FILE: Final = "file"
 
 # bash >= 4.4 (compopt, complete -o nosort). After `STORE=` the reply keeps no space.
 _BASH_SCRIPT: Final = r"""%(complete_func)s() {
@@ -69,11 +79,13 @@ _BASH_SCRIPT: Final = r"""%(complete_func)s() {
 %(complete_func)s_setup;
 """
 
-# A path after `STORE=` (`-k STORE=PATH`) is completed without the `STORE=` prefix.
+# A path after `STORE=` (`-k STORE=PATH`) is completed without the `STORE=` prefix. `STORE=`
+# itself is added without zsh's space suffix (`-S ''`), like bash's `compopt -o nospace`.
 _ZSH_SCRIPT: Final = r"""#compdef %(prog_name)s
 
 %(complete_func)s() {
     local -a completions
+    local -a completions_without_suffix
     local -a completions_with_descriptions
     local -a response
     (( ! $+commands[%(prog_name)s] )) && return 1
@@ -83,7 +95,9 @@ _ZSH_SCRIPT: Final = r"""#compdef %(prog_name)s
 
     for type key descr in ${response}; do
         if [[ "$type" == "plain" ]]; then
-            if [[ "$descr" == "_" ]]; then
+            if [[ "$descr" == "_" && "$key" == *= ]]; then
+                completions_without_suffix+=("$key")
+            elif [[ "$descr" == "_" ]]; then
                 completions+=("$key")
             else
                 completions_with_descriptions+=("$key":"$descr")
@@ -105,6 +119,10 @@ _ZSH_SCRIPT: Final = r"""#compdef %(prog_name)s
     if [ -n "$completions" ]; then
         compadd -U -V unsorted -a completions
     fi
+
+    if [ -n "$completions_without_suffix" ]; then
+        compadd -U -S '' -V unsorted -a completions_without_suffix
+    fi
 }
 
 if [[ $zsh_eval_context[-1] == loadautofunc ]]; then
@@ -116,7 +134,10 @@ else
 fi
 """
 
+# After `-k STORE=` the answer is only the path, but fish matches candidates against the whole
+# token: the `STORE=` prefix is put back before each completed path.
 _FISH_SCRIPT: Final = r"""function %(complete_func)s;
+    set -l token (commandline -t);
     set -l response (env %(complete_var)s=fish_complete COMP_WORDS=(commandline -cp) \
 COMP_CWORD=(commandline -t) %(prog_name)s);
 
@@ -126,7 +147,11 @@ COMP_CWORD=(commandline -t) %(prog_name)s);
         if test $metadata[1] = "dir";
             __fish_complete_directories $metadata[2];
         else if test $metadata[1] = "file";
-            __fish_complete_path $metadata[2];
+            set -l prefix (string match -r -- '^[^=]*=' "$token");
+            test "$metadata[2]" = "$token"; and set prefix;
+            for path in (__fish_complete_path $metadata[2]);
+                echo "$prefix$path";
+            end;
         else if test $metadata[1] = "plain";
             echo $metadata[2];
         end;
@@ -139,7 +164,19 @@ complete --no-files --command %(prog_name)s --arguments \
 
 
 class _Shell(shell_completion.ShellComplete):
-    """What the three shells share: the script variables."""
+    """What the three shells share: the script variables and the passthrough rule."""
+
+    @override
+    def get_completions(
+        self, args: list[str], incomplete: str
+    ) -> list[shell_completion.CompletionItem]:
+        """The candidates of the parameter in question; after `run ... --`, the shell's files."""
+        # The vendored click's own steps, with the passthrough check in between.
+        ctx = shell_completion._resolve_context(self.cli, self.ctx_args, self.prog_name, args)
+        if PASSTHROUGH in ctx.meta:
+            return [shell_completion.CompletionItem(incomplete, type=_FILE)]
+        obj, incomplete = shell_completion._resolve_incomplete(ctx, args, incomplete)
+        return obj.shell_complete(ctx, incomplete)
 
     @override
     def source_vars(self) -> dict[str, Any]:
@@ -288,8 +325,11 @@ def answer(
     shell_class = SHELLS.get(shell)
     if shell_class is None or action != _COMPLETE:
         return ""
+    # Only the computed answer reaches stdout: zsh reads it in triples, so a stray line (e.g.
+    # of a callback) would shift every item.
     with (
         warnings.catch_warnings(),
+        contextlib.redirect_stdout(io.StringIO()),
         contextlib.redirect_stderr(io.StringIO()),
     ):
         warnings.simplefilter("ignore")
@@ -301,11 +341,12 @@ def answer(
 
 
 def _glue_separators(words: list[str]) -> list[str]:
-    # bash splits words at '=' (COMP_WORDBREAKS): `-k a=b` arrives as `-k`, `a`, `=`, `b`.
+    # bash splits words at '=' and ':' (COMP_WORDBREAKS): `-k a=b` arrives as `-k`, `a`, `=`,
+    # `b`, and `-c sqlite:///a.db` as `-c`, `sqlite`, `:`, `///a.db` (§6.15: `-c` on the line).
     glued: list[str] = []
     attach = False
     for word in words:
-        if word == _SEPARATOR and glued:
+        if word in _WORD_BREAKS and glued:
             glued[-1] += word
             attach = True
         elif attach:

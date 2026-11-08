@@ -157,3 +157,38 @@ def test_read_only_write_to_a_missing_file_creates_nothing(tmp_path: Path) -> No
         adapter.create_store(_record())
 
     assert list(tmp_path.iterdir()) == []
+
+
+def test_read_only_on_a_rollback_journal_database_honours_the_writers_lock(
+    tmp_path: Path,
+) -> None:
+    # Without WAL there is never a -wal file; an immutable read would ignore the writer's lock
+    # and could read half-written pages, so the plain read-only mode is used.
+    path = tmp_path / "envs.db"
+    _current(path, "a")
+    with raw(path) as writer:
+        writer.execute("PRAGMA journal_mode = DELETE")
+        writer.execute("BEGIN EXCLUSIVE")
+        try:
+            with (
+                SqliteAdapter(path, setup=_RO, busy_timeout=0.05) as adapter,
+                pytest.raises(BackendError),
+            ):
+                adapter.list_stores()
+        finally:
+            writer.execute("ROLLBACK")
+
+    with open_sqlite(url_of(path), setup=_RO) as adapter:
+        assert [info.name for info in adapter.list_stores()] == ["a"]
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == ["envs.db"]
+
+
+def test_read_only_on_an_unreadable_file_raises_backend_error(tmp_path: Path) -> None:
+    path = tmp_path / "envs.db"
+    _current(path, "a")
+    path.chmod(0)
+    try:
+        with pytest.raises(BackendError, match="Permission denied"):
+            open_sqlite(url_of(path), setup=_RO)
+    finally:
+        path.chmod(0o600)

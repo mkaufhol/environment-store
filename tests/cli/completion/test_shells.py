@@ -28,7 +28,10 @@ pytestmark = pytest.mark.skipif(
 
 _ZSH_STUBS: Final = r"""
 compdef() { : }
-compadd() { print -rl -- "${(@P)${@[-1]}}" }
+compadd() {
+    (( ${@[(Ie)-S]} )) && print -r -- "SUFFIX '${@[${@[(Ie)-S]}+1]}'"
+    print -rl -- "${(@P)${@[-1]}}"
+}
 _describe() { print -rl -- "${(@P)3}" }
 _path_files() { print -r -- "FILES $*" }
 compset() { print -r -- "COMPSET $*" }
@@ -109,6 +112,16 @@ def test_zsh_completes_the_path_after_store_equals_with_its_own_file_completion(
 
 
 @pytest.mark.skipif(_ZSH is None, reason="zsh is not installed")
+def test_zsh_adds_store_equals_without_a_space_after_it(cli_json: CliHarness) -> None:
+    # Like bash's `compopt -o nospace`: the path follows `STORE=` directly.
+    cli_json.store().create_store("alpha")
+
+    lines = _zsh(cli_json, "envs", ["envs", "-c", cli_json.connection, "ls", "-k", "al"])
+
+    assert lines == ["FILES -f", "SUFFIX ''", "alpha="]
+
+
+@pytest.mark.skipif(_ZSH is None, reason="zsh is not installed")
 def test_zsh_completes_a_plain_path_without_stripping_anything(cli_json: CliHarness) -> None:
     lines = _zsh(cli_json, "envs", ["envs", "keygen", "a=b"])
 
@@ -132,7 +145,9 @@ def test_the_bash_script_has_valid_syntax(tmp_path: Path, prog_name: str) -> Non
     ("words", "expected"),
     [
         (["ls", ""], ["alpha", "beta"]),
-        (["ls", "-k", "al"], ["COMPOPT -o nospace", "alpha="]),
+        # The file item resets the reply; the store names win, files are the fallback.
+        (["ls", "-k", "al"], ["COMPOPT -o default", "COMPOPT -o nospace", "alpha="]),
+        (["ls", "alpha", "-k", "./k"], ["COMPOPT -o default"]),
         (["keygen", "ke"], ["COMPOPT -o default"]),
     ],
 )
@@ -156,6 +171,28 @@ def test_the_bash_function_fills_compreply(
 
     assert (result.returncode, result.stderr) == (0, "")
     assert result.stdout.splitlines() == expected
+
+
+@pytest.mark.skipif(_BASH is None, reason="bash is not installed")
+def test_the_bash_function_joins_a_connection_split_at_colons(cli_json: CliHarness) -> None:
+    # readline splits `-c json:///x` into `json`, `:`, `///x` (':' is in COMP_WORDBREAKS).
+    assert _BASH is not None
+    cli_json.store().create_store("alpha")
+    script = cli_json.root / "completion.bash"
+    script.write_text(_script("envs", "bash", cli_json.root), encoding="utf-8")
+    scheme, _, rest = cli_json.connection.partition(":")
+    line = ["envs", "-c", scheme, ":", rest, "ls", ""]
+    body = (
+        f"{_BASH_STUBS}\nsource {script}\n"
+        f"COMP_WORDS=({' '.join(repr(word) for word in line)})\n"
+        f"COMP_CWORD={len(line) - 1}\n_envs_completion envs\n"
+        'for reply in "${COMPREPLY[@]}"; do echo "$reply"; done\n'
+    )
+
+    result = _run([_BASH, "--norc", "--noprofile", "-c", body], cli_json.root, _environment())
+
+    assert (result.returncode, result.stderr) == (0, "")
+    assert result.stdout.splitlines() == ["alpha"]
 
 
 @pytest.mark.parametrize(

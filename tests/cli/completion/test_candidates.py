@@ -95,6 +95,6 @@ def test_read_key_type_offers_store_names_then_the_path(cli_json: CliHarness) ->
         path = key_type.shell_complete(ctx, param, "alpha=~/k")
         bare = key_type.shell_complete(ctx, param, "./a=b")
 
-    assert [(item.type, item.value) for item in stores] == [("plain", "alpha=")]
+    assert [(item.type, item.value) for item in stores] == [("file", "a"), ("plain", "alpha=")]
     assert [(item.type, item.value) for item in path] == [("file", "~/k")]
-    assert bare == []
+    assert [(item.type, item.value) for item in bare] == [("file", "./a=b")]

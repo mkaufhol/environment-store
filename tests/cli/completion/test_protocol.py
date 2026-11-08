@@ -3,12 +3,14 @@
 import hashlib
 import sys
 from pathlib import Path
-from typing import Final
+from typing import Annotated, Final
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from environment_store.cli.app import app as envs
+from environment_store.cli.app import build_app
 from environment_store.config.settings import ENV_CONNECTION
 from environment_store.core.adapter import Adapter, SetupMode
 from environment_store.core.errors import BackendError, MissingExtraError
@@ -139,8 +141,31 @@ def test_the_store_part_of_a_reading_key_completes(cli_json: CliHarness, command
     _stores(cli_json, "alpha", "beta")
     args = (command, "KEY", "-k") if command == "get" else (command, "-k")
 
-    assert _values(cli_json, *args) == ["alpha=", "beta="]
-    assert _values(cli_json, *args, incomplete="b") == ["beta="]
+    # The file item first: bash's script resets its reply on it, so the store names win there.
+    assert parse(complete(cli_json, *args)) == [
+        Item("file", ""),
+        Item("plain", "alpha="),
+        Item("plain", "beta="),
+    ]
+    assert parse(complete(cli_json, *args, incomplete="b")) == [
+        Item("file", "b"),
+        Item("plain", "beta="),
+    ]
+
+
+@pytest.mark.parametrize("incomplete", ["./k", "/", "~/ke", "../k"])
+@pytest.mark.parametrize("shell", _SHELLS)
+def test_the_path_shorthand_of_a_reading_key_is_left_to_the_shell(
+    cli_json: CliHarness, incomplete: str, shell: Shell
+) -> None:
+    # D33: with one store, `-k PATH` is enough; §6.15: every -k completes paths.
+    _stores(cli_json, "alpha")
+
+    items = parse(
+        complete(cli_json, "ls", "alpha", "-k", incomplete=incomplete, shell=shell), shell
+    )
+
+    assert items == [Item("file", incomplete)]
 
 
 def test_the_path_part_of_a_reading_key_is_left_to_the_shell(cli_json: CliHarness) -> None:
@@ -157,7 +182,7 @@ def test_the_path_part_of_a_reading_key_is_left_to_the_shell(cli_json: CliHarnes
         # bash splits at '=' (COMP_WORDBREAKS): `-k alpha=ke` and `-k alpha=`.
         ("envs ls -k alpha = ke", "5", [Item("file", "ke")]),
         ("envs ls -k alpha =", "4", [Item("file", "")]),
-        ("envs ls --key = al", "4", [Item("plain", "alpha=")]),
+        ("envs ls --key = al", "4", [Item("file", "al"), Item("plain", "alpha=")]),
     ],
 )
 def test_bash_words_split_at_equals_signs_are_joined_again(
@@ -173,6 +198,79 @@ def test_bash_words_split_at_equals_signs_are_joined_again(
     result = complete(cli_json, connection=False, env=env)
 
     assert parse(result) == expected
+
+
+@pytest.mark.parametrize(
+    ("words", "cword", "incomplete"),
+    [
+        # bash also splits at ':' (COMP_WORDBREAKS): every connection URL has one.
+        ("envs -c {url} ls ", "6", ""),
+        ("envs -c {url} ls a", "6", "a"),
+        ("envs --connection = {url} ls ", "7", ""),
+    ],
+)
+def test_bash_words_split_at_colons_are_joined_again(
+    cli_json: CliHarness, words: str, cword: str, incomplete: str
+) -> None:
+    _stores(cli_json, "alpha", "beta")
+    url = cli_json.connection.replace(":", " : ")
+    assert url.count(" : ") == 1
+    env = {"COMP_WORDS": words.format(url=url), "COMP_CWORD": cword}
+
+    result = complete(cli_json, connection=False, env=env)
+
+    assert [item.value for item in parse(result)] == [
+        name for name in ("alpha", "beta") if name.startswith(incomplete)
+    ]
+
+
+@pytest.mark.parametrize("shell", _SHELLS)
+def test_the_version_option_prints_nothing_while_completing(
+    cli_json: CliHarness, shell: Shell
+) -> None:
+    # D54: only protocol output; zsh reads the answer in triples, one extra line shifts them.
+    result = complete(cli_json, "--version", incomplete="ls", shell=shell)
+
+    assert "environment-store" not in result.stdout
+    assert sorted(item.value for item in parse(result, shell)) == ["ls", "ls-store"]
+
+
+@pytest.mark.parametrize("shell", _SHELLS)
+def test_nothing_but_the_answer_reaches_stdout(cli_json: CliHarness, shell: Shell) -> None:
+    app = build_app()
+
+    def noisy(incomplete: str) -> list[str]:
+        print("noise")  # noqa: T201 - the stray output under test
+        return ["value"]
+
+    @app.command("noisy")
+    def _noisy(word: Annotated[str, typer.Argument(autocompletion=noisy)]) -> None: ...
+
+    result = complete(cli_json, "noisy", shell=shell, app=app)
+
+    assert "noise" not in result.stdout
+    assert parse(result, shell) == [Item("plain", "value")]
+
+
+@pytest.mark.parametrize(
+    ("args", "incomplete"),
+    [
+        (("run", "alpha", "--"), ""),
+        (("run", "--"), "a"),
+        (("run", "alpha", "--", "python"), ""),
+        (("run", "alpha", "--", "python", "--"), "a"),
+    ],
+)
+@pytest.mark.parametrize("shell", _SHELLS)
+def test_run_leaves_the_command_after_the_separator_to_the_shell(
+    cli_json: CliHarness, args: tuple[str, ...], incomplete: str, shell: Shell
+) -> None:
+    # C4, §6.13: everything after the first `--` is the command, not a store (§6.15).
+    _stores(cli_json, "alpha")
+
+    items = parse(complete(cli_json, *args, incomplete=incomplete, shell=shell), shell)
+
+    assert items == [Item("file", incomplete)]
 
 
 # --- variables -------------------------------------------------------------------------------
@@ -231,6 +329,18 @@ def test_a_mix_completes_only_the_plaintext_variable_names(cli_json: CliHarness)
 
 def test_a_missing_store_completes_no_variable_names(cli_json: CliHarness) -> None:
     assert _values(cli_json, "rm", "-s", "nope") == []
+
+
+@pytest.mark.parametrize("command", ["rm", "set"])
+def test_writing_commands_complete_no_variables_of_the_project_file_stores(
+    cli_json: CliHarness, command: str
+) -> None:
+    # Writing commands never take their store from the project file's stores.
+    _stores(cli_json, "alpha")
+    cli_json.store().set("alpha", "HOST", "h")
+    cli_json.project_file("stores = ['alpha']")
+
+    assert _values(cli_json, command) == []
 
 
 # --- paths -----------------------------------------------------------------------------------

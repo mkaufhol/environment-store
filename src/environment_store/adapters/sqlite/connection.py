@@ -16,6 +16,11 @@ from environment_store.adapters.sqlite.directories import (
 
 __all__ = ["connect_file"]
 
+# https://sqlite.org/fileformat2.html#the_database_header
+_HEADER_SIZE = 100
+_WRITE_VERSION = 18
+_WAL_VERSION = 2
+
 
 def connect_file(
     path: Path, *, create: bool, read_only: bool, busy_timeout: float
@@ -33,7 +38,8 @@ def connect_file(
 
     Raises:
         sqlite3.Error: The file cannot be opened.
-        OSError: A missing directory cannot be created.
+        OSError: A missing directory cannot be created, or the header of a file opened
+            read-only cannot be read.
     """
     if create:
         make_private_directory(path.parent)
@@ -69,10 +75,22 @@ def _uri_parameters(path: Path, *, create: bool, read_only: bool) -> str:
         # mode=rw: SQLite never creates the file itself (with its default mode, 0644) when it
         # is deleted between the existence check and the connect.
         return "mode=rw"
-    # D54: an immutable file needs no lock, -wal or -shm file. Only while a writer keeps its
-    # -wal file is the plain read-only mode needed to see the writer's commits.
+    # D54: an immutable file needs no lock, -wal or -shm file, and a WAL database without its
+    # -wal file has no writer whose commits it could miss. A rollback-journal database (a file
+    # system without WAL support keeps that mode) is changed in place by its writers, so only
+    # the plain read-only mode, which honours their locks, can read it safely.
     wal = path.with_name(path.name + "-wal")
-    return "mode=ro" if wal.exists() else "mode=ro&immutable=1"
+    if wal.exists() or not _is_wal_database(path):
+        return "mode=ro"
+    return "mode=ro&immutable=1"
+
+
+def _is_wal_database(path: Path) -> bool:
+    # The header's file format write version is 2 for WAL, 1 for a rollback journal; an empty
+    # or short file has no header and no WAL either.
+    with path.open("rb") as database:
+        header = database.read(_HEADER_SIZE)
+    return len(header) == _HEADER_SIZE and header[_WRITE_VERSION] == _WAL_VERSION
 
 
 def _decode_text(data: bytes) -> str:

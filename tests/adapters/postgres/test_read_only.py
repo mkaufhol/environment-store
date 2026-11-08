@@ -1,11 +1,13 @@
 """`SetupMode.READ_ONLY` on PostgreSQL: no setup, no writes, a short connect timeout (D54)."""
 
 import socket
+import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from typing import Final
 
+import psycopg
 import pytest
 from psycopg import sql
 
@@ -49,6 +51,42 @@ def silent_server() -> Iterator[int]:
         listener.bind(("127.0.0.1", 0))
         listener.listen(8)
         yield listener.getsockname()[1]
+
+
+@pytest.fixture
+def silent_listeners() -> Iterator[list[socket.socket]]:
+    """Three silent servers, whose pending connections show which hosts were tried."""
+    listeners = [socket.socket(socket.AF_INET, socket.SOCK_STREAM) for _ in range(3)]
+    try:
+        for listener in listeners:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(8)
+            listener.settimeout(0)
+        yield listeners
+    finally:
+        for listener in listeners:
+            listener.close()
+
+
+def _port(listener: socket.socket) -> int:
+    port: int = listener.getsockname()[1]
+    return port
+
+
+def _was_tried(listener: socket.socket) -> bool:
+    try:
+        connection, _ = listener.accept()
+    except BlockingIOError:
+        return False
+    connection.close()
+    return True
+
+
+def _closed_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        port: int = probe.getsockname()[1]
+    return port
 
 
 def test_read_only_on_a_database_without_the_schema_finds_no_stores_and_creates_nothing(
@@ -140,3 +178,72 @@ def test_read_only_lost_connection_before_the_first_read_raises_backend_error(
 
         with pytest.raises(BackendError, match="checking the schema"):
             adapter.list_stores()
+
+
+def test_read_only_spends_the_connect_timeout_once_for_all_hosts(
+    silent_listeners: list[socket.socket],
+) -> None:
+    # libpq's connect_timeout is per host; completion waits about 2 s in all (D54).
+    hosts = ",".join(f"127.0.0.1:{_port(listener)}" for listener in silent_listeners)
+    started = time.monotonic()
+
+    with pytest.raises(BackendError, match="cannot connect"):
+        open_postgres(f"postgresql://nobody@{hosts}/db", setup=_RO)
+
+    assert time.monotonic() - started < READ_ONLY_CONNECT_TIMEOUT + 1
+    assert [_was_tried(listener) for listener in silent_listeners] == [True, False, False]
+
+
+def test_read_only_tries_the_next_host_while_time_is_left(
+    silent_listeners: list[socket.socket],
+) -> None:
+    silent = silent_listeners[0]
+    url = f"postgresql://nobody@127.0.0.1:{_closed_port()},127.0.0.1:{_port(silent)}/db"
+
+    with pytest.raises(BackendError, match="cannot connect"):
+        open_postgres(url, setup=_RO)
+
+    assert _was_tried(silent)
+
+
+def test_read_only_sets_tcp_keepalives_against_a_stalled_network(
+    postgres_server: PostgresServer, database: str
+) -> None:
+    with open_postgres(postgres_server.url(database), setup=_RO) as adapter:
+        parameters = adapter._connection.info.get_parameters()
+
+    assert parameters["keepalives"] == "1"
+    assert int(parameters["keepalives_idle"]) <= READ_ONLY_CONNECT_TIMEOUT
+    assert int(parameters["keepalives_count"]) >= 1
+
+
+@pytest.mark.parametrize(
+    "read",
+    [PostgresAdapter.list_stores, lambda adapter: adapter.read_store("base")],
+    ids=["list_stores", "read_store"],
+)
+def test_read_only_gives_up_on_a_locked_table(
+    postgres_server: PostgresServer, database: str, read: Callable[[PostgresAdapter], object]
+) -> None:
+    # A migration holding ACCESS EXCLUSIVE must not hang completion until it ends (D54).
+    with open_postgres(postgres_server.url(database)) as writer:
+        writer.create_store(_record())
+    holder = psycopg.connect(postgres_server.url(database))
+    holder.execute("LOCK TABLE environment_store.stores IN ACCESS EXCLUSIVE MODE")
+    # Without a limit the read would wait for the holder; release it eventually anyway.
+    release = threading.Timer(15, holder.rollback)
+    release.start()
+    started = time.monotonic()
+    try:
+        with (
+            open_postgres(postgres_server.url(database), setup=_RO) as adapter,
+            pytest.raises(BackendError),
+        ):
+            read(adapter)
+        elapsed = time.monotonic() - started
+    finally:
+        release.cancel()
+        holder.rollback()
+        holder.close()
+
+    assert elapsed < READ_ONLY_CONNECT_TIMEOUT + 3
