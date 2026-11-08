@@ -54,10 +54,12 @@ envs -c json://envs tui
 | Connection | `-c/--connection`, else `ENV_STORE_CONNECTION`, else `connection` in `.envstore.toml` |
 | Keys for encrypted stores | `ENV_STORE_KEY_<STORE>`, else the `[keys]` table in `.envstore.toml`, else the Unlock dialog |
 | Project file | `.envstore.toml` in the current directory or a parent; `--no-project` ignores it |
+| Default of **First wins** in the export dialog | `ENV_STORE_ORDERED_OVERWRITE`, else `ordered_overwrite` in `.envstore.toml`, else unchecked |
 
 So in a project with an `.envstore.toml` that sets `connection`, a plain `envs tui` is enough. The project file's
-`stores` list plays no role in the TUI: it always shows every store in the backend. `ordered_overwrite` only sets the
-default of **First wins** in the export dialog (`ordered_overwrite = false` checks it). See
+`stores` list plays no role in the TUI: it always shows every store in the backend. The merge order setting
+(`ENV_STORE_ORDERED_OVERWRITE`, else `ordered_overwrite`) only sets the default of **First wins** in the export
+dialog: `false` checks it, and the environment variable wins over the file. See
 [Configuration](configuration.md) for the project file.
 
 `envs tui` refuses to start when it cannot be interactive (exit code 1):
@@ -186,7 +188,8 @@ deleted and that this cannot be undone, and **Remove** works only once you have 
  ⏎ Remove  esc Cancel
 ```
 
-If the typed name does not match, nothing is removed, the dialog stays open and says
+The **Remove** button stays disabled until the typed name matches. If you press `Enter` in the input while the name
+does not match, nothing is removed, the dialog stays open and an error notification says
 `type the store name 'dev' exactly to remove it`. Like `envs rm-store`, removing needs no key, also for an
 encrypted store.
 
@@ -209,8 +212,9 @@ encrypted store.
    ```
 
 2. **Choose the options**: the format (dotenv, JSON, TOML), **Nested** (`--nested`: one namespace per store instead
-   of merging) and **First wins** (`--first-wins`). First wins starts checked when the project file sets
-   `ordered_overwrite = false`. `Ctrl+S` goes on.
+   of merging) and **First wins** (`--first-wins`). First wins starts checked when the merge order setting
+   is `false`: `ENV_STORE_ORDERED_OVERWRITE=false`, or `ordered_overwrite = false` in the project file when the
+   variable is not set (the variable wins over the file). `Ctrl+S` goes on.
 3. **Enter the output path.** The path input completes paths (see [Path completion](#path-completion)), and a typed
    extension (`.env`, `.json`, `.toml`) preselects the format, like `-t` on the command line; you can still change
    it. `Enter` or `Ctrl+S` exports.
@@ -273,7 +277,8 @@ starts in the value; when you add, you type the name first.
 
 ### Unlock
 
-Appears when you open an encrypted store and no key from the project file fits (see
+Appears when an encrypted store has no working key from `ENV_STORE_KEY_<STORE>` or the project file's `[keys]`:
+when you open it, and during an export for every chosen encrypted store (see
 [Encrypted stores](#encrypted-stores)):
 
 ```
@@ -346,7 +351,7 @@ stray Enter never confirms. Its footer reads `y Yes  n No  esc Cancel`; `Esc` an
 
 | Key | Action |
 |---|---|
-| `Enter` in any field, `Ctrl+S` | Create the store |
+| `Enter` in a text field, `Ctrl+S` | Create the store |
 | `↑` / `↓` in the encryption choice, then `Enter` or `Space` | Choose the encryption |
 | `Tab` in a key file path field | Accept the shown path suggestion; without one, move on |
 | `Tab` / `Shift+Tab` | Move between fields and buttons |
@@ -398,7 +403,7 @@ existing file or directory that completes what you typed, shown dimmed after the
 | Key | Action |
 |---|---|
 | `Tab` | Accept the suggestion, when one is shown and the cursor is at the end; otherwise move to the next field |
-| `→` | Accept the suggestion |
+| `→` | Accept the suggestion, when one is shown and the cursor is at the end; otherwise move the cursor one character right |
 
 A leading `~` is expanded for the lookup and kept in the text (as with `-k` on the command line, `./~/a`
 names a directory called `~`), directories end in `/`, and matching is case-sensitive.
@@ -550,8 +555,8 @@ Press `y` to read the store again, then repeat your change. Nothing is ever over
 - **Some commands are CLI-only.** `cp-store`, `mv-store`, `import`, `export-shell`, `encrypt`, `rekey` and `keygen`.
   The TUI creates, removes and exports stores (to a file only), and edits variables.
 - **One store at a time.** The variables screen shows one store; it does not merge stores the way `envs ls base dev`
-  does. Only the export merges stores. The TUI ignores `stores` in the project file; `ordered_overwrite` only sets
-  the export dialog's default.
+  does. Only the export merges stores. The TUI ignores `stores` in the project file; the merge order setting
+  (`ENV_STORE_ORDERED_OVERWRITE`, else `ordered_overwrite`) only sets the export dialog's default.
 - **One variable per write.** Each save or delete is its own write. To change many variables in one write, use
   `envs import`, or, for a plaintext store only, `envs set` with several `KEY=VALUE` pairs. Encrypted stores refuse
   `KEY=VALUE` pairs: `envs set` takes one `KEY` with its value piped in or typed at the hidden prompt.

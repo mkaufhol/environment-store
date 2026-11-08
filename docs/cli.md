@@ -1188,7 +1188,7 @@ Needs the `tui` extra. The full guide is [tui.md](tui.md). It opens a full-scree
 | Add / Edit | **Ctrl+S** save, **Esc** cancel |
 | Confirm | **y** yes, **n** or **Esc** no |
 
-Every path input (the export path, the key file fields of the create and unlock dialogs) suggests an existing file or directory as you type; **Tab** or **→** accepts it, and a leading `~` is expanded. Each screen's footer lists the keys that work there.
+Every path input (the export path, the key file fields of the create and unlock dialogs) suggests an existing file or directory as you type; **Tab** or **→** accepts it when the cursor is at the end, and a leading `~` is expanded. Each screen's footer lists the keys that work there.
 
 The key you type in the Unlock dialog is forgotten when you leave the store. If someone else changed the store in the meantime, nothing is written and the TUI offers to reload.
 
@@ -1269,7 +1269,7 @@ environment-store completion fish > ~/.config/fish/completions/environment-store
 | `envs ls -k <Tab>` | `STORE=` for each store, and paths; after `-k prod=` the path |
 | `envs get <Tab>`, `envs set -s base <Tab>`, `envs rm -s base <Tab>` | the variable names of plaintext stores: `-s` for `set` and `rm`, the project file's `stores` for `get` |
 | `envs keygen <Tab>`, `-f`, `--new-key`, `--generate-key` | paths, by your shell's own file completion |
-| `envs run base -- <Tab>` | whatever your shell completes for the command you run |
+| `envs run base -- <Tab>` | paths, by your shell's own file completion, for every word after `--` (command names and the command's own completion are not offered) |
 
 **What never completes:**
 

@@ -121,7 +121,7 @@ envs completion fish > ~/.config/fish/completions/envs.fish
 Run as `environment-store completion SHELL`, the script completes that name instead. It completes
 commands, options, fixed values (`-t`, the shells), existing store names (never a new name: not for
 `create-store` or the `cp-store`/`mv-store` target), variable names of plaintext stores for `get`, `rm`,
-`set` (never of encrypted stores: no key is read) and paths. It never prompts, never writes to stderr,
+`set` (never of encrypted stores: no key is read) and paths (after `run ... --` only paths). It never prompts, never writes to stderr,
 never creates a file, directory or schema, and offers nothing when the backend is missing, broken or slow.
 Any other shell name is a usage error (exit 1).
 

@@ -122,6 +122,26 @@ def test_zsh_adds_store_equals_without_a_space_after_it(cli_json: CliHarness) ->
 
 
 @pytest.mark.skipif(_ZSH is None, reason="zsh is not installed")
+def test_zsh_keeps_the_empty_path_item_and_still_offers_store_equals(cli_json: CliHarness) -> None:
+    # The file item of an empty word has an empty value; it must keep its slot in the triples.
+    cli_json.store().create_store("alpha")
+    cli_json.store().create_store("beta")
+
+    lines = _zsh(cli_json, "envs", ["envs", "-c", cli_json.connection, "ls", "-k", ""])
+
+    assert lines == ["FILES -f", "SUFFIX ''", "alpha=", "beta="]
+
+
+@pytest.mark.skipif(_ZSH is None, reason="zsh is not installed")
+def test_zsh_completes_the_path_right_after_store_equals(cli_json: CliHarness) -> None:
+    cli_json.store().create_store("alpha")
+
+    lines = _zsh(cli_json, "envs", ["envs", "-c", cli_json.connection, "ls", "-k", "alpha="])
+
+    assert lines == ["COMPSET -P *=", "FILES -f"]
+
+
+@pytest.mark.skipif(_ZSH is None, reason="zsh is not installed")
 def test_zsh_completes_a_plain_path_without_stripping_anything(cli_json: CliHarness) -> None:
     lines = _zsh(cli_json, "envs", ["envs", "keygen", "a=b"])
 

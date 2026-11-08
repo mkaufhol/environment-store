@@ -81,6 +81,8 @@ _BASH_SCRIPT: Final = r"""%(complete_func)s() {
 
 # A path after `STORE=` (`-k STORE=PATH`) is completed without the `STORE=` prefix. `STORE=`
 # itself is added without zsh's space suffix (`-S ''`), like bash's `compopt -o nospace`.
+# The response is iterated quoted: the path item of an empty word has an empty value, and an
+# unquoted `${response}` would drop it and shift every later triple by one.
 _ZSH_SCRIPT: Final = r"""#compdef %(prog_name)s
 
 %(complete_func)s() {
@@ -93,7 +95,7 @@ _ZSH_SCRIPT: Final = r"""#compdef %(prog_name)s
     response=("${(@f)$(env COMP_WORDS="${words[*]}" COMP_CWORD=$((CURRENT-1)) \
 %(complete_var)s=zsh_complete %(prog_name)s)}")
 
-    for type key descr in ${response}; do
+    for type key descr in "${response[@]}"; do
         if [[ "$type" == "plain" ]]; then
             if [[ "$descr" == "_" && "$key" == *= ]]; then
                 completions_without_suffix+=("$key")
