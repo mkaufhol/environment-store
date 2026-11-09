@@ -158,7 +158,7 @@ def _stores_in_question(ctx: "ClickContext", settings: Settings) -> tuple[str, .
     stores = ctx.params.get("stores")
     if stores:
         return tuple(dict.fromkeys(stores))
-    return settings.stores
+    return settings.default_stores
 
 
 def _backend(ctx: "ClickContext") -> tuple[Settings, Runtime]:

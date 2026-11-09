@@ -45,7 +45,8 @@ class OpenedStore:
         secret: The store's key or passphrase; `None` for a plaintext store.
         revision: The revision the variables were read at.
         variables: The variables (read-only).
-        from_environment: Whether the secret came from `ENV_STORE_KEY_<STORE>`.
+        from_environment: Whether the secret came from `ENV_STORE_KEY_<STORE>` or
+            `ENV_STORE_LOAD`.
     """
 
     name: str
@@ -117,18 +118,32 @@ class StoreSession:
         return self._key_paths.get(name)
 
     def environment_secret(self, name: str) -> Secret | None:
-        """Return a store's secret from `ENV_STORE_KEY_<STORE>`, tried first.
+        """Return a store's secret from `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, tried first.
 
         Args:
             name: The store name.
 
         Returns:
-            The secret, or `None` if the variable is not set or the store is plaintext.
+            The secret, or `None` if neither variable has a key for the store or the store is
+            plaintext.
 
         Raises:
-            CryptoError: The variable is set but empty or does not fit the store's key mode.
+            CryptoError: The key variable is set but empty, or the secret does not fit the
+                store's key mode.
+            ValidationError: Both variables have a key for the store.
         """
         return self._store.environment_secret(name)
+
+    def environment_key_source(self, name: str) -> str | None:
+        """Name the environment variable that gives a store's key.
+
+        Args:
+            name: The store name.
+
+        Returns:
+            `ENV_STORE_KEY_<STORE>`, `ENV_STORE_LOAD`, or `None` if neither has a key for it.
+        """
+        return self._store.environment_key_source(name)
 
     def secret_from_file(self, name: str, path: Path) -> Secret:
         """Read a key or passphrase file and interpret it by the store's key mode.
@@ -293,7 +308,8 @@ class StoreSession:
 
         Args:
             sources: The stores in load order with their secrets; an encrypted store without
-                one takes its key from `ENV_STORE_KEY_<STORE>`.
+                one takes its key from the environment (`ENV_STORE_KEY_<STORE>` or
+                `ENV_STORE_LOAD`).
             path: The output file.
             options: Format, nested and merge order.
             force: Replace an existing file.

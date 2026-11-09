@@ -1,29 +1,35 @@
-"""An existing store's key from `ENV_STORE_KEY_<STORE>`.
+"""An existing store's key from the environment: `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`.
 
 This serves deployments that hand secrets over as environment variables (e.g. Heroku,
-Kubernetes). The variable sits between an explicit source and the project file's `[keys]` in
-the key precedence; `SecretResolver` and `EnvironmentStore` both read it through this module. It is
-consulted only for encrypted stores: a variable for a plaintext store is ignored, because
-environments are shared. Messages name the variable, never its value.
+Kubernetes). The environment sits between an explicit source and the project file's `[keys]` in
+the key precedence; `SecretResolver` and `EnvironmentStore` both read it through this module. A
+store's key comes from its key variable or from the load specification in `ENV_STORE_LOAD`;
+both at once is an error, because it is unclear which one is meant. The environment is consulted
+only for encrypted stores: a key for a plaintext store is ignored, because environments are
+shared. Messages name the variable, never its value.
 """
 
 from collections.abc import Collection, Iterable, Mapping
 from typing import Final, Protocol
 
+from environment_store.config.load_spec import ENV_LOAD, load_spec_from_environment
 from environment_store.core.errors import (
     InvalidKeyFileError,
     KeyModeMismatchError,
     KeySourceError,
     ValidationError,
 )
-from environment_store.core.models import StoreInfo
+from environment_store.core.models import KeyMode, StoreInfo
 from environment_store.core.names import key_variable
-from environment_store.core.secrets import Secret
+from environment_store.core.secrets import KeyMaterial, Passphrase, Secret
 
 __all__ = [
     "StoreInspector",
     "check_key_variables",
     "check_not_empty",
+    "environment_key",
+    "environment_key_source",
+    "has_environment_key",
     "parse_key_variable",
     "secret_from_environment",
 ]
@@ -125,27 +131,119 @@ def check_key_variables(
 def secret_from_environment(
     inspector: StoreInspector, store: str, environ: Mapping[str, str]
 ) -> Secret | None:
-    """Return an existing store's secret from `ENV_STORE_KEY_<STORE>`, if it gives one.
+    """Return an existing store's secret from the environment, if it gives one.
 
     Args:
-        inspector: Reads the store's metadata (only when the variable is set).
+        inspector: Reads the store's metadata (only when the environment has a key for it).
         store: The store name.
         environ: The environment variables.
 
     Returns:
-        The secret, or `None` when the variable is not set or the store is plaintext (a
-        variable for a plaintext store is ignored: environments are shared).
+        The secret, or `None` when neither `ENV_STORE_KEY_<STORE>` nor `ENV_STORE_LOAD` has a
+        key for the store, or the store is plaintext (a key for a plaintext store is ignored:
+        environments are shared).
 
     Raises:
-        StoreNotFoundError: The variable is set and the store does not exist.
-        KeySourceError: The variable is set but empty, or not valid UTF-8.
-        InvalidKeyFileError: A `keyfile` store and the value is not key text.
-        KeyModeMismatchError: A `passphrase` store and the value is key text.
+        StoreNotFoundError: The environment has a key and the store does not exist.
+        ConfigurationError: `ENV_STORE_LOAD` is set but not a load specification.
+        ValidationError: Both variables have a key for the store.
+        KeySourceError: The key variable is set but empty, or not valid UTF-8.
+        InvalidKeyFileError: A `keyfile` store and the key variable is not key text.
+        KeyModeMismatchError: The secret does not fit the store's key mode.
     """
-    text = environ.get(key_variable(store))
-    if text is None or not inspector.store_info(store).encrypted:
+    if not has_environment_key(store, environ) or not inspector.store_info(store).encrypted:
         return None
-    return parse_key_variable(inspector, store, text)
+    return environment_key(inspector, store, environ)
+
+
+def environment_key(
+    inspector: StoreInspector, store: str, environ: Mapping[str, str]
+) -> Secret | None:
+    """Return an encrypted store's secret from the environment, if it gives one.
+
+    Args:
+        inspector: Interprets the key variable and reads the store's key mode.
+        store: The store name; the caller has checked that it is encrypted.
+        environ: The environment variables.
+
+    Returns:
+        The secret from `ENV_STORE_KEY_<STORE>` or from `ENV_STORE_LOAD`, or `None` when
+        neither has one.
+
+    Raises:
+        ConfigurationError: `ENV_STORE_LOAD` is set but not a load specification.
+        ValidationError: Both variables have a key for the store; the message names them,
+            never a value.
+        KeySourceError: The key variable is set but empty, or not valid UTF-8.
+        InvalidKeyFileError: A `keyfile` store and the key variable is not key text.
+        KeyModeMismatchError: The secret does not fit the store's key mode.
+    """
+    variable = key_variable(store)
+    text = environ.get(variable)
+    spec = load_spec_from_environment(environ)
+    from_spec = None if spec is None else spec.keys.get(store)
+    if text is not None and from_spec is not None:
+        message = (
+            f"store {store!r} gets a key from both {variable} and {ENV_LOAD}, so it is unclear "
+            "which one is meant: set only one of them"
+        )
+        raise ValidationError(message)
+    if text is not None:
+        return parse_key_variable(inspector, store, text)
+    if from_spec is not None:
+        return _fitting(inspector, store, from_spec)
+    return None
+
+
+def environment_key_source(store: str, environ: Mapping[str, str]) -> str | None:
+    """Name the variable that gives a store's key, without reading the store.
+
+    Args:
+        store: The store name.
+        environ: The environment variables.
+
+    Returns:
+        `ENV_STORE_KEY_<STORE>` when it is set, else `ENV_STORE_LOAD` when its load
+        specification has a key for the store, else `None`. A plaintext store still ignores it.
+
+    Raises:
+        ConfigurationError: `ENV_STORE_LOAD` is set but not a load specification.
+    """
+    variable = key_variable(store)
+    if variable in environ:
+        return variable
+    spec = load_spec_from_environment(environ)
+    if spec is not None and store in spec.keys:
+        return ENV_LOAD
+    return None
+
+
+def has_environment_key(store: str, environ: Mapping[str, str]) -> bool:
+    """Tell whether the environment has a key for a store, without reading the store.
+
+    Args:
+        store: The store name.
+        environ: The environment variables.
+
+    Returns:
+        Whether `ENV_STORE_KEY_<STORE>` is set or `ENV_STORE_LOAD` has a key for the store.
+
+    Raises:
+        ConfigurationError: `ENV_STORE_LOAD` is set but not a load specification.
+    """
+    return environment_key_source(store, environ) is not None
+
+
+def _fitting(inspector: StoreInspector, store: str, secret: Secret) -> Secret:
+    # The specification's secrets are typed, so a wrong kind is caught before decryption.
+    mode = inspector.store_info(store).key_mode
+    if mode is KeyMode.PASSPHRASE and isinstance(secret, KeyMaterial):
+        message = f"{ENV_LOAD} holds key text for store {store!r}, which uses a passphrase"
+        raise KeyModeMismatchError(message)
+    if mode is KeyMode.KEYFILE and isinstance(secret, Passphrase):
+        message = f"{ENV_LOAD} holds a passphrase for store {store!r}, which uses a key file"
+        raise KeyModeMismatchError(message)
+    return secret
 
 
 def parse_key_variable(inspector: StoreInspector, store: str, text: str) -> Secret:

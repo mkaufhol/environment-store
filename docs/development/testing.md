@@ -121,7 +121,8 @@ uv run coverage run -m pytest && uv run coverage report  # the full run, as in t
 CI uses `ci`, so set it locally to reproduce a CI failure.
 
 The same file has the autouse fixture `_no_key_variables`. It removes every `ENV_STORE_KEY_*`
-variable, so your shell can't leak a key into a test.
+variable and `ENV_STORE_LOAD`, so your shell can't leak a key into a test. A test that needs one
+sets it with `monkeypatch.setenv` or passes its own environment mapping.
 
 ### PostgreSQL
 

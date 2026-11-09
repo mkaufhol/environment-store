@@ -5,9 +5,9 @@ surfaces at once), and one `StoreService` over it. Keys are taken as `KeyInput`:
 existing store a `Path` is read and interpreted by the store's mode; for a new secret a `Path`
 must be a key file. Key text without a file is passed as `parse_key_text(text)`.
 
-An existing store's key that is not given comes from `ENV_STORE_KEY_<STORE>` when that is set;
-new keys never do. The environment is passed in (`os.environ` by default) and never
-changed.
+An existing store's key that is not given comes from the environment, `ENV_STORE_KEY_<STORE>` or
+the load specification in `ENV_STORE_LOAD`; new keys never do. The environment is passed in
+(`os.environ` by default) and never changed.
 """
 
 import os
@@ -16,7 +16,12 @@ from pathlib import Path
 from types import TracebackType
 from typing import Final, Literal, Self
 
-from environment_store.config.key_variables import check_key_variables, secret_from_environment
+from environment_store.config.key_variables import (
+    check_key_variables,
+    environment_key_source,
+    secret_from_environment,
+)
+from environment_store.config.load_spec import LoadSpec
 from environment_store.config.project import PROJECT_FILE_NAME
 from environment_store.config.secrets import read_secret_file
 from environment_store.config.settings import ENV_CONNECTION, Settings
@@ -94,8 +99,8 @@ class EnvironmentStore:
             kdf_params_factory: Argon2id parameters for new passphrases; `None` for the
                 defaults (`t=3`, `m=64 MiB`, `p=4`, as RFC 9106 recommends).
             opener: Opens the adapter; tests inject fakes here.
-            environ: Where `ENV_STORE_KEY_<STORE>` is looked up; `None` for
-                `os.environ`.
+            environ: Where `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` are looked up; `None`
+                for `os.environ`.
 
         Raises:
             ValidationError: The connection string is malformed or its scheme is unknown.
@@ -125,8 +130,8 @@ class EnvironmentStore:
         """Open the backend named by `ENV_STORE_CONNECTION` only (no project file).
 
         Args:
-            environ: The environment, also for `ENV_STORE_KEY_<STORE>`; `None` for
-                `os.environ`.
+            environ: The environment, also for `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD`;
+                `None` for `os.environ`.
             setup: As for the constructor.
             clock: As for the constructor.
             kdf_params_factory: As for the constructor.
@@ -459,24 +464,44 @@ class EnvironmentStore:
         return checked
 
     def environment_secret(self, store: str) -> Secret | None:
-        """Return an existing store's secret from `ENV_STORE_KEY_<STORE>`.
+        """Return an existing store's secret from `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`.
 
-        The frontends use it to try the variable before a project key or a prompt.
+        The frontends use it to try the environment before a project key or a prompt.
 
         Args:
             store: The store name.
 
         Returns:
-            The secret, or `None` if the variable is not set or the store is plaintext.
+            The secret, or `None` if neither variable has a key for the store or the store is
+            plaintext.
 
         Raises:
-            KeySourceError: The variable is set but empty or not UTF-8.
+            ValidationError: Both variables have a key for the store.
+            ConfigurationError: `ENV_STORE_LOAD` is set but not a load specification.
+            KeySourceError: The key variable is set but empty or not UTF-8.
             CryptoError: The value does not fit the store's key mode; it names the variable,
                 never the value.
         """
         self._open_service()
         validate_store_name(store)
         return secret_from_environment(self, store, self._environ)
+
+    def environment_key_source(self, store: str) -> str | None:
+        """Name the environment variable that gives a store's key, without reading the store.
+
+        Args:
+            store: The store name.
+
+        Returns:
+            `ENV_STORE_KEY_<STORE>` when it is set, else `ENV_STORE_LOAD` when it has a key
+            for the store, else `None`. A plaintext store ignores either.
+
+        Raises:
+            ConfigurationError: `ENV_STORE_LOAD` is set but not a load specification.
+        """
+        self._open_service()
+        validate_store_name(store)
+        return environment_key_source(store, self._environ)
 
     def parse_secret(self, store: str, text: str) -> Secret:
         """Interpret raw secret text by the store's key mode.
@@ -504,20 +529,34 @@ class EnvironmentStore:
         Returns:
             The loaded stores.
         """
-        service = self._open_service()
-        if isinstance(sources, str):
-            message = "sources must be a list of stores, not a single string"
-            raise ValidationError(message)
-        checked = [_checked_source(source) for source in sources]
-        # Before any key is read: a shared key variable is ambiguous.
-        check_key_variables(
-            self,
-            [source.name for source in checked],
-            explicit={source.name for source in checked if source.key is not None},
-            environ=self._environ,
+        resolved = self._resolved_sources(sources)
+        return Environment(stores=tuple(self._open_service().load(resolved)), order=order)
+
+    def load_spec(self, sources: Sequence[Source | str]) -> LoadSpec:
+        """Build the load specification for `ENV_STORE_LOAD`, proving every key.
+
+        Keys are resolved as for `load`; every store is decrypted, so a wrong key fails here and
+        not in the deployment.
+
+        Args:
+            sources: Store names or `Source`s with keys, in load order.
+
+        Returns:
+            The specification: the stores in order and the secret of every encrypted one.
+            `encode()` gives the value of `ENV_STORE_LOAD`.
+
+        Raises:
+            ValidationError: No stores, or a single string instead of a list.
+            KeyRequiredError: An encrypted store has no key.
+            DecryptionError: A key does not open its store.
+            NotEncryptedError: A key was given for a plaintext store.
+        """
+        resolved = self._resolved_sources(sources)
+        self._open_service().load(resolved)
+        return LoadSpec(
+            stores=tuple(source.name for source in resolved),
+            keys={source.name: source.secret for source in resolved if source.secret is not None},
         )
-        resolved = [self._core_source(source) for source in checked]
-        return Environment(stores=tuple(service.load(resolved)), order=order)
 
     def migrate(self) -> MigrationReport:
         """Create or upgrade the schema of a SQL backend.
@@ -544,9 +583,24 @@ class EnvironmentStore:
         return self._service
 
     def _existing_secret(self, store: str, key: KeyInput | None) -> Secret | None:
-        # The explicit key, else the key variable; None lets the service raise
+        # The explicit key, else the environment; None lets the service raise
         # KeyRequiredError for an encrypted store.
         return self.environment_secret(store) if key is None else self.secret_for(store, key)
+
+    def _resolved_sources(self, sources: Sequence[Source | str]) -> list[CoreSource]:
+        self._open_service()
+        if isinstance(sources, str):
+            message = "sources must be a list of stores, not a single string"
+            raise ValidationError(message)
+        checked = [_checked_source(source) for source in sources]
+        # Before any key is read: a shared key variable is ambiguous.
+        check_key_variables(
+            self,
+            [source.name for source in checked],
+            explicit={source.name for source in checked if source.key is not None},
+            environ=self._environ,
+        )
+        return [self._core_source(source) for source in checked]
 
     def _core_source(self, source: Source) -> CoreSource:
         return CoreSource(name=source.name, secret=self._existing_secret(source.name, source.key))

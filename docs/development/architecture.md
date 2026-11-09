@@ -44,7 +44,7 @@ the same table as `ALLOWED_IMPORTS` and fails on any import outside it.
 | `adapters.sqlite` | `core`, `adapters.sql`, `adapters.sqlite` | The SQLite backend. |
 | `adapters.postgres` | `core`, `adapters.sql`, `adapters.postgres` | The PostgreSQL backend. |
 | `formats` | `core`, `formats`, `_toml` | Pure readers and writers for dotenv, JSON, TOML and shell exports. |
-| `config` | `core`, `crypto`, `config` | Settings precedence, the project file, `ENV_STORE_KEY_<STORE>`, key sources, prompts. |
+| `config` | `core`, `crypto`, `config` | Settings precedence, the project file, `ENV_STORE_KEY_<STORE>`, the load specification in `ENV_STORE_LOAD`, key sources, prompts. |
 | `library` | `core`, `crypto`, `service`, `formats`, `config`, `library` | The public API: `EnvironmentStore`, `Environment`, `load()`. |
 | `cli` | `core`, `config`, `library`, `formats`, `cli` | The `envs` command: options, prompts, output, exit codes. |
 | `tui` | `core`, `config`, `library`, `formats`, `tui` | The terminal UI. |
@@ -161,15 +161,31 @@ The formats are pure functions over `str`, with no I/O:
   - The connection comes from `-c`, then `ENV_STORE_CONNECTION`, then `connection` in
     `.envstore.toml`. There is no default connection.
   - An empty environment variable counts as unset.
+  - `Settings.load_spec` holds the decoded `ENV_STORE_LOAD`, or `None`. It is resolved with the
+    other settings, so an invalid value fails every command except `keygen` and `completion`
+    with a `ConfigurationError`.
+  - `Settings.default_stores` is the store list of a reading command or of `load()` that names
+    none: the stores of `ENV_STORE_LOAD`, else `stores` in `.envstore.toml`.
+- **`config/load_spec.py`:** `LoadSpec`, the stores to load in load order plus the secret of every
+  encrypted one, and `ENV_LOAD`, the name `ENV_STORE_LOAD`.
+  - Its text form is one line, `envstore-load-v1:` followed by unpadded URL-safe base64 of JSON.
+    `encode` is deterministic.
+  - Decoding is strict. Its errors say why the text is invalid and never contain the value,
+    because the value holds keys.
 - **`config/project.py`:** finds and parses `.envstore.toml`.
   - It walks up from the working directory. The first project file it finds ends the search.
   - A file owned by another user, or a world-writable one, is ignored with a warning.
   - Unknown keys are errors.
 - **`config/secrets.py`:** `SecretResolver` decides the key of an existing store, in this order:
-  explicit key > `ENV_STORE_KEY_<STORE>` > project `[keys]` > prompt (interactive only) >
-  `KeyRequiredError`.
-- **`config/key_variables.py`:** reads `ENV_STORE_KEY_<STORE>`. A key variable for a plaintext store
-  is ignored, because environments are shared.
+  explicit key > the environment (`ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`) > project `[keys]` >
+  prompt (interactive only) > `KeyRequiredError`.
+- **`config/key_variables.py`:** reads a store's key from the environment: `ENV_STORE_KEY_<STORE>`
+  or the load specification in `ENV_STORE_LOAD`.
+  - `environment_key` returns the secret; `environment_key_source` names the variable that gives
+    it, and `has_environment_key` tells whether one does, both without reading the store.
+  - A key from both variables for one store is a `ValidationError`, because it is unclear which
+    one is meant. An explicit key skips the check.
+  - A key for a plaintext store is ignored, because environments are shared.
 
 ### `library`: the public facade
 
@@ -177,8 +193,11 @@ The formats are pure functions over `str`, with no I/O:
   - Its methods mirror the CLI commands.
   - It turns a `Path`, `KeyMaterial` or `Passphrase` into a `Secret`. A plain `str` is refused,
     because it could be either a path or a passphrase.
-  - It reads `ENV_STORE_KEY_<STORE>` for existing stores, but never the project file's `[keys]`, and
-    it never prompts.
+  - It reads `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` for existing stores, but never the
+    project file's `[keys]`, and it never prompts.
+  - `load_spec` decrypts every given store with its key and returns the `LoadSpec` for
+    `ENV_STORE_LOAD`; `envs export-credentials` (`cli/exporting/credentials.py`) prints it next to
+    the connection string.
   - Its `repr` shows only the scheme, because the connection string may hold a password.
 - **`environment_store.load()` (`library/oneliner.py`):** reproduces the CLI's configuration
   resolution for apps: settings, the project file, key precedence and prompts, but never stdin.
@@ -214,7 +233,7 @@ business rules: every rule they apply comes from `library`, `config` or `core`.
    lazily, so a missing `cli` extra becomes a clean `MissingExtraError`.
 2. **Settings.** The root callback in `cli/app.py` builds a `CliState`. Before the command's callback runs,
    `EnvsCommand.invoke` resolves the settings (`config/settings.py`), so a broken project file
-   fails every command the same way. Only `keygen` and `completion`, which are `OfflineCommand`s,
+   or an invalid `ENV_STORE_LOAD` fails every command the same way. Only `keygen` and `completion`, which are `OfflineCommand`s,
    resolve no settings.
 3. **Loading.** `cli/variables/reading.py` validates the variable name, then calls
    `cli/loading.py:load_for_reading`. In this order, it:
@@ -240,9 +259,10 @@ business rules: every rule they apply comes from `library`, `config` or `core`.
    prompter.
 2. The settings are resolved exactly as in the CLI. A connection string with credentials in the
    project file becomes a `CredentialsInProjectFileWarning`.
-3. Every store must exist before any key is read or prompted for. Then each key comes from
-   `keys=`, `ENV_STORE_KEY_<STORE>`, the project's `[keys]`, or an interactive prompt, in that
-   order.
+3. Without store names the stores come from `Settings.default_stores`: those of
+   `ENV_STORE_LOAD`, else the project file's. Every store must exist before any key is read or
+   prompted for. Then each key comes from `keys=`, the environment (`ENV_STORE_KEY_<STORE>` or
+   `ENV_STORE_LOAD`), the project's `[keys]`, or an interactive prompt, in that order.
 4. `EnvironmentStore.load` decrypts and merges. `Environment.apply` writes into `os.environ` and
    keeps existing variables unless `overwrite=True`.
 5. Errors reach the caller unchanged. There are no exit codes in the library.

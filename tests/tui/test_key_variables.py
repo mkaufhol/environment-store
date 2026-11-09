@@ -1,4 +1,4 @@
-"""The TUI and `ENV_STORE_KEY_<STORE>`: tried before the project key and the dialog."""
+"""The TUI and the environment keys: tried before the project key and the dialog."""
 
 import dataclasses
 from collections.abc import Generator, Mapping
@@ -12,8 +12,9 @@ from typer.testing import CliRunner
 
 import environment_store.tui
 from environment_store.cli.app import app as envs
+from environment_store.config.load_spec import LoadSpec
 from environment_store.core.secrets import Passphrase, Secret
-from environment_store.library.keys import generate_key_file, generate_key_text
+from environment_store.library.keys import generate_key_file, generate_key_text, parse_key_text
 from environment_store.library.store import EnvironmentStore
 from environment_store.tui.app import EnvironmentStoreApp
 from environment_store.tui.screens.stores import StoresScreen
@@ -160,3 +161,64 @@ def test_envs_tui_gives_the_tui_a_store_with_the_cli_environment(
 
     assert_exit(result, 0)
     assert seen == [Passphrase(text="pw")]
+
+
+# --- ENV_STORE_LOAD -------------------------------------------------------------------------------
+
+
+def _load_spec(key: Path | None = None) -> str:
+    secret = generate_key_text() if key is None else key.read_text(encoding="utf-8")
+    return LoadSpec(stores=("a",), keys={"a": parse_key_text(secret)}).encode()
+
+
+@pytest.mark.usefixtures("arranged")
+def test_an_encrypted_store_opens_with_its_key_from_the_load_spec(
+    connection: str, key: Path
+) -> None:
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        assert isinstance(app.screen, VariablesScreen)
+        assert rows(app) == [["API_URL", MASK]]
+        assert notifications(app) == []
+
+    with _store(connection, {"ENV_STORE_LOAD": _load_spec(key)}) as store:
+        run_app(store, scenario)
+
+
+@pytest.mark.usefixtures("arranged")
+def test_a_wrong_key_in_the_load_spec_notifies_naming_it_and_asks(connection: str) -> None:
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        assert isinstance(app.screen, UnlockScreen)
+        [message] = notifications(app)
+        assert message.startswith("unlocking with ENV_STORE_LOAD failed: cannot decrypt store 'a'")
+        assert "hidden-value" not in message
+
+    with _store(connection, {"ENV_STORE_LOAD": _load_spec()}) as store:
+        run_app(store, scenario)
+
+
+@pytest.mark.usefixtures("arranged")
+def test_the_session_names_where_a_key_comes_from(connection: str, key: Path) -> None:
+    environ = {"ENV_STORE_LOAD": _load_spec(key)}
+
+    with _store(connection, environ) as store:
+        session = StoreSession(store, key_paths={})
+
+        assert session.environment_key_source("a") == "ENV_STORE_LOAD"
+        assert session.environment_key_source("b") is None
+
+
+@pytest.mark.usefixtures("arranged")
+def test_an_invalid_load_spec_notifies_without_the_value_and_asks(connection: str) -> None:
+    async def scenario(pilot: Pilot[None], app: EnvironmentStoreApp) -> None:
+        await _open_first(pilot)
+        assert isinstance(app.screen, UnlockScreen)
+        [message] = notifications(app)
+        assert message.startswith(
+            "unlocking with ENV_STORE_LOAD failed: ENV_STORE_LOAD is not a valid load specification"
+        )
+        assert CANARY not in message
+
+    with _store(connection, {"ENV_STORE_LOAD": CANARY}) as store:
+        run_app(store, scenario)

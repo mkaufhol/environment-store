@@ -3,9 +3,9 @@
 `a` creates a store and `d` removes the selected one, `x` exports stores to a file. `q` quits
 the app, here and on the variables screen; `escape` goes back from there.
 
-An encrypted store is opened without asking with the key from `ENV_STORE_KEY_<STORE>`,
-else with the project file's key when it names one; otherwise, or when that key does not
-fit, the `UnlockScreen` asks for one.
+An encrypted store is opened without asking with the key from the environment
+(`ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`), else with the project file's key when it names one;
+otherwise, or when that key does not fit, the `UnlockScreen` asks for one.
 """
 
 from typing import ClassVar, Final, override

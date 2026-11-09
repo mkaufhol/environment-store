@@ -1,9 +1,9 @@
 """`ExportFlow`: the steps of an export from the stores screen.
 
 Stores in order, options, output path (each a dialog, `screens.export`), then the keys of the
-encrypted stores in load order: `ENV_STORE_KEY_<STORE>`, the project file's `[keys]`, else
-the unlock dialog. The file is written through the library, mode `0600`, in output order.
-Cancelling any step ends the export without writing anything.
+encrypted stores in load order: the environment (`ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`), the
+project file's `[keys]`, else the unlock dialog. The file is written through the library, mode
+`0600`, in output order. Cancelling any step ends the export without writing anything.
 """
 
 from collections.abc import Mapping, Sequence
@@ -104,6 +104,6 @@ class ExportFlow:
 
 
 def _source(opened: OpenedStore) -> Source:
-    # A key from ENV_STORE_KEY_<STORE> is left to the library, which then also refuses stores
+    # A key from the environment is left to the library, which then also refuses stores
     # that share one key variable.
     return Source(opened.name, key=None if opened.from_environment else opened.secret)

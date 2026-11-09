@@ -43,6 +43,7 @@ _ENVIRONMENT: Final = (
     "ENV_STORE_CONNECTION",
     "ENV_STORE_ORDERED_OVERWRITE",
     "ENV_STORE_KEY_",
+    "ENV_STORE_LOAD",
 )
 _TLDR_MAX_EXAMPLES: Final = 8
 _FONT_ESCAPE: Final = re.compile(r"\\f[BIRP]")

@@ -12,7 +12,8 @@ settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "default"))
 
 @pytest.fixture(autouse=True)
 def _no_key_variables(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No `ENV_STORE_KEY_*` variable of the developer's shell leaks into a test."""
+    """No key of the developer's shell leaks into a test: `ENV_STORE_KEY_*`, `ENV_STORE_LOAD`."""
     for name in list(os.environ):
         if name.startswith("ENV_STORE_KEY_"):
             monkeypatch.delenv(name)
+    monkeypatch.delenv("ENV_STORE_LOAD", raising=False)

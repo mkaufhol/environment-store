@@ -21,6 +21,7 @@ with [the setup below](#set-up-the-example-stores), and the output shown is the 
 - [How do I manage stores from a script?](#how-do-i-manage-stores-from-a-script)
 - [How do I work with encrypted stores?](#how-do-i-work-with-encrypted-stores)
 - [How do I use an encrypted store in CI?](#how-do-i-use-an-encrypted-store-in-ci)
+- [How do I deploy with two environment variables?](#how-do-i-deploy-with-two-environment-variables)
 - [Which errors should I catch?](#which-errors-should-i-catch)
 - [Typing notes](#typing-notes)
 - [API reference](#api-reference)
@@ -179,8 +180,8 @@ print(os.environ["DB_HOST"])  # dev.example.com
 | Setting | Taken from, in order |
 |---|---|
 | Connection | `connection=` argument, then `ENV_STORE_CONNECTION`, then `connection` in `.envstore.toml` |
-| Stores | the positional arguments, then `stores` in `.envstore.toml` |
-| Keys | `keys=` argument, then `ENV_STORE_KEY_<STORE>`, then `[keys]` in `.envstore.toml`, then a hidden prompt (terminal only) |
+| Stores | the positional arguments, then the stores of `ENV_STORE_LOAD`, then `stores` in `.envstore.toml` |
+| Keys | `keys=` argument, then `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, then `[keys]` in `.envstore.toml`, then a hidden prompt (terminal only) |
 | Merge order | `first_wins=True`, then `ENV_STORE_ORDERED_OVERWRITE`, then `ordered_overwrite` in `.envstore.toml`, then last wins |
 
 For the merge order setting, `true` (the default) means the last store wins and `false` means
@@ -225,7 +226,7 @@ described in [cli.md](cli.md).
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `*stores` | none | Stores in load order; none means `stores` from `.envstore.toml` |
+| `*stores` | none | Stores in load order; none means the stores of `ENV_STORE_LOAD`, else `stores` from `.envstore.toml` |
 | `connection` | `None` | Connection string; `None` uses `ENV_STORE_CONNECTION`, then the project file |
 | `keys` | `None` | `{store name: key}`; see [keys](#how-do-i-work-with-encrypted-stores) |
 | `first_wins` | `False` | The first store wins instead of the last |
@@ -240,8 +241,11 @@ replaced by `_`: `DB_HOST` from `customer-a` becomes `CUSTOMER_A__DB_HOST`. Noth
 If no stores are named anywhere, `load()` raises `ConfigurationError`:
 
 ```text
-ConfigurationError: no stores to load: name them, e.g. load('base_conf'), or set 'stores' in .envstore.toml
+ConfigurationError: no stores to load: name them, e.g. load('base_conf'), set ENV_STORE_LOAD, or set 'stores' in .envstore.toml
 ```
+
+`ENV_STORE_LOAD` holds the stores and their keys in one value; see
+[How do I deploy with two environment variables?](#how-do-i-deploy-with-two-environment-variables).
 
 ## How do I read one value?
 
@@ -543,12 +547,14 @@ variable `ENV_STORE_KEY_<STORE>`: the store name in upper case with `-` turned i
 (`ENV_STORE_KEY_PROD` for `prod`, `ENV_STORE_KEY_CUSTOMER_A` for `customer-a`). It holds the key
 line (`envstore-key-v1:…`) or the passphrase, as a key file or passphrase file would. This is
 meant for deployments that cannot ship a key file, such as Heroku config vars; see
-[Deploying with encrypted stores](deployment.md).
+[Deploying with encrypted stores](deployment.md). `ENV_STORE_LOAD` can hold the keys of several
+stores at once, and counts as the same step; see
+[How do I deploy with two environment variables?](#how-do-i-deploy-with-two-environment-variables).
 
 | Key of an existing store, highest priority first | `EnvironmentStore` methods, `es.load()` | `environment_store.load()` |
 |---|---|---|
 | 1. explicit | `key=`, `Source(name, key=…)`, `rekey_store(old=…)` | `keys={"prod": …}` |
-| 2. environment | `ENV_STORE_KEY_<STORE>` | `ENV_STORE_KEY_<STORE>` |
+| 2. environment | `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD` | `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD` |
 | 3. project file | — | `[keys]` in `.envstore.toml` |
 | 4. prompt | — (`KeyRequiredError`) | hidden prompt, unless `noinput=True` or no terminal |
 
@@ -560,18 +566,34 @@ the platform provides it. An explicit key always wins, so a `keys=` entry hides 
   `KeyModeMismatchError` for key text in a passphrase store's variable), and a key that does not
   fit the store raises `DecryptionError`. Messages name the variable, never its
   value.
-- The variable of a plaintext store, and of a store that is not used, is ignored.
+- The variable of a plaintext store, and of a store that is not used, is ignored. So is a key in
+  `ENV_STORE_LOAD` for such a store.
+- If both `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` have a key for the same store, it is
+  unclear which one is meant, so reading the store raises `ValidationError`, unless an explicit
+  key is given:
+
+  ```text
+  ValidationError: store 'prod' gets a key from both ENV_STORE_KEY_PROD and ENV_STORE_LOAD, so it is unclear which one is meant: set only one of them
+  ```
+
+- A secret of the wrong kind in `ENV_STORE_LOAD` (key text for a passphrase store, or a
+  passphrase for a key file store) raises `KeyModeMismatchError`.
 - Two encrypted stores of one call that share a variable (`my-app` and `my_app`) raise
   `ValidationError` while it is set, unless an explicit key is given for both.
 - New keys never come from it: `create_store(encrypt=True, key=…)`, `encrypt_store`, the `new=` of
   `rekey_store` and the `encryption=` of `copy_store` / `move_store` take only what you pass.
-  `rekey_store(store, new=…)` without `old=` takes the old key from the variable.
+  `rekey_store(store, new=…)` without `old=` takes the old key from the variable or from
+  `ENV_STORE_LOAD`.
 - `EnvironmentStore` looks the variable up in `os.environ`, or in the mapping you pass as
   `environ=` (`EnvironmentStore(connection, environ={...})`, `from_env(environ=...)`);
-  `es.environment_secret("prod")` returns the secret it finds there, or `None`.
+  `es.environment_secret("prod")` returns the secret it finds there (in `ENV_STORE_KEY_PROD` or
+  `ENV_STORE_LOAD`), or `None`, and `es.environment_key_source("prod")` names the variable it
+  would come from (`'ENV_STORE_KEY_PROD'`, `'ENV_STORE_LOAD'` or `None`) without reading the
+  store.
 - The library never removes the variable from `os.environ`. If your process starts other
-  programs, drop it after loading: `os.environ.pop("ENV_STORE_KEY_PROD", None)`. (`envs run`
-  removes every `ENV_STORE_KEY_*` variable for you.)
+  programs, drop it after loading: `os.environ.pop("ENV_STORE_KEY_PROD", None)`, and the same for
+  `ENV_STORE_LOAD`. (`envs run` removes `ENV_STORE_LOAD` and every `ENV_STORE_KEY_*` variable for
+  you.)
 
 **Prompting.** When `environment_store.load()` meets an encrypted store without a key, it asks
 for it with a hidden prompt, but only if stdin is a terminal and `noinput` is `False`. Otherwise
@@ -627,6 +649,66 @@ Without a key, CI fails with a clear error:
 KeyRequiredError: store 'prod' is encrypted and no key or passphrase was given; pass key=... (or keys={'prod': ...} to load()), or set ENV_STORE_KEY_PROD
 ```
 
+## How do I deploy with two environment variables?
+
+A deployment needs the connection, the stores to load and the key of every encrypted one. Two
+environment variables carry all of it:
+
+- `ENV_STORE_CONNECTION`: the connection string.
+- `ENV_STORE_LOAD`: a **load specification**, one line that holds the stores in load order
+  (repeats kept) and the key or passphrase of every encrypted one. Treat the value as opaque. It
+  is as secret as all its keys together, so keep it in a secret manager, never in a file under
+  version control.
+
+Build the value where the keys are, with `EnvironmentStore.load_spec()`. It resolves keys like
+`es.load()` (an explicit key, else the environment) and decrypts every store, so a wrong key
+fails here and not in the deployment:
+
+```python
+from pathlib import Path
+from environment_store import EnvironmentStore, Source
+
+with EnvironmentStore("sqlite:///envs.db") as es:
+    spec = es.load_spec(["base", Source("prod", key=Path("prod.key"))])
+print(spec)
+print(spec.encode())  # the value of ENV_STORE_LOAD
+```
+
+```text
+LoadSpec(stores=('base', 'prod'), keys=mappingproxy({'prod': KeyMaterial(<redacted>)}))
+envstore-load-v1:eyJzdG9yZXMiOlsiYmFzZSIsInByb2QiXSwia2V5cyI...
+```
+
+The `repr` hides the keys; `encode()` does not, and gives the same text for the same
+specification. On the command line, `envs export-credentials base prod -k prod=prod.key` prints
+both variables as dotenv lines, with a relative path in the connection string made absolute; see
+[cli.md](cli.md).
+
+Put both variables into the secret settings of your platform (CI, Kubernetes, Heroku). The
+application then needs no project file, no key file and no store names:
+
+```python
+from environment_store import load
+
+load(use_project=False, noinput=True)
+```
+
+With `ENV_STORE_LOAD` set, `load()` without store names loads its stores with its keys, and
+`keys=` still beats it. Stores named in the call beat the stores of `ENV_STORE_LOAD`; its keys
+for stores you do not load are ignored. An empty `ENV_STORE_LOAD` counts as unset.
+
+An invalid value stops `load()` and every key lookup with `ConfigurationError`. The message says
+why, never what the value holds:
+
+```text
+ConfigurationError: ENV_STORE_LOAD is not a valid load specification: the text after the prefix is not URL-safe base64 without padding
+```
+
+To read or write the value yourself, use `LoadSpec`: `LoadSpec(stores=("base", "prod"),
+keys={"prod": secret})` takes a `KeyMaterial` or `Passphrase` per encrypted store, and
+`LoadSpec.decode(text)` reads `encode()`'s text back; text that is not a load specification
+raises `ConfigurationError: the text is not a valid load specification: ...`.
+
 ## Which errors should I catch?
 
 Every error derives from `EnvironmentStoreError`, and every class is importable from
@@ -663,8 +745,8 @@ pass overwrite=True to replace them
 
 | Catch | When | CLI exit code |
 |---|---|---|
-| `ValidationError` (also a `ValueError`) | bad store or variable name, bad argument, a plain `str` as key, closed store, value refused by dotenv. Subclasses: `AlreadyEncryptedError`, `NotEncryptedError`, `PlaintextNotAllowedError` | 1 |
-| `ConfigurationError` | no connection, no stores, broken `.envstore.toml` | 1 |
+| `ValidationError` (also a `ValueError`) | bad store or variable name, bad argument, a plain `str` as key, closed store, value refused by dotenv, a key in both `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD`. Subclasses: `AlreadyEncryptedError`, `NotEncryptedError`, `PlaintextNotAllowedError` | 1 |
+| `ConfigurationError` | no connection, no stores, broken `.envstore.toml`, invalid `ENV_STORE_LOAD` | 1 |
 | `MissingExtraError` | an optional dependency is missing; `.extra` names it (`"postgres"`) | 1 |
 | `BackendError` | the database or files cannot be used. Subclasses: `UnsupportedFormatError`, `DatabaseNotCleanError`, `SchemaOutdatedError`, `SchemaTooNewError`, `SetupPrivilegeError` | 1 |
 | `NotFoundError` | `StoreNotFoundError`, or `VariableNotFoundError` with `.names` and `.store` | 2 |
@@ -713,9 +795,9 @@ variables not found in store 'base': NOPE, ALSO_NOPE
   [the order of the merged variables](#the-order-of-the-merged-variables)).
   `nested_flat()` and `apply(nested=True)` also keep the stores in load order and sort the
   variables within each store, so `PROD__A` can come before `BASE__Z`.
-- `Source`, `KeyMaterial`, `Passphrase`, `StoreInfo`, `MigrationReport` and `Environment` are
-  frozen dataclasses. Their secret-holding arguments are keyword-only (`Source("prod", key=...)`,
-  `Passphrase(text=...)`).
+- `Source`, `KeyMaterial`, `Passphrase`, `LoadSpec`, `StoreInfo`, `MigrationReport` and
+  `Environment` are frozen dataclasses. Their secret-holding arguments are keyword-only
+  (`Source("prod", key=...)`, `Passphrase(text=...)`).
 - `MergeOrder`, `KeyMode`, `Format` and `SetupMode` are `StrEnum`s, so `"json"` and `Format.JSON`
   are interchangeable where a format is taken.
 - `StoreInfo.created_at` and `updated_at` are timezone-aware UTC datetimes.
@@ -740,11 +822,12 @@ Everything below is importable from `environment_store`. Signatures are taken fr
 Opens the backend immediately. Use it as a context manager or call `close()`. `clock`,
 `kdf_params_factory` and `opener` exist for testing; leave them at their defaults.
 `setup=SetupMode.NONE` skips the database check on open; the first data operation then does it.
-`environ` is where `ENV_STORE_KEY_<STORE>` is looked up; `None` means `os.environ`.
+`environ` is where `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` are looked up; `None` means
+`os.environ`.
 
 | Method | Description |
 |---|---|
-| `from_env(*, environ: Mapping[str, str] \| None = None, setup=SetupMode.AUTO, ...) -> Self` (classmethod) | Open the backend in `ENV_STORE_CONNECTION` (from `environ`, default `os.environ`, which is also where `ENV_STORE_KEY_<STORE>` is looked up). |
+| `from_env(*, environ: Mapping[str, str] \| None = None, setup=SetupMode.AUTO, ...) -> Self` (classmethod) | Open the backend in `ENV_STORE_CONNECTION` (from `environ`, default `os.environ`, which is also where `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` are looked up). |
 | `from_settings(settings, *, setup=SetupMode.AUTO, ..., environ=None) -> Self` (classmethod) | Open from resolved settings; used internally by `load()` and the CLI. |
 | `close() -> None` | Close the backend; safe to call twice. |
 | `closed` (property) `-> bool` | Whether `close()` was called. |
@@ -760,11 +843,13 @@ Opens the backend immediately. Use it as a context manager or call `close()`. `c
 | `set_many(store: str, values: Mapping[str, str], *, key: KeyInput \| None = None, overwrite: bool = False) -> None` | Set several variables in one write. |
 | `delete(store: str, names: Collection[str], *, key: KeyInput \| None = None) -> None` | Delete variables in one write. |
 | `encrypt_store(store: str, *, key: KeyInput) -> None` | Encrypt a plaintext store; there is no way back. |
-| `rekey_store(store: str, *, old: KeyInput \| None = None, new: KeyInput) -> None` | Re-encrypt with a new secret; `old=None` takes the old key from `ENV_STORE_KEY_<STORE>`. |
+| `rekey_store(store: str, *, old: KeyInput \| None = None, new: KeyInput) -> None` | Re-encrypt with a new secret; `old=None` takes the old key from `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`. |
 | `secret_for(store: str, key: KeyInput) -> Secret` | Turn a key input into the store's secret (reads a `Path`). |
-| `environment_secret(store: str) -> Secret \| None` | The store's secret from `ENV_STORE_KEY_<STORE>`, or `None` if the variable is unset or the store is plaintext. |
+| `environment_secret(store: str) -> Secret \| None` | The store's secret from `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, or `None` if neither has a key for the store or the store is plaintext; a key in both raises `ValidationError`. |
+| `environment_key_source(store: str) -> str \| None` | `'ENV_STORE_KEY_<STORE>'` when that variable is set, else `'ENV_STORE_LOAD'` when it has a key for the store, else `None`; does not read the store. |
 | `parse_secret(store: str, text: str) -> Secret` | Interpret key file text or a passphrase by the store's key mode. |
 | `load(sources: Sequence[Source \| str], *, order: MergeOrder = MergeOrder.LAST_WINS) -> Environment` | Read stores for merging; does not touch `os.environ`. |
+| `load_spec(sources: Sequence[Source \| str]) -> LoadSpec` | Resolve keys like `load()`, decrypt every store and return the [load specification](#how-do-i-deploy-with-two-environment-variables) for `ENV_STORE_LOAD`. |
 | `migrate() -> MigrationReport` | Create or upgrade a SQL schema. |
 
 ### `Environment`
@@ -791,6 +876,7 @@ one from `load()` or `EnvironmentStore.load()`. Its `repr` hides the values.
 | `Passphrase(*, text: str)` | A passphrase; must not be empty. |
 | `KeyInput` | `Path \| KeyMaterial \| Passphrase` |
 | `Secret` | `KeyMaterial \| Passphrase` |
+| `LoadSpec(*, stores: tuple[str, ...], keys: Mapping[str, Secret] = {})` | The stores to load, in order, and the secret of every encrypted one; at least one store, keys only for stores it loads. `encode() -> str` gives the value of `ENV_STORE_LOAD`; `LoadSpec.decode(text: str) -> LoadSpec` (classmethod) reads it back and raises `ConfigurationError` for other text. Its `repr` hides the keys. |
 | `StoreInfo(*, name: str, encrypted: bool, key_mode: KeyMode \| None, revision: int, created_at: datetime, updated_at: datetime)` | A store listing entry. |
 | `MigrationReport(*, from_version: int \| None, to_version: int, created: bool)` | What `migrate()` did. |
 | `MergeOrder` | `LAST_WINS = "last_wins"`, `FIRST_WINS = "first_wins"` |

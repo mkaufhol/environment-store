@@ -114,7 +114,7 @@ def resolve_existing(
     try:
         return _resolve_existing(state, resolver, store, source)
     except KeyModeMismatchError as error:
-        if resolver.uses_key_variable(store, source):
+        if resolver.uses_environment_key(store, source):
             # The message names the variable; -k is not what the user gave.
             raise
         message = (

@@ -1,10 +1,10 @@
 """Key sources: reading existing secrets and choosing new ones.
 
 `SecretResolver` finds the secret of an existing store, in this order: an explicit
-source (file, stdin, or a key the caller already has) > `ENV_STORE_KEY_<STORE>` > the project
-file's `[keys]` > a hidden prompt. `resolve_new_secret` produces the secret for a new
-encryption and never looks at the environment. The variable itself is read by
-`config.key_variables`. Nothing is cached or stored.
+source (file, stdin, or a key the caller already has) > the environment (`ENV_STORE_KEY_<STORE>`
+or `ENV_STORE_LOAD`) > the project file's `[keys]` > a hidden prompt. `resolve_new_secret`
+produces the secret for a new encryption and never looks at the environment. The variables
+themselves are read by `config.key_variables`. Nothing is cached or stored.
 Messages name the source (a path, stdin or the variable), never the secret.
 """
 
@@ -17,7 +17,8 @@ from environment_store.config.key_variables import (
     StoreInspector,
     check_key_variables,
     check_not_empty,
-    parse_key_variable,
+    environment_key,
+    has_environment_key,
 )
 from environment_store.config.prompt import Prompter
 from environment_store.core.errors import (
@@ -27,7 +28,6 @@ from environment_store.core.errors import (
     NotEncryptedError,
     ValidationError,
 )
-from environment_store.core.names import key_variable
 from environment_store.core.secrets import Secret
 from environment_store.crypto.keyfile import (
     generate_key,
@@ -86,8 +86,8 @@ class SecretInput:
             decoded as strict UTF-8 without newline translation.
         stdin_is_tty: Whether stdin is a terminal.
         prompter: Asks the user; `None` never prompts (non-interactive or `--noinput`).
-        environ: The environment variables, for `ENV_STORE_KEY_<STORE>`; the edge
-            passes `os.environ`. Never consulted for new secrets.
+        environ: The environment variables, for `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD`;
+            the edge passes `os.environ`. Never consulted for new secrets.
     """
 
     read_stdin: Callable[[], bytes]
@@ -149,7 +149,8 @@ def _decode(data: bytes, *, what: str) -> str:
 class SecretResolver:
     """Finds the secret of an existing store.
 
-    Explicit source > `ENV_STORE_KEY_<STORE>` > project key > prompt > `KeyRequiredError`.
+    Explicit source > environment (`ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`) > project key >
+    prompt > `KeyRequiredError`.
     """
 
     _inspector: StoreInspector
@@ -168,7 +169,7 @@ class SecretResolver:
     def existing(
         self, store: str, source: KeySource | None, *, project_key: Path | None = None
     ) -> Secret | None:
-        """Return the secret of an existing store: source > key variable > project key > prompt.
+        """Return the secret of an existing store: source > environment > project key > prompt.
 
         Args:
             store: The store name.
@@ -185,6 +186,8 @@ class SecretResolver:
                 off.
             KeySourceError: The source cannot be read, is not UTF-8 or is empty; or the key
                 variable is set but empty.
+            ConfigurationError: `ENV_STORE_LOAD` is set but not a load specification.
+            ValidationError: Both environment variables have a key for the store.
             CryptoError: The text does not fit the store's key mode.
         """
         info = self._inspector.store_info(store)
@@ -195,25 +198,25 @@ class SecretResolver:
             return None
         if source is not None:
             return self._inspector.parse_secret(store, self._read(source))
-        text = self._input.environ.get(key_variable(store))
-        if text is not None:
-            return parse_key_variable(self._inspector, store, text)
+        from_environment = environment_key(self._inspector, store, self._input.environ)
+        if from_environment is not None:
+            return from_environment
         if project_key is not None:
             return self._inspector.parse_secret(store, read_secret_file(project_key))
         return self._inspector.parse_secret(store, self._prompt(store))
 
-    def uses_key_variable(self, store: str, source: KeySource | None) -> bool:
-        """Tell whether `existing` takes the store's secret from its key variable.
+    def uses_environment_key(self, store: str, source: KeySource | None) -> bool:
+        """Tell whether `existing` takes the store's secret from the environment.
 
         Args:
             store: The store name.
             source: The explicitly given key source, or `None`.
 
         Returns:
-            Whether no source is given and `ENV_STORE_KEY_<STORE>` is set (it is still
-            ignored for a plaintext store).
+            Whether no source is given and `ENV_STORE_KEY_<STORE>` is set or `ENV_STORE_LOAD`
+            has a key for the store (it is still ignored for a plaintext store).
         """
-        return source is None and key_variable(store) in self._input.environ
+        return source is None and has_environment_key(store, self._input.environ)
 
     def check_key_variables(self, stores: Iterable[str], *, explicit: Collection[str]) -> None:
         """`check_key_variables` with this resolver's inspector and environment.
