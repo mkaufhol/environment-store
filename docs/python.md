@@ -346,8 +346,8 @@ Things to know:
 - Files are created with mode `0600` (only you can read them), but their content is plain
   text, including the values of encrypted stores. Do not commit them; see
   [Keep secrets out of version control](#keep-secrets-out-of-version-control).
-- An existing file is not replaced unless you pass `force=True`. Without it you get
-  `ValidationError: output file '.env' already exists; pass force=True to replace it`.
+- An existing file is not replaced unless you pass `force=True`. Without it you get a `ValidationError`
+  (its subclass `OutputFileExistsError`): `output file '.env' already exists; pass force=True to replace it`.
 - The format is inferred from the name: `.json`, `.toml`, and names that start or end with
   `.env` (`.env`, `.env.local`, `prod.env`). Anything else needs `fmt=` (`"dotenv"`, `"json"`,
   `"toml"`, or the `Format` enum).
@@ -370,11 +370,11 @@ DEBUG = "true"
 ```
 
 The dotenv writer only produces files that python-dotenv and Docker Compose both read back
-exactly. A value that cannot be written that way is refused, and no file is written. The most
-common case is a value containing `${`:
+exactly. A value that cannot be written that way is refused with a `ValidationError` (its subclass
+`DotenvValueError`), and no file is written. The most common case is a value containing `${`:
 
 ```text
-ValidationError: the value of 'TEMPLATE' cannot be written to a dotenv file that python-dotenv and Docker Compose both read back exactly: it contains '${', which python-dotenv interpolates even in single quotes; export with fmt='json' or fmt='toml', or set the variables with Environment.apply() instead
+DotenvValueError: the value of 'TEMPLATE' cannot be written to a dotenv file that python-dotenv and Docker Compose both read back exactly: it contains '${', which python-dotenv interpolates even in single quotes; export with fmt='json' or fmt='toml', or set the variables with Environment.apply() instead
 ```
 
 So use `fmt="json"` or `fmt="toml"` for such values, or apply them directly with
@@ -496,7 +496,7 @@ with EnvironmentStore("sqlite:///envs.db") as es:
 ```
 
 ```text
-store 'prod' is encrypted (keyfile mode): a key or passphrase is required
+store 'prod' is encrypted and no key or passphrase was given; pass key=... (or keys={'prod': ...} to load()), or set ENV_STORE_KEY_PROD
 {'DB_PASSWORD': 'hunter2'}
 {'DB_HOST': 'localhost', 'DB_PORT': '5432', 'LOG_LEVEL': 'info', 'DB_PASSWORD': 'hunter2'}
 ```
@@ -711,8 +711,8 @@ raises `ConfigurationError: the text is not a valid load specification: ...`.
 
 ## Which errors should I catch?
 
-Every error derives from `EnvironmentStoreError`, and every class is importable from
-`environment_store`. Messages never contain values, keys or passphrases, so they are safe to log.
+Every error derives from `EnvironmentStoreError`, and every class in the table below is
+importable from `environment_store`. Messages never contain values, keys or passphrases, so they are safe to log.
 
 Messages speak Python: when there is a remedy, it names the library's own parameters and
 functions, never a CLI flag. Every error has two attributes: `detail` says what went wrong, and
@@ -884,6 +884,6 @@ one from `load()` or `EnvironmentStore.load()`. Its `repr` hides the values.
 | `Format` | `DOTENV = "dotenv"`, `JSON = "json"`, `TOML = "toml"` |
 | `SetupMode` | `AUTO = "auto"`, `NONE = "none"` |
 | `CredentialsInProjectFileWarning` | `UserWarning` subclass emitted by `load()` |
-| `__version__` | The package version, e.g. `'2.0.0'` |
+| `__version__` | The package version, e.g. `'2.1.0'` |
 
 The error classes are listed in [Which errors should I catch?](#which-errors-should-i-catch).

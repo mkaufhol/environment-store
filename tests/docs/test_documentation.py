@@ -49,7 +49,7 @@ _PROJECT_FILES: Final = (
     _ROOT / "CLAUDE.md",
     _ROOT / "CONTRIBUTING.md",
 )
-# `environment-store 2.0.0` as `envs --version` prints it, or a bare version in a code span.
+# `environment-store 2.1.0` as `envs --version` prints it, or a bare version in a code span.
 _SHOWN_VERSION: Final = re.compile(r"environment-store (\d[\w.]*)|`'?(\d+\.\d+\.\d+[\w.]*)'?`")
 _REPOSITORY: Final = "https://github.com/mkaufhol/environment-store"
 

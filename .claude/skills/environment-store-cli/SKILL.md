@@ -16,7 +16,7 @@ Full option tables and the error catalogue are in [reference.md](reference.md). 
 If `envs` is not installed, do not `pip install` it globally. Ask the user, then prefer uv:
 `uv tool install 'environment-store[cli]'` (add extras as needed, e.g. `[cli,postgres]`), or run it
 once with `uvx --from 'environment-store[cli]' envs ...`; inside a uv project use `uv run envs ...`.
-Check with `envs --version` (must be `2.0.0` or later; the old 0.1 line has no `envs` command).
+Check with `envs --version` (must be `2.1.0` or later: 2.0 has no `ENV_STORE_LOAD` or `export-credentials`, and the old 0.1 line has no `envs` command).
 
 ## Rules for agents
 

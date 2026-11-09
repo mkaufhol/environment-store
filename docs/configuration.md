@@ -33,7 +33,7 @@ The second form fails and says so:
 ```console
 $ envs ls-store -c json://envs
 Usage: envs ls-store [OPTIONS]
-Try 'envs ls-store --help' for help.
+Try 'envs ls-store -h' for help.
 
 Error: No such option: -c; -c is a global option: put it before the command, e.g. envs -c URL ls-store
 ```

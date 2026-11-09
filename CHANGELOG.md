@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-09
+
+Requires Python 3.12 or newer, like 2.0. Existing setups keep working: while `ENV_STORE_LOAD` is not set,
+stores and keys are found as in 2.0.
+
 ### Added
 
 - **Two variables are enough for a deployment**: `ENV_STORE_CONNECTION` and the new `ENV_STORE_LOAD`. The load
@@ -14,8 +19,8 @@ All notable changes to this project are documented here. The format follows
   names, `envs run` and every reading command load those stores with nothing else configured.
   - Its store list is the default when no stores are named, ahead of `stores` in the project file.
   - Its keys are an environment key source in every frontend, next to `ENV_STORE_KEY_<STORE>`: explicit key >
-    environment > `[keys]` > prompt. A store with a key in both variables is refused, because it is unclear which
-    one is meant.
+    environment > `[keys]` > prompt. A store with a key in both variables and no explicit key is refused, because it
+    is unclear which one is meant.
   - An invalid value stops every command except `keygen` and `completion`, and no message contains it.
     `envs run` removes `ENV_STORE_LOAD` from the child's environment, like the key variables.
 - **`envs export-credentials [STORES]...`** prints both variables as dotenv lines, or one JSON document with
@@ -141,7 +146,8 @@ First public pre-release.
 - Optional extras: `aws`, `postgres`, `tui` and `full`.
 - Agent skill for using the CLI safely.
 
-[Unreleased]: https://github.com/mkaufhol/environment-store/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/mkaufhol/environment-store/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/mkaufhol/environment-store/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/mkaufhol/environment-store/compare/v0.1.0rc2...v2.0.0
 [0.1.0rc2]: https://github.com/mkaufhol/environment-store/compare/v0.1.0rc1...v0.1.0rc2
 [0.1.0rc1]: https://github.com/mkaufhol/environment-store/releases/tag/v0.1.0rc1
