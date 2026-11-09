@@ -15,7 +15,7 @@ These docs use [uv](https://docs.astral.sh/uv/) and show pip as the alternative.
 > **0.1 is a different line.** The 0.1 pre-releases on PyPI were an earlier, incompatible design with no `envs`
 > command and no `cli` extra, and 2.0 cannot read their data. If you have 0.1 installed, uninstall it first
 > (`uv tool uninstall environment-store` or `pip uninstall environment-store`). Whatever route you take, check
-> with `envs --version`: it must print `environment-store 2.0.0` or later.
+> with `envs --version`: it must print `environment-store 2.1.0` or later.
 
 ## Which install do I need?
 
@@ -40,14 +40,14 @@ the short name `envs`, because that name differs from the package name.
 ```console
 $ uv tool install 'environment-store[cli]'
 $ envs --version
-environment-store 2.0.0
+environment-store 2.1.0
 ```
 
 The same package name works for a one-off run and for the library:
 
 ```console
 $ uvx --from 'environment-store[cli]' envs --version
-environment-store 2.0.0
+environment-store 2.1.0
 $ uv add 'environment-store[postgres]'
 ```
 
@@ -77,7 +77,7 @@ To work on the code, or to follow `main` with `git pull`, clone the repository:
 $ git clone https://github.com/mkaufhol/environment-store.git
 $ cd environment-store
 $ uv run --extra cli envs --version
-environment-store 2.0.0
+environment-store 2.1.0
 ```
 
 `uv run` creates the project's `.venv` on first use and runs the command in it. To get `envs` on your `PATH`
@@ -160,7 +160,7 @@ The package installs two console commands that are exactly the same program:
 
 ```console
 $ python -m environment_store.cli --version
-environment-store 2.0.0
+environment-store 2.1.0
 ```
 
 `python -m` needs the package in the Python you run: after `pip install` into an activated virtual environment,
@@ -188,9 +188,9 @@ To check the library, import it from the Python that has it installed: an activa
 
 ```console
 $ python -c 'import environment_store; print(environment_store.__version__)'
-2.0.0
+2.1.0
 $ uv run python -c 'import environment_store; print(environment_store.__version__)'
-2.0.0
+2.1.0
 ```
 
 After `uv tool install` the library is in the tool's isolated environment, where plain `python` cannot import it.

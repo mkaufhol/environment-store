@@ -8,7 +8,7 @@
 
 This guide covers the command line from start to finish. It starts with the ideas you need, then describes every command, and ends with recipes for common jobs. New here? The [quick start page](quickstart.md) is a shorter walk-through. For the Python API, see [python.md](python.md); all pages are listed in the [docs index](README.md).
 
-All examples on this page were run against `environment-store 2.0.0`. The output shown is real. Lines such as `created store 'base'` are status messages printed on **stderr**; data (values, listings, exports) goes to **stdout**.
+All examples on this page were run against `environment-store 2.1.0`. The output shown is real. Lines such as `created store 'base'` are status messages printed on **stderr**; data (values, listings, exports) goes to **stdout**.
 
 ## Contents
 
@@ -64,7 +64,7 @@ Check the install:
 
 ```console
 $ envs --version
-environment-store 2.0.0
+environment-store 2.1.0
 ```
 
 `envs` and `environment-store` are the same program, and `python -m environment_store.cli` works too. If an extra is missing, the command tells you which one to install, for example `Error: this feature needs the optional 'postgres' dependencies: uv add 'environment-store[postgres]' (or pip install 'environment-store[postgres]'); for the CLI tool: uv tool install 'environment-store[cli,postgres]'`. For the `envs` tool, use the last command: it reinstalls the tool with the extra added (list any other extras the tool already has, too).
@@ -369,7 +369,7 @@ Save the key first (`envs keygen vault.key`, or in your password manager) and pi
   $ envs ls -v prod -k missing.key
   Error: cannot read key or passphrase file 'missing.key': No such file or directory
   $ envs ls -v customer-a -k prod.key
-  Error: store 'customer-a' uses a passphrase, but a key file was given
+  Error: store 'customer-a' uses a passphrase, but a key file was given: pass the passphrase file with -k (or -k - for stdin), or switch the store to the key file with 'envs rekey -s customer-a --new-key <path>'
   ```
 
 - A key for a plain store is a usage error (exit code 1):
@@ -440,11 +440,11 @@ With that file in place, from the project root or any subfolder:
 
 ```console
 $ envs ls -v --source
-API_TOKEN=tok-123        secret
 DB_HOST=dev.example.com  dev
 DB_PORT=5432             base
 LOG_LEVEL=info           base
 DEBUG=false              dev
+API_TOKEN=tok-123        secret
 $ envs get DB_HOST
 dev.example.com
 $ envs get DB_HOST --first-wins
@@ -488,7 +488,7 @@ Global options go **before** the command name: `envs --noinput -c json://envs rm
 ```console
 $ envs -c json://envs ls --noinput base
 Usage: envs ls [OPTIONS] [STORES]...
-Try 'envs ls --help' for help.
+Try 'envs ls -h' for help.
 
 Error: No such option: --noinput; --noinput is a global option: put it before the command, e.g. envs --noinput ls
 ```
@@ -1115,13 +1115,19 @@ Prints `ENV_STORE_CONNECTION` and `ENV_STORE_LOAD`. With these two variables set
 
 The stores and keys are found exactly like those of `ls` or `run`: the stores you name, else the stores of `ENV_STORE_LOAD`, else `stores` in the project file; each key from `-k`, else `ENV_STORE_KEY_<STORE>` or `ENV_STORE_LOAD`, else `[keys]`, else a hidden prompt on stderr when you are at a terminal. Every store is decrypted before anything is printed, so a wrong key fails here, with exit code 4 and nothing on stdout, rather than in the deployment.
 
+The examples use the Quick start's `json://envs` and an encrypted store `app` with the key file `app.key` (not the plain `app` of the import example), holding `DB_PASSWORD`:
+
 ```console
+$ envs create-store app -e --generate-key app.key
+created store 'app'
+$ printf 'hunter2' | envs set -s app DB_PASSWORD -k app.key
+set DB_PASSWORD in store 'app'
 $ envs export-credentials base app -k app=app.key
-ENV_STORE_CONNECTION=json:///home/me/project/stores
+ENV_STORE_CONNECTION=json:///home/me/project/envs
 ENV_STORE_LOAD=envstore-load-v1:eyJzdG9yZXMiOlsiYmFzZSIsImFwcCJdLCJrZXlzIjp7ImFwcCI6eyJrZXkiOiJlbnZzdG9yZS1rZXktdjE6...
 $ envs export-credentials base app -k app=app.key --json
 {
-  "ENV_STORE_CONNECTION": "json:///home/me/project/stores",
+  "ENV_STORE_CONNECTION": "json:///home/me/project/envs",
   "ENV_STORE_LOAD": "envstore-load-v1:eyJzdG9yZXMiOlsiYmFzZSIsImFwcCJdLCJrZXlzIjp7ImFwcCI6eyJrZXkiOiJlbnZzdG9yZS1rZXktdjE6..."
 }
 ```
@@ -1140,6 +1146,8 @@ $ envs export-credentials base app -k app=other.key
 Error: cannot decrypt store 'app': wrong key or passphrase, or the stored data was modified
 $ envs --noinput export-credentials base app
 Error: store 'app' is encrypted and no key or passphrase was given: pass it with -k app=<path> (or -k app=- for stdin), or set ENV_STORE_KEY_APP
+$ envs -c 'json://a${b' create-store base
+created store 'base'
 $ envs -c 'json://a${b' export-credentials base
 Error: the connection string cannot be written as a dotenv line: use --json
 ```
@@ -1447,12 +1455,12 @@ Each JSON object has sorted keys, the list itself follows the [output order](#ou
 | 127 | `run` only: the command was not found | |
 | any | `run` only: the command's own exit code | |
 
-Every error ends with one line, `Error: <message>`, on stderr. Usage errors found while reading the command line (an unknown option, a missing `-s`) first print the usage line, a `Try ... --help` hint and a blank line:
+Every error ends with one line, `Error: <message>`, on stderr. Usage errors found while reading the command line (an unknown option, a missing `-s`) first print the usage line, a `Try ... -h` hint and a blank line:
 
 ```console
 $ envs ls --bogus
 Usage: envs ls [OPTIONS] [STORES]...
-Try 'envs ls --help' for help.
+Try 'envs ls -h' for help.
 
 Error: No such option: --bogus
 ```
@@ -1462,7 +1470,7 @@ Some usage errors add a hint after `;`: a global option after the command name (
 ```console
 $ envs set A=1
 Usage: envs set [OPTIONS] {KEY=VALUE... | KEY}
-Try 'envs set --help' for help.
+Try 'envs set -h' for help.
 
 Error: Missing option '-s' / '--store'. writing commands never take the store from ENV_STORE_LOAD or the project file's 'stores'; name it with -s STORE
 ```
@@ -1607,7 +1615,7 @@ A deployment needs only two secrets: `ENV_STORE_CONNECTION` and `ENV_STORE_LOAD`
 
 ```console
 $ envs export-credentials base app -k app=app.key
-ENV_STORE_CONNECTION=json:///home/me/project/stores
+ENV_STORE_CONNECTION=json:///home/me/project/envs
 ENV_STORE_LOAD=envstore-load-v1:eyJzdG9yZXMiOlsiYmFzZSIsImFwcCJdLCJrZXlzIjp7ImFwcCI6eyJrZXkiOiJlbnZzdG9yZS1rZXktdjE6...
 ```
 
@@ -1630,7 +1638,7 @@ DB_PASSWORD=hunter2  app
 What else to know:
 
 - **Stores named on the command line win.** `envs run base -- ./server` loads only `base` (with its key from `ENV_STORE_LOAD`, if it has one). The order is: stores you name, then the stores of `ENV_STORE_LOAD`, then `stores` in the project file. Writing commands still need `-s STORE`.
-- **Keys:** `-k` beats `ENV_STORE_LOAD`, and `ENV_STORE_LOAD` beats `[keys]` and the prompt. A store with a key in both `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` is refused with exit code 1; set only one. Keys for stores that a command does not load are ignored.
+- **Keys:** `-k` beats `ENV_STORE_LOAD`, and `ENV_STORE_LOAD` beats `[keys]` and the prompt. A store with a key in both `ENV_STORE_KEY_<STORE>` and `ENV_STORE_LOAD` is refused with exit code 1 unless `-k` gives its key; set only one. Keys for stores that a command does not load are ignored.
 - **An invalid value** stops every command except `keygen` and `completion` with exit code 1, for example `Error: ENV_STORE_LOAD is not a valid load specification: it must start with 'envstore-load-v1:'`. The message never contains the value.
 - **After a key change** (`rekey`) or to load other stores, run `envs export-credentials` again and replace the secret.
 
@@ -1654,9 +1662,9 @@ Then update `[keys]` in `.envstore.toml`, the CI secrets, every `ENV_STORE_KEY_P
 
 ```console
 $ envs ls-store
-name        encryption
-base        plain
-legacy      plain
+name    encryption
+base    plain
+legacy  plain
 $ envs encrypt -s legacy --generate-key legacy.key
 encrypted store 'legacy' (keyfile)
 $ envs ls -v legacy -k legacy.key

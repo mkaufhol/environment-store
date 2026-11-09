@@ -1,6 +1,6 @@
 # environment-store CLI reference
 
-Companion to [SKILL.md](SKILL.md). Checked against `envs --version` = `environment-store 2.0.0`.
+Companion to [SKILL.md](SKILL.md). Checked against `envs --version` = `environment-store 2.1.0`.
 The same reference is in the man page `envs(1)` (`docs/man/share/man/man1/envs.1` in the repository).
 Every flag defaults to off; every option with a value defaults to none.
 

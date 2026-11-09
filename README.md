@@ -37,7 +37,7 @@ it.
 ```console
 $ uv tool install 'environment-store[cli]'
 $ envs --version
-environment-store 2.0.0
+environment-store 2.1.0
 ```
 
 To try it without installing: `uvx --from 'environment-store[cli]' envs -h`.

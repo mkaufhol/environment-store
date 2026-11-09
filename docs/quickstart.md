@@ -15,7 +15,7 @@ and puts `envs` on your `PATH`:
 ```console
 $ uv tool install 'environment-store[cli]'
 $ envs --version
-environment-store 2.0.0
+environment-store 2.1.0
 ```
 
 Then change into your empty work directory for the rest of the guide. With pip, run

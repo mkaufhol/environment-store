@@ -325,6 +325,7 @@ variable `ENV_STORE_KEY_<STORE>`: the store name in upper case with `-` turned i
 $ export ENV_STORE_KEY_PROD="$(cat prod.key)"
 $ envs --noinput ls base prod -v
 DB_HOST=localhost
+DB_PORT=5432
 DB_PASSWORD=hunter2
 ```
 
